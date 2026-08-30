@@ -1,0 +1,24 @@
+{
+  "name": "vnmaker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @vnmaker/app dev",
+    "dev:gateway": "pnpm --filter @vnmaker/gateway dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "e2e": "playwright test",
+    "assets:audio": "node tools/audio-gen.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "typescript": "5.9.3",
+    "@types/node": "26.4.0"
+  }
+}
