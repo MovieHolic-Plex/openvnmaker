@@ -4,8 +4,8 @@
  * 파일 경로 규칙:
  *   배경   packages/app/public/assets/bg/<id>.png
  *   스프라이트 packages/app/public/assets/sprite/<characterId>-<expression>.png
- *   BGM    packages/app/public/assets/audio/bgm/<id>.ogg
- *   효과음 packages/app/public/assets/audio/sfx/<id>.ogg
+ *   BGM    packages/app/public/assets/audio/bgm/<id>.mp3
+ *   효과음 packages/app/public/assets/audio/sfx/<id>.mp3
  */
 
 export const BACKGROUNDS = {

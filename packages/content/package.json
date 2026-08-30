@@ -11,9 +11,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test test/"
+    "test": "node --test --import tsx test/script.test.ts test/assets.test.ts"
   },
   "devDependencies": {
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "tsx": "4.23.13"
   }
 }
