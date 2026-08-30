@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>vnmaker — 네 개의 표면: NODE · MAP · ROUTE · STAGE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink:#12110e; --ink-2:#1a1815; --ink-3:#221f1a;
+  --paper:#efe6d4; --paper-dim:#cfc3a4;
+  --amber:#d4783a; --gold:#c9a227; --cyan:#7eb8c9;
+  --danger:#c45c4a; --green:#8aa86a;
+  --line:rgba(239,230,212,.14); --line-2:rgba(239,230,212,.08);
+  --muted:rgba(239,230,212,.62); --faint:rgba(239,230,212,.38);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--ink);color:var(--paper);
+  font-family:"Noto Sans KR",system-ui,sans-serif;font-size:16px;line-height:1.65;
+  -webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+code,.mono{font-family:"IBM Plex Mono",monospace}
+.wrap{width:min(1180px,calc(100% - 48px));margin:0 auto}
+
+nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);
+  background:rgba(18,17,14,.82);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:56px;gap:24px}
+.brand{font-family:Fraunces,serif;font-weight:600;letter-spacing:.02em}
+nav ul{display:flex;gap:16px;list-style:none;margin:0;padding:0;font-size:13px;flex-wrap:wrap}
+nav a{color:var(--paper-dim)}
+nav a:hover{color:var(--paper);text-decoration:none}
+
+.hero{position:relative;min-height:76vh;display:grid;align-items:end;overflow:hidden}
+.hero img.plate{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 55%}
+.hero::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(180deg,rgba(18,17,14,.32) 0%,rgba(18,17,14,.30) 38%,rgba(18,17,14,.95) 100%),
+  linear-gradient(90deg,rgba(18,17,14,.62) 0%,rgba(18,17,14,.06) 60%)}
+.hero-copy{position:relative;z-index:1;padding:0 0 64px}
+.kicker{display:inline-block;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--gold);margin-bottom:14px}
+h1{font-family:Fraunces,serif;font-weight:600;font-size:clamp(38px,6.4vw,74px);
+  line-height:1.06;margin:0 0 18px;max-width:19ch}
+.lede{font-size:19px;max-width:46ch;color:var(--paper-dim)}
+
+section{padding:84px 0;border-top:1px solid var(--line)}
+h2{font-family:Fraunces,serif;font-size:clamp(26px,3.7vw,40px);line-height:1.16;margin:0 0 12px;font-weight:600}
+h3{font-family:Fraunces,serif;font-size:22px;margin:0 0 8px;font-weight:600}
+h4{font-size:13px;letter-spacing:.02em;margin:0 0 6px;font-weight:600}
+.sub{color:var(--muted);max-width:64ch;margin:0 0 34px}
+p{margin:0 0 14px}
+.note{font-size:13.5px;color:var(--muted);max-width:70ch}
+.cap{font-size:12px;color:var(--faint);margin-top:10px}
+
+/* ── 표면 카드 ─────────────────────────── */
+.grid-4{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.surf{border:1px solid var(--line);background:var(--ink-2);padding:20px 20px 18px;position:relative}
+.surf .tag{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.16em;
+  color:var(--ink);background:var(--gold);padding:2px 7px;display:inline-block;margin-bottom:12px}
+.surf.b .tag{background:var(--cyan)}
+.surf.c .tag{background:var(--amber)}
+.surf.d .tag{background:var(--paper-dim)}
+.surf h3{margin-bottom:4px}
+.surf .one{font-size:14px;color:var(--paper-dim);margin:0 0 12px}
+.surf .who{font-size:12px;color:var(--faint);border-top:1px solid var(--line-2);padding-top:10px;margin:0}
+.mini{height:92px;margin:0 0 14px;border:1px solid var(--line-2);background:var(--ink)}
+
+/* ── 에디터 창 목업 ─────────────────────── */
+.app{border:1px solid var(--line);background:var(--ink-2);overflow:hidden}
+.app-bar{display:flex;align-items:center;gap:14px;height:40px;padding:0 14px;
+  background:var(--ink-3);border-bottom:1px solid var(--line)}
+.dots{display:flex;gap:6px}
+.dots i{width:9px;height:9px;border-radius:50%;background:rgba(239,230,212,.18);display:block}
+.tabs{display:flex;gap:2px;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em}
+.tabs span{padding:4px 11px;color:var(--faint);border:1px solid transparent}
+.tabs span.on{color:var(--ink);background:var(--gold);font-weight:500}
+.app-bar .path{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint)}
+.app-body{padding:22px 24px}
+
+/* ── 산문 블록 ─────────────────────────── */
+.prose{display:grid;gap:2px}
+.blk{display:grid;grid-template-columns:186px 1fr;gap:20px;padding:9px 10px;
+  border:1px solid transparent;border-radius:2px}
+.blk:hover{background:rgba(239,230,212,.035);border-color:var(--line-2)}
+.blk.sel{background:rgba(201,162,39,.07);border-color:rgba(201,162,39,.34)}
+.gut{display:flex;flex-direction:column;gap:6px;align-items:flex-end;text-align:right;padding-top:2px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;letter-spacing:.04em;color:var(--muted);
+  border:1px solid var(--line);padding:2px 7px;background:var(--ink)}
+.chip b{color:var(--paper-dim);font-weight:500}
+.chip.bg{border-color:rgba(126,184,201,.4);color:var(--cyan)}
+.chip.sp{border-color:rgba(201,162,39,.42);color:var(--gold)}
+.chip.au{border-color:rgba(138,168,106,.4);color:var(--green)}
+.thumb{width:52px;height:32px;object-fit:cover;border:1px solid var(--line);background:var(--ink)}
+.thumb.tall{width:32px;height:42px;object-fit:contain;object-position:top}
+.spk{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--gold)}
+.spk i{width:7px;height:7px;border-radius:50%;background:var(--gold);display:block}
+.spk.n{color:var(--faint);font-weight:400}
+.spk.n i{background:var(--faint)}
+.line{font-size:16.5px;line-height:1.78;margin:0}
+.line.d{color:var(--paper)}
+.line.n{color:var(--paper-dim)}
+.blk .line em{font-style:normal;background:rgba(212,120,58,.16);padding:0 2px}
+
+/* menu 블록 */
+.menu-blk{margin:8px 0 4px 206px;border-left:2px solid var(--amber);padding:4px 0 4px 16px}
+.menu-blk .q{font-size:12px;font-family:"IBM Plex Mono",monospace;color:var(--amber);
+  letter-spacing:.1em;margin-bottom:8px}
+.opt{display:flex;align-items:center;gap:12px;padding:7px 10px;border:1px solid var(--line);
+  background:var(--ink);margin-bottom:6px;font-size:14.5px}
+.opt .arrow{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--cyan)}
+.opt:hover{border-color:rgba(126,184,201,.4)}
+
+/* 밀도 토글 비교 */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.dens{border:1px solid var(--line);background:var(--ink-2)}
+.dens header{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);
+  font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;color:var(--muted)}
+.dens header b{color:var(--gold);font-weight:500}
+.dens .in{padding:14px 16px}
+.card-row{display:grid;grid-template-columns:78px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line-2)}
+.card-row:last-child{border-bottom:0}
+.card-row img{width:78px;height:48px;object-fit:cover;border:1px solid var(--line)}
+.card-row .ph{width:78px;height:48px;border:1px solid var(--line);background:var(--ink);
+  display:grid;place-items:center;font-family:"IBM Plex Mono",monospace;font-size:9.5px;color:var(--faint)}
+.tight{display:grid;gap:9px}
+.tight .r{display:grid;grid-template-columns:14px 1fr;gap:9px;align-items:start}
+.tight .m{width:5px;height:5px;border-radius:50%;margin-top:9px}
+.tight .m.bg{background:var(--cyan)}.tight .m.sp{background:var(--gold)}.tight .m.au{background:var(--green)}.tight .m.no{background:transparent}
+.tight p{font-size:14.5px;line-height:1.72;margin:0}
+
+/* ── 3열 투영 ──────────────────────────── */
+.proj{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border:1px solid var(--line)}
+.proj>div{padding:18px}
+.proj>div+div{border-left:1px solid var(--line)}
+.proj h4{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;
+  color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+.proj .b{background:var(--ink-2)}
+.proj pre{font-family:"IBM Plex Mono",monospace;font-size:11.5px;line-height:1.72;
+  margin:0;white-space:pre-wrap;color:var(--paper-dim)}
+.proj pre .k{color:var(--cyan)}
+.proj pre .s{color:var(--paper)}
+.proj pre .op{color:var(--gold)}
+.arrow-row{display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint);padding:10px 0 0}
+
+/* ── ROUTE ─────────────────────────────── */
+.route{border:1px solid var(--line);background:var(--ink-2);padding:26px 32px}
+.nodebadge{display:flex;align-items:center;gap:12px;margin:26px 0 18px}
+.nodebadge:first-child{margin-top:0}
+.nodebadge .nm{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+  color:var(--ink);background:var(--paper-dim);padding:2px 8px}
+.nodebadge .ttl{font-size:12.5px;color:var(--faint)}
+.nodebadge .ln{flex:1;height:1px;background:var(--line)}
+.route p{font-size:16.5px;line-height:1.86;max-width:66ch;margin:0 0 14px}
+.route p .who{color:var(--gold);font-weight:600}
+.route p.nar{color:var(--paper-dim)}
+.route .picked{display:inline-flex;align-items:center;gap:8px;font-size:13px;
+  border:1px solid rgba(212,120,58,.45);background:rgba(212,120,58,.09);
+  padding:5px 12px;margin:6px 0 18px;color:var(--amber)}
+
+/* ── STAGE ─────────────────────────────── */
+.stage{position:relative;aspect-ratio:16/9;border:1px solid var(--line);overflow:hidden;background:#000}
+.stage>img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.stage>img.spr{position:absolute;bottom:0;left:56%;transform:translateX(-50%);height:88%;
+  width:auto;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(0,0,0,.55))}
+.vnbox{position:absolute;left:5%;right:5%;bottom:5%;background:rgba(18,17,14,.86);
+  border:1px solid rgba(239,230,212,.22);padding:16px 20px 18px;backdrop-filter:blur(3px)}
+.vnbox .nm{font-family:Fraunces,serif;font-size:15px;color:var(--gold);margin-bottom:5px}
+.vnbox .tx{font-size:15.5px;line-height:1.6;margin:0}
+.stage .cursor{position:absolute;top:12px;left:12px;font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;letter-spacing:.1em;color:var(--ink);background:var(--gold);padding:3px 8px}
+
+/* ── 제안 카드 ─────────────────────────── */
+.props{display:grid;gap:12px}
+.pcard{border:1px solid rgba(201,162,39,.36);border-left:3px solid var(--gold);background:var(--ink-2)}
+.pcard header{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line-2)}
+.pcard .kind{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.12em;
+  color:var(--ink);background:var(--gold);padding:2px 7px}
+.pcard .kind.add{background:var(--green)}
+.pcard .kind.del{background:var(--danger)}
+.pcard .where{font-size:12px;color:var(--faint);font-family:"IBM Plex Mono",monospace}
+.pcard .acts{margin-left:auto;display:flex;gap:7px}
+.pcard .acts span{font-size:11.5px;padding:3px 11px;border:1px solid var(--line);color:var(--muted)}
+.pcard .acts span.ok{border-color:rgba(201,162,39,.5);color:var(--gold)}
+.pcard .in{padding:14px 16px 16px}
+.dq{font-size:15px;line-height:1.74;margin:0 0 8px;padding-left:12px;border-left:2px solid var(--danger);
+  color:var(--faint);text-decoration:line-through;text-decoration-color:rgba(196,92,74,.5)}
+.iq{font-size:15.5px;line-height:1.74;margin:0;padding-left:12px;border-left:2px solid var(--green);color:var(--paper)}
+.why{font-size:12.5px;color:var(--faint);margin:10px 0 0;font-family:"IBM Plex Mono",monospace}
+
+/* ── 표 ─────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--gold);border-bottom:1px solid var(--line);padding:0 14px 9px 0;font-weight:500}
+td{padding:12px 14px 12px 0;border-bottom:1px solid var(--line-2);vertical-align:top;color:var(--paper-dim)}
+td:first-child{color:var(--paper);font-family:"IBM Plex Mono",monospace;font-size:12.5px;white-space:nowrap}
+td b{color:var(--paper);font-weight:600}
+
+/* ── 열린 질문 ─────────────────────────── */
+.q-two{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:8px}
+.qbox{border:1px solid var(--line);background:var(--ink-2);padding:20px}
+.qbox.pick{border-color:rgba(212,120,58,.45)}
+.qbox .lbl{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;
+  color:var(--amber);margin-bottom:10px}
+.qbox ul{margin:12px 0 0;padding-left:18px;font-size:13.5px;color:var(--muted)}
+.qbox ul li{margin-bottom:5px}
+.qbox ul li.p::marker{color:var(--green)}
+.qbox ul li.m::marker{color:var(--danger)}
+.verdict{margin-top:26px;border-left:3px solid var(--amber);background:var(--ink-2);padding:16px 20px}
+.verdict b{color:var(--amber)}
+
+.foot{padding:56px 0 76px;color:var(--faint);font-size:13px;border-top:1px solid var(--line)}
+@media(max-width:900px){
+  .grid-4,.two,.q-two{grid-template-columns:1fr}
+  .proj{grid-template-columns:1fr}
+  .proj>div+div{border-left:0;border-top:1px solid var(--line)}
+  .blk{grid-template-columns:1fr;gap:8px}
+  .gut{align-items:flex-start;text-align:left;flex-direction:row;flex-wrap:wrap}
+  .menu-blk{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="brand">vnmaker <span style="color:var(--faint);font-weight:400">/ 표면</span></span>
+  <ul>
+    <li><a href="#four">네 표면</a></li>
+    <li><a href="#node">NODE</a></li>
+    <li><a href="#proj">블록=비트</a></li>
+    <li><a href="#map">MAP</a></li>
+    <li><a href="#route">ROUTE</a></li>
+    <li><a href="#stage">STAGE</a></li>
+    <li><a href="#diff">제안 카드</a></li>
+    <li><a href="#open">열린 질문</a></li>
+    <li><a href="#gloss">용어</a></li>
+  </ul>
+</div></nav>
+
+<header class="hero">
+  <img class="plate" src="assets/bg-platform.png" alt="비 오는 플랫폼 — 예시 작품의 배경" />
+  <div class="wrap hero-copy">
+    <span class="kicker">브레인스토밍 · 2026-08-31</span>
+    <h1>노드 + 소설을<br>화면으로 옮기면</h1>
+    <p class="lede">지난번에 제가 NODE·MAP·ROUTE·STAGE라고 줄여 쓴 것들을 실제 화면과 예시로 풀었습니다. 예시 작품 하나를 처음부터 끝까지 같이 씁니다 — 비 오는 플랫폼에서 우산을 안 가져온 날.</p>
+  </div>
+</header>
+
+<!-- ══════════════════ 한 장 요약 ══════════════════ -->
+<section id="four"><div class="wrap">
+  <span class="kicker">One page</span>
+  <h2>표면은 네 개, 진실은 하나</h2>
+  <p class="sub">디스크에 있는 JSON 그래프가 유일한 진실입니다. 네 표면은 그 하나를 네 가지 배율로 보는 창일 뿐이고, 어느 창에서 고쳐도 같은 파일에 씁니다.</p>
+
+  <div class="grid-4">
+    <div class="surf a">
+      <span class="tag">NODE</span>
+      <svg class="mini" viewBox="0 0 300 92" role="img" aria-label="산문 블록이 쌓인 모습">
+        <rect x="14" y="14" width="58" height="7" fill="#7eb8c9" opacity=".55"/>
+        <rect x="84" y="12" width="196" height="6" rx="3" fill="#cfc3a4" opacity=".38"/>
+        <rect x="84" y="24" width="150" height="6" rx="3" fill="#cfc3a4" opacity=".38"/>
+        <rect x="14" y="44" width="44" height="7" fill="#c9a227" opacity=".7"/>
+        <rect x="84" y="42" width="176" height="6" rx="3" fill="#efe6d4" opacity=".72"/>
+        <rect x="14" y="68" width="58" height="7" fill="#c9a227" opacity=".35"/>
+        <rect x="84" y="66" width="120" height="6" rx="3" fill="#efe6d4" opacity=".5"/>
+        <rect x="84" y="78" width="168" height="6" rx="3" fill="#efe6d4" opacity=".5"/>
+      </svg>
+      <h3>NODE — 산문</h3>
+      <p class="one">씬 하나를 소설처럼 위에서 아래로 읽고 씁니다. 기본 작업 화면.</p>
+      <p class="who">문단을 쓰는 곳. 하루 중 90%를 여기서 보냅니다.</p>
+    </div>
+
+    <div class="surf b">
+      <span class="tag">MAP</span>
+      <svg class="mini" viewBox="0 0 300 92" role="img" aria-label="노드와 엣지로 이루어진 그래프">
+        <line x1="74" y1="46" x2="128" y2="24" stroke="#7eb8c9" stroke-width="1.4" opacity=".7"/>
+        <line x1="74" y1="46" x2="128" y2="68" stroke="#7eb8c9" stroke-width="1.4" opacity=".7"/>
+        <line x1="196" y1="24" x2="238" y2="46" stroke="#7eb8c9" stroke-width="1.4" opacity=".7"/>
+        <line x1="196" y1="68" x2="238" y2="46" stroke="#7eb8c9" stroke-width="1.4" opacity=".7"/>
+        <rect x="18" y="36" width="56" height="20" fill="#221f1a" stroke="#c9a227" stroke-width="1.2"/>
+        <rect x="128" y="14" width="68" height="20" fill="#221f1a" stroke="#efe6d4" stroke-opacity=".3"/>
+        <rect x="128" y="58" width="68" height="20" fill="#221f1a" stroke="#efe6d4" stroke-opacity=".3"/>
+        <rect x="238" y="36" width="48" height="20" fill="#221f1a" stroke="#efe6d4" stroke-opacity=".3"/>
+      </svg>
+      <h3>MAP — 그래프</h3>
+      <p class="one">씬이 상자, 갈래가 선. 이야기의 골격만 봅니다.</p>
+      <p class="who">구조를 볼 때만 엽니다. 초보자의 첫 화면이 아닙니다.</p>
+    </div>
+
+    <div class="surf c">
+      <span class="tag">ROUTE</span>
+      <svg class="mini" viewBox="0 0 300 92" role="img" aria-label="여러 노드를 한 줄로 눌러 편 모습">
+        <rect x="14" y="10" width="40" height="6" fill="#cfc3a4" opacity=".5"/>
+        <rect x="14" y="24" width="266" height="6" rx="3" fill="#efe6d4" opacity=".55"/>
+        <rect x="14" y="36" width="230" height="6" rx="3" fill="#efe6d4" opacity=".55"/>
+        <rect x="14" y="54" width="40" height="6" fill="#cfc3a4" opacity=".5"/>
+        <rect x="14" y="68" width="252" height="6" rx="3" fill="#efe6d4" opacity=".55"/>
+        <rect x="14" y="80" width="180" height="6" rx="3" fill="#efe6d4" opacity=".55"/>
+        <rect x="60" y="8" width="220" height="10" fill="#d4783a" opacity=".18"/>
+        <rect x="60" y="52" width="220" height="10" fill="#d4783a" opacity=".18"/>
+      </svg>
+      <h3>ROUTE — 경로 읽기</h3>
+      <p class="one">갈래를 하나 고정하고 여러 노드를 이어 한 편의 소설로 읽습니다.</p>
+      <p class="who">페이싱·중복·감정선을 잡을 때. 에디터에 없던 표면.</p>
+    </div>
+
+    <div class="surf d">
+      <span class="tag">STAGE</span>
+      <svg class="mini" viewBox="0 0 300 92" role="img" aria-label="배경과 캐릭터, 대사창이 있는 프리뷰">
+        <rect x="14" y="8" width="272" height="76" fill="#221f1a" stroke="#efe6d4" stroke-opacity=".18"/>
+        <rect x="14" y="8" width="272" height="44" fill="#7eb8c9" opacity=".1"/>
+        <ellipse cx="176" cy="50" rx="16" ry="26" fill="#c9a227" opacity=".3"/>
+        <rect x="30" y="60" width="240" height="18" fill="#12110e" stroke="#efe6d4" stroke-opacity=".22"/>
+        <rect x="38" y="65" width="34" height="4" fill="#c9a227" opacity=".8"/>
+        <rect x="38" y="72" width="180" height="3" fill="#efe6d4" opacity=".4"/>
+      </svg>
+      <h3>STAGE — 프리뷰</h3>
+      <p class="one">커서가 놓인 그 순간을 플레이어가 보는 대로 그립니다.</p>
+      <p class="who">읽기 전용. 여기서는 편집하지 않습니다.</p>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:26px">NODE·ROUTE는 <b>소설</b> 쪽이고 MAP은 <b>노드</b> 쪽입니다. "노드 + 소설"이라고 하신 게 이 둘을 한 제품 안에서 같은 데이터의 두 배율로 놓는다는 뜻이라고 이해했습니다. STAGE는 그 결과를 확인하는 거울입니다.</p>
+</div></section>
+
+<!-- ══════════════════ 예시 씬 ══════════════════ -->
+<section><div class="wrap">
+  <span class="kicker">예시 작품</span>
+  <h2>이 문서 전체가 같은 씬 하나를 씁니다</h2>
+  <p class="sub">추상적으로 설명하면 또 말장난이 됩니다. 노드 하나, 캐릭터 하나, 갈래 하나로 된 최소 작품을 놓고 네 표면을 차례로 보여드립니다.</p>
+
+  <div class="two" style="align-items:start">
+    <div>
+      <table>
+        <tr><th style="width:26%">항목</th><th>값</th></tr>
+        <tr><td>작품</td><td><b>우산을 안 가져온 날</b> · 한국어 · 4노드 · 1갈래</td></tr>
+        <tr><td>노드</td><td><code>platform-01</code> 비 오는 플랫폼<br><code>share-umbrella</code> 우산을 같이 쓴다<br><code>walk-alone</code> 혼자 걷는다<br><code>next-morning</code> 다음 날 아침</td></tr>
+        <tr><td>캐릭터</td><td><b>유리</b> — 같은 반. 담담한 말투. 색: <span style="color:var(--gold)">gold</span><br><b>나</b> — 화자. 이름 없는 1인칭 나레이션</td></tr>
+        <tr><td>배경</td><td><code>bg platform_rain</code> — 위 히로 이미지</td></tr>
+        <tr><td>스프라이트</td><td><code>yuri neutral</code> / <code>yuri surprised</code></td></tr>
+      </table>
+      <p class="cap">배경과 스프라이트는 grok <code>image_gen</code>으로 만들고, 표정은 정본 스프라이트에서 <code>image_edit</code>으로 파생시켰습니다. 방법론은 <code>docs/grok-imagine.md</code>.</p>
+    </div>
+    <div>
+      <div style="border:1px solid var(--line);background:var(--ink-2);padding:18px">
+        <h4 style="color:var(--gold);font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em">CHARACTER BIBLE — 유리</h4>
+        <div style="display:grid;grid-template-columns:96px 1fr;gap:16px;align-items:start;margin-top:12px">
+          <img src="assets/sprite-yuri-cut.png" alt="유리 정본 스프라이트" style="border:1px solid var(--line);background:var(--ink)" />
+          <div style="font-size:13.5px;color:var(--paper-dim)">
+            <p style="margin:0 0 8px"><b style="color:var(--paper)">유리</b> · 17세 · 같은 반</p>
+            <p style="margin:0 0 8px">말이 짧고 감정을 설명하지 않는다. 질문으로 되받는다. 상대가 곤란해하면 화제를 돌린다.</p>
+            <p style="margin:0"><code style="color:var(--gold);font-size:11.5px">neutral</code> <code style="color:var(--gold);font-size:11.5px">surprised</code></p>
+          </div>
+        </div>
+      </div>
+      <p class="cap">에이전트가 매 턴 받는 컨텍스트의 일부입니다. 대사 톤은 여기서 나옵니다 — 프롬프트에 매번 다시 적지 않습니다.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════════ NODE ══════════════════ -->
+<section id="node"><div class="wrap">
+  <span class="kicker">Surface 1 · NODE</span>
+  <h2>NODE 산문 — 씬 하나를 소설처럼</h2>
+  <p class="sub">왼쪽 좁은 열이 <b>거터</b>입니다. 배경·스프라이트·소리 같은 연출이 여기 작은 칩으로 붙습니다. 오른쪽 넓은 열이 <b>본문</b>입니다. 대사와 나레이션만 있습니다. <code>show yuri neutral</code> 같은 코드 줄이 본문을 끊지 않는 게 요점입니다.</p>
+
+  <div class="app">
+    <div class="app-bar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="tabs"><span class="on">NODE</span><span>MAP</span><span>ROUTE</span><span>STAGE</span></span>
+      <span class="path">story/nodes/platform-01.json</span>
+    </div>
+    <div class="app-body">
+      <div class="prose">
+
+        <div class="blk">
+          <div class="gut">
+            <img class="thumb" src="assets/bg-platform.png" alt="" />
+            <span class="chip bg">배경 <b>비 오는 플랫폼</b></span>
+          </div>
+          <div><p class="line n" style="color:var(--faint);font-size:13.5px;font-style:italic">— 씬이 여기서 시작합니다</p></div>
+        </div>
+
+        <div class="blk">
+          <div class="gut"><span class="spk n"><i></i>나레이션</span></div>
+          <div><p class="line n">우산을 안 가져온 날은 늘 이런 식이다. 개찰구를 나서자마자 비가 쏟아졌고, 플랫폼 지붕 아래는 이미 사람으로 반쯤 차 있었다.</p></div>
+        </div>
+
+        <div class="blk">
+          <div class="gut">
+            <img class="thumb tall" src="assets/sprite-yuri-cut.png" alt="" />
+            <span class="chip sp">유리 <b>담담</b> · 가운데</span>
+          </div>
+          <div><p class="line n" style="color:var(--faint);font-size:13.5px;font-style:italic">— 유리가 등장합니다</p></div>
+        </div>
+
+        <div class="blk sel">
+          <div class="gut"><span class="spk"><i></i>유리</span></div>
+          <div><p class="line d">"안 가져왔지, 우산."</p></div>
+        </div>
+
+        <div class="blk">
+          <div class="gut"><span class="spk n"><i></i>나레이션</span></div>
+          <div><p class="line n">대답할 말을 고르는 동안 유리는 접힌 우산을 손목으로 두 번 흔들었다. 물어본 게 아니라 확인이었다.</p></div>
+        </div>
+
+        <div class="blk">
+          <div class="gut"><span class="chip au">소리 <b>비 · 반복</b></span></div>
+          <div><p class="line n" style="color:var(--faint);font-size:13.5px;font-style:italic">— 빗소리가 깔립니다</p></div>
+        </div>
+
+        <div class="blk">
+          <div class="gut">
+            <img class="thumb tall" src="assets/sprite-yuri-surprised-cut.png" alt="" />
+            <span class="chip sp">유리 <b>놀람</b></span>
+          </div>
+          <div><p class="line n" style="color:var(--faint);font-size:13.5px;font-style:italic">— 표정이 바뀝니다</p></div>
+        </div>
+
+        <div class="blk">
+          <div class="gut"><span class="spk"><i></i>유리</span></div>
+          <div><p class="line d">"왜 그렇게 봐?"</p></div>
+        </div>
+
+      </div>
+
+      <div class="menu-blk">
+        <div class="q">갈래 — 여기서 이야기가 나뉩니다</div>
+        <div class="opt">같이 쓰자고 말한다 <span class="arrow">→ 우산을 같이 쓴다</span></div>
+        <div class="opt">괜찮다고 한다 <span class="arrow">→ 혼자 걷는다</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:34px">
+    <div>
+      <h3>거터에 있는 것</h3>
+      <p class="note">배경 전환, 스프라이트 등장·퇴장·표정 변경, 음악과 효과음, 변수 대입. 전부 타입이 있는 연출이고, 클릭하면 인라인 편집기가 열립니다. 썸네일이 붙으니 "지금 화면에 누가 있는지"를 글로 추적할 필요가 없습니다.</p>
+    </div>
+    <div>
+      <h3>본문에 있는 것</h3>
+      <p class="note">대사와 나레이션. 문단 앞의 <b>화자 칩</b>이 누가 말하는지 정합니다 — 산문에서 추론하지 않습니다. 추론은 여기서 재앙입니다. 나레이션은 화자 없는 문단이고, Ren'Py의 화자 없는 say로 그대로 나갑니다.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════════ 밀도 토글 ══════════════════ -->
+<section><div class="wrap">
+  <span class="kicker">같은 노드, 두 배율</span>
+  <h2>"스토리보드 카드"는 별도 화면이 아니라 밀도입니다</h2>
+  <p class="sub">비전 문서의 초보자 화면(스테이지 + 스토리보드 카드)과 위의 산문 뷰는 다른 구현이 아닙니다. 같은 블록 리스트를 두 밀도로 그리는 것입니다. 토글 하나. 데이터는 동일.</p>
+
+  <div class="two">
+    <div class="dens">
+      <header><b>카드 밀도</b> · 처음 여는 사람</header>
+      <div class="in">
+        <div class="card-row">
+          <img src="assets/bg-platform.png" alt="" />
+          <div style="font-size:14px;color:var(--paper-dim)">우산을 안 가져온 날은 늘 이런 식이다. 개찰구를 나서자마자 비가 쏟아졌고…</div>
+        </div>
+        <div class="card-row">
+          <div class="ph" style="padding:2px"><img src="assets/sprite-yuri-cut.png" alt="" style="width:100%;height:100%;object-fit:contain;object-position:top;border:0"/></div>
+          <div><span style="color:var(--gold);font-weight:600;font-size:13px">유리</span><div style="font-size:14px">"안 가져왔지, 우산."</div></div>
+        </div>
+        <div class="card-row">
+          <div class="ph">비 · SFX</div>
+          <div style="font-size:14px;color:var(--paper-dim)">대답할 말을 고르는 동안 유리는 접힌 우산을 손목으로 두 번 흔들었다…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dens">
+      <header><b>산문 밀도</b> · 길게 쓰는 사람</header>
+      <div class="in">
+        <div class="tight">
+          <div class="r"><span class="m bg"></span><p style="color:var(--paper-dim)">우산을 안 가져온 날은 늘 이런 식이다. 개찰구를 나서자마자 비가 쏟아졌고, 플랫폼 지붕 아래는 이미 사람으로 반쯤 차 있었다.</p></div>
+          <div class="r"><span class="m sp"></span><p><span style="color:var(--gold);font-weight:600">유리</span> "안 가져왔지, 우산."</p></div>
+          <div class="r"><span class="m au"></span><p style="color:var(--paper-dim)">대답할 말을 고르는 동안 유리는 접힌 우산을 손목으로 두 번 흔들었다. 물어본 게 아니라 확인이었다.</p></div>
+          <div class="r"><span class="m no"></span><p><span style="color:var(--gold);font-weight:600">유리</span> "왜 그렇게 봐?"</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">썸네일이 좌측 거터의 작은 색 점으로 접힙니다. 점을 누르면 그 자리에서 펼쳐집니다. 같은 분량의 씬인데 화면당 읽히는 글자 수가 두 배 이상 차이납니다.</p>
+</div></section>
+
+<!-- ══════════════════ 블록 = 비트 ══════════════════ -->
+<section id="proj"><div class="wrap">
+  <span class="kicker">계약</span>
+  <h2>블록 하나 = 비트 op 하나</h2>
+  <p class="sub">여기가 가장 틀리기 쉬운 지점입니다. 산문을 자유 텍스트로 두고 파서로 구조를 뽑으려 하면, .rpy 왕복이 죽은 것과 똑같은 이유로 죽습니다 — 표현할 수 없는 입력이 무한히 들어옵니다. 그래서 산문 뷰는 파서가 아니라 <b>투영</b>입니다. 문단을 타이핑하면 비트가 생기고, 비트가 바뀌면 문단이 다시 그려집니다.</p>
+
+  <div class="proj">
+    <div>
+      <h4>1 · 작가가 보는 것</h4>
+      <div style="border-left:2px solid var(--line);padding-left:14px">
+        <p style="font-size:12px;color:var(--cyan);font-family:'IBM Plex Mono',monospace;margin:0 0 10px">배경 · 비 오는 플랫폼</p>
+        <p style="font-size:14.5px;color:var(--paper-dim);line-height:1.7;margin:0 0 12px">우산을 안 가져온 날은 늘 이런 식이다.</p>
+        <p style="font-size:12px;color:var(--gold);font-family:'IBM Plex Mono',monospace;margin:0 0 10px">유리 · 담담 · 가운데</p>
+        <p style="font-size:14.5px;line-height:1.7;margin:0"><span style="color:var(--gold);font-weight:600">유리</span> "안 가져왔지, 우산."</p>
+      </div>
+    </div>
+    <div class="b">
+      <h4>2 · 디스크에 있는 진실</h4>
+<pre><span class="k">// story/nodes/platform-01.json</span>
+{ <span class="k">"id"</span>: <span class="s">"platform-01"</span>,
+  <span class="k">"title"</span>: <span class="s">"비 오는 플랫폼"</span>,
+  <span class="k">"beats"</span>: [
+   { <span class="op">"op"</span>:<span class="s">"scene"</span>, <span class="k">"bg"</span>:<span class="s">"platform_rain"</span> },
+   { <span class="op">"op"</span>:<span class="s">"narrate"</span>,
+     <span class="k">"text"</span>:<span class="s">"우산을 안 가져온…"</span> },
+   { <span class="op">"op"</span>:<span class="s">"show"</span>, <span class="k">"who"</span>:<span class="s">"yuri"</span>,
+     <span class="k">"expr"</span>:<span class="s">"neutral"</span>, <span class="k">"at"</span>:<span class="s">"center"</span> },
+   { <span class="op">"op"</span>:<span class="s">"say"</span>, <span class="k">"who"</span>:<span class="s">"yuri"</span>,
+     <span class="k">"text"</span>:<span class="s">"안 가져왔지, 우산."</span> }
+  ] }</pre>
+    </div>
+    <div>
+      <h4>3 · 익스포트 산출물</h4>
+<pre><span class="k"># game/platform-01.rpy — 생성물</span>
+label platform_01:
+    scene bg platform_rain
+    <span class="s">"우산을 안 가져온 날은 늘…"</span>
+    show yuri neutral at center
+    yuri <span class="s">"안 가져왔지, 우산."</span>
+</pre>
+      <p style="font-size:12px;color:var(--faint);margin:14px 0 0">단방향입니다. IR이 Ren'Py의 <b>의도적 부분집합</b>이라서 되돌리지 않습니다. 손으로 쓴 임의의 .rpy에는 Python 블록·screen·ATL·런타임 등록 문장이 들어갈 수 있고, 열 개 남짓한 op으로는 표현할 수 없습니다.</p>
+    </div>
+  </div>
+  <div class="arrow-row"><span>투영 ↕ 편집은 곧 뮤테이션</span><span>Zod 스키마 검증</span><span>emit →</span></div>
+
+  <p class="note" style="margin-top:28px">이 계약이 왜 중요한가. 리서치에서 측정치로 나온 게 두 개 있습니다. 내용을 JSON 도구 인자에 밀어넣으면 품질이 떨어지고 strict 스키마도 못 고칩니다. 반대로 추론과 형식을 분리해서 <b>산문으로 먼저 쓰게 하고 값싼 모델이 타입 op으로 변환</b>하면 형식 오류가 측정된 모든 조합에서 0이 됩니다. 즉 <b>모델이 서사를 잘 쓰는 표현과 작가가 읽기 편한 표현이 같습니다.</b> 산문은 UI 껍데기가 아니라 사람과 모델이 공유하는 표현 계층입니다.</p>
+</div></section>
+
+<!-- ══════════════════ MAP ══════════════════ -->
+<section id="map"><div class="wrap">
+  <span class="kicker">Surface 2 · MAP</span>
+  <h2>MAP — 씬이 상자, 갈래가 선</h2>
+  <p class="sub">노드는 씬 파일 하나입니다. 엣지는 산문 속 링크가 아니라 타입이 있는 연결입니다 — <code>jump</code>이거나 <code>menu</code>의 한 갈래. 그래서 이름을 바꾸면 참조가 따라 바뀌고, 끊어진 엣지는 컴파일 전에 걸립니다.</p>
+
+  <div class="app">
+    <div class="app-bar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="tabs"><span>NODE</span><span class="on">MAP</span><span>ROUTE</span><span>STAGE</span></span>
+      <span class="path">story/edges.json · 4 nodes · 4 edges</span>
+    </div>
+    <div class="app-body" style="padding:8px">
+      <svg viewBox="0 0 1080 340" role="img" aria-label="4개 노드 그래프: 비 오는 플랫폼에서 두 갈래로 나뉘어 다음 날 아침으로 합류" style="width:100%;height:auto">
+        <defs>
+          <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 z" fill="#7eb8c9"/>
+          </marker>
+          <marker id="ara" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 z" fill="#d4783a"/>
+          </marker>
+        </defs>
+
+        <!-- edges -->
+        <path d="M262,140 C330,140 330,74 396,74" fill="none" stroke="#d4783a" stroke-width="2" marker-end="url(#ara)"/>
+        <path d="M262,176 C330,176 330,246 396,246" fill="none" stroke="#7eb8c9" stroke-width="1.6" opacity=".75" marker-end="url(#ar)"/>
+        <path d="M660,74 C740,74 740,140 812,140" fill="none" stroke="#d4783a" stroke-width="2" marker-end="url(#ara)"/>
+        <path d="M660,246 C740,246 740,176 812,176" fill="none" stroke="#7eb8c9" stroke-width="1.6" opacity=".75" marker-end="url(#ar)"/>
+
+        <rect x="291" y="84" width="76" height="17" fill="#1a1815"/>
+        <text x="329" y="97" fill="#d4783a" font-family="Noto Sans KR" font-size="11" text-anchor="middle">같이 쓰자고</text>
+        <rect x="297" y="193" width="64" height="17" fill="#1a1815"/>
+        <text x="329" y="206" fill="#7eb8c9" font-family="Noto Sans KR" font-size="11" text-anchor="middle" opacity=".85">괜찮다고</text>
+        <rect x="716" y="86" width="40" height="16" fill="#1a1815"/>
+        <text x="736" y="98" fill="#cfc3a4" font-family="IBM Plex Mono" font-size="10.5" text-anchor="middle" opacity=".55">jump</text>
+        <rect x="716" y="216" width="40" height="16" fill="#1a1815"/>
+        <text x="736" y="228" fill="#cfc3a4" font-family="IBM Plex Mono" font-size="10.5" text-anchor="middle" opacity=".55">jump</text>
+        <text x="166" y="228" fill="#d4783a" font-family="IBM Plex Mono" font-size="10.5" text-anchor="middle" opacity=".8">menu · 2갈래</text>
+
+        <!-- node 1 (current) -->
+        <rect x="70" y="112" width="192" height="92" fill="#221f1a" stroke="#c9a227" stroke-width="1.6"/>
+        <rect x="70" y="112" width="192" height="4" fill="#c9a227"/>
+        <text x="86" y="140" fill="#efe6d4" font-family="Fraunces" font-size="17">비 오는 플랫폼</text>
+        <text x="86" y="162" fill="#cfc3a4" font-family="IBM Plex Mono" font-size="10.5" opacity=".7">platform-01</text>
+        <text x="86" y="184" fill="#cfc3a4" font-family="Noto Sans KR" font-size="11.5" opacity=".8">비트 7 · 대사 2 · 갈래 2</text>
+        <circle cx="246" cy="128" r="4" fill="#c9a227"/>
+
+        <!-- node 2 -->
+        <rect x="396" y="42" width="264" height="86" fill="#221f1a" stroke="#efe6d4" stroke-opacity=".26"/>
+        <text x="414" y="72" fill="#efe6d4" font-family="Fraunces" font-size="16">우산을 같이 쓴다</text>
+        <text x="414" y="92" fill="#cfc3a4" font-family="IBM Plex Mono" font-size="10.5" opacity=".6">share-umbrella</text>
+        <text x="414" y="112" fill="#cfc3a4" font-family="Noto Sans KR" font-size="11.5" opacity=".7">비트 12 · 대사 6</text>
+
+        <!-- node 3 -->
+        <rect x="396" y="214" width="264" height="86" fill="#221f1a" stroke="#efe6d4" stroke-opacity=".26"/>
+        <text x="414" y="244" fill="#efe6d4" font-family="Fraunces" font-size="16">혼자 걷는다</text>
+        <text x="414" y="264" fill="#cfc3a4" font-family="IBM Plex Mono" font-size="10.5" opacity=".6">walk-alone</text>
+        <text x="414" y="284" fill="#c45c4a" font-family="Noto Sans KR" font-size="11.5">비트 0 · 비어 있음</text>
+
+        <!-- node 4 -->
+        <rect x="812" y="112" width="198" height="92" fill="#221f1a" stroke="#efe6d4" stroke-opacity=".26"/>
+        <text x="830" y="142" fill="#efe6d4" font-family="Fraunces" font-size="16">다음 날 아침</text>
+        <text x="830" y="163" fill="#cfc3a4" font-family="IBM Plex Mono" font-size="10.5" opacity=".6">next-morning</text>
+        <text x="830" y="185" fill="#cfc3a4" font-family="Noto Sans KR" font-size="11.5" opacity=".7">비트 9 · 대사 4</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:30px">
+    <div>
+      <h3>MAP이 대답하는 질문</h3>
+      <p class="note">갈래가 몇 개인가. 어디서 합류하는가. 아직 비어 있는 씬은 어디인가(<span style="color:var(--danger)">혼자 걷는다 · 비트 0</span>). 도달 불가능한 노드가 있는가. 변수가 어느 갈래에서 갈리는가. 전부 구조 질문이고, 산문으로는 절대 안 보입니다.</p>
+    </div>
+    <div>
+      <h3>MAP이 대답하지 못하는 질문</h3>
+      <p class="note">재미있는가. 이 대사가 유리답게 들리는가. 여기서 호흡이 늘어지는가. 같은 말을 두 번 했는가. 그래서 MAP만 있는 도구는 작가에게 불친절합니다 — 상자 안의 글을 읽을 수가 없으니까요. 그게 ROUTE가 필요한 이유입니다.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════════ ROUTE ══════════════════ -->
+<section id="route"><div class="wrap">
+  <span class="kicker">Surface 3 · ROUTE</span>
+  <h2>ROUTE — 갈래를 하나 고정하고, 소설로 읽는다</h2>
+  <p class="sub">작품 전체를 소설로 읽는 건 원리적으로 불가능합니다. 분기가 있으니까요. 그런데 작가가 실제로 원하는 건 그게 아닙니다. <b>한 경로를 이어서 읽고 싶은 겁니다.</b> menu에서 선택을 고정하면 경로가 정해지고, 여러 노드의 산문이 한 편으로 이어집니다. 각 문단이 자기 노드 id를 들고 있으니 여기서 고쳐도 원래 파일에 씁니다.</p>
+
+  <div class="app">
+    <div class="app-bar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="tabs"><span>NODE</span><span>MAP</span><span class="on">ROUTE</span><span>STAGE</span></span>
+      <span class="path">경로: platform-01 → share-umbrella → next-morning · 28비트 · 12대사 · 약 1,900자</span>
+    </div>
+    <div class="route">
+      <div class="nodebadge"><span class="nm">platform-01</span><span class="ttl">비 오는 플랫폼</span><span class="ln"></span></div>
+      <p class="nar">우산을 안 가져온 날은 늘 이런 식이다. 개찰구를 나서자마자 비가 쏟아졌고, 플랫폼 지붕 아래는 이미 사람으로 반쯤 차 있었다.</p>
+      <p><span class="who">유리</span> "안 가져왔지, 우산."</p>
+      <p class="nar">대답할 말을 고르는 동안 유리는 접힌 우산을 손목으로 두 번 흔들었다. 물어본 게 아니라 확인이었다.</p>
+      <p><span class="who">유리</span> "왜 그렇게 봐?"</p>
+      <div class="picked">갈래 고정 · <b>같이 쓰자고 말한다</b> · 다른 갈래로 바꿔 읽기</div>
+
+      <div class="nodebadge"><span class="nm">share-umbrella</span><span class="ttl">우산을 같이 쓴다</span><span class="ln"></span></div>
+      <p class="nar">우산은 생각보다 작았다. 어깨를 붙이고 걷는데도 한쪽은 계속 젖었고, 유리는 그걸 아는 것 같았지만 우산을 기울이지 않았다.</p>
+      <p><span class="who">유리</span> "네 쪽이 젖는 게 낫겠지. 나는 감기 걸리면 시끄러워."</p>
+      <p class="nar">무슨 뜻인지 물으려다 말았다. 빗소리가 대화를 대신 메워줬다.</p>
+
+      <div class="nodebadge"><span class="nm">next-morning</span><span class="ttl">다음 날 아침</span><span class="ln"></span></div>
+      <p class="nar">다음 날, 사물함 위에 접힌 우산이 놓여 있었다. 어제 그 우산이었다. 쪽지는 없었다.</p>
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:30px">
+    <div>
+      <h3>ROUTE가 해주는 일</h3>
+      <p class="note">페이싱이 보입니다. 나레이션이 세 문단 연속이면 눈에 걸립니다. 같은 비유를 두 번 쓴 것도 보입니다. 그리고 노드 경계가 옅은 선으로만 표시되니, <b>씬 나누기가 잘못된 곳</b>이 읽다가 걸려서 드러납니다 — MAP에서는 상자가 예쁘게 보였던 자리입니다.</p>
+    </div>
+    <div>
+      <h3>에이전트도 같은 것을 읽습니다</h3>
+      <p class="note">다만 전부 던지면 안 됩니다. 리서치의 절제 실험에서 아티팩트 전체를 보여주면 100줄 창보다 오히려 나빴습니다(18.0 → 12.7, 상대 −29%). 그래서 조립 규칙은 <b>현재 노드 산문 전문 + 직전 1홉 요약 + 경로 한 줄 시놉시스 + 압축 캐릭터 바이블</b>입니다. ROUTE는 사람이 읽는 표면이고, 에이전트는 그것의 창을 받습니다.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════════ STAGE ══════════════════ -->
+<section id="stage"><div class="wrap">
+  <span class="kicker">Surface 4 · STAGE</span>
+  <h2>STAGE — 커서가 놓인 순간을 플레이어의 눈으로</h2>
+  <p class="sub">위 NODE 화면에서 금색으로 선택된 블록이 유리의 첫 대사였습니다. STAGE는 정확히 그 순간을 그립니다. 커서를 아래로 옮기면 화면도 따라 바뀝니다. 편집은 하지 않습니다 — 읽기 전용 거울입니다. 그리고 이 런타임이 웹 익스포트에서 돌아가는 것과 <b>같은 코드</b>입니다.</p>
+
+  <div class="app">
+    <div class="app-bar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="tabs"><span>NODE</span><span>MAP</span><span>ROUTE</span><span class="on">STAGE</span></span>
+      <span class="path">platform-01 · 비트 4 / 7</span>
+    </div>
+    <div class="stage">
+      <img class="bg" src="assets/bg-platform.png" alt="비 오는 플랫폼 배경" />
+      <img class="spr" src="assets/sprite-yuri-cut.png" alt="유리 스프라이트" />
+      <span class="cursor">커서 · 비트 4</span>
+      <div class="vnbox">
+        <p class="nm">유리</p>
+        <p class="tx">"안 가져왔지, 우산."</p>
+      </div>
+    </div>
+  </div>
+  <p class="cap">배경 <code>image_gen</code> · 스프라이트 <code>image_gen</code> 후 알파 컷아웃 · 표정 <code>image_edit</code>으로 정본에서 파생. 자산 파이프라인이 실제로 이렇게 돕니다.</p>
+</div></section>
+
+<!-- ══════════════════ 제안 카드 ══════════════════ -->
+<section id="diff"><div class="wrap">
+  <span class="kicker">AI-native가 실제로 뜻하는 것</span>
+  <h2>에이전트는 제안하고, 작가가 커밋한다</h2>
+  <p class="sub">이 모델이 작동하려면 <b>작가가 제안을 읽을 수 있어야</b> 합니다. JSON 패치는 작가가 못 읽습니다. 산문 문단 diff는 읽습니다. 그래서 노드+소설은 UX 취향이 아니라 이 제품이 성립하는 조건입니다. 아래는 "플랫폼 도착 직후의 호흡을 늘려줘"에 대한 응답입니다 — 디스크에는 아직 아무것도 쓰이지 않았습니다.</p>
+
+  <div class="props">
+    <div class="pcard">
+      <header>
+        <span class="kind">수정</span>
+        <span class="where">platform-01 · 비트 2 · narrate</span>
+        <span class="acts"><span class="ok">수락</span><span>거절</span></span>
+      </header>
+      <div class="in">
+        <p class="dq">우산을 안 가져온 날은 늘 이런 식이다. 개찰구를 나서자마자 비가 쏟아졌고, 플랫폼 지붕 아래는 이미 사람으로 반쯤 차 있었다.</p>
+        <p class="iq">우산을 안 가져온 날은 늘 이런 식이다. 개찰구를 나서는 순간 비가 쏟아졌다. 플랫폼 지붕 아래로 뛰어들었을 때는 셔츠 어깨가 이미 젖어 있었고, 지붕 밑은 사람으로 반쯤 차 있었다.</p>
+        <p class="why">한 문장을 둘로 쪼개고 몸의 감각을 하나 넣었습니다 · 47자 → 78자</p>
+      </div>
+    </div>
+
+    <div class="pcard">
+      <header>
+        <span class="kind add">추가</span>
+        <span class="where">platform-01 · 비트 2와 3 사이 · play</span>
+        <span class="acts"><span class="ok">수락</span><span>거절</span></span>
+      </header>
+      <div class="in">
+        <p class="iq" style="font-family:'IBM Plex Mono',monospace;font-size:13px">소리 · <b>비</b> · 반복 · 페이드인 1.5초</p>
+        <p class="why">유리가 등장하기 전에 빗소리를 먼저 깔면 그 침묵이 길어집니다 · 자산 <code>audio/rain.ogg</code> 없음 → 플레이스홀더로 추가됩니다</p>
+      </div>
+    </div>
+
+    <div class="pcard">
+      <header>
+        <span class="kind">수정</span>
+        <span class="where">platform-01 · 비트 6 · narrate</span>
+        <span class="acts"><span class="ok">수락</span><span>거절</span></span>
+      </header>
+      <div class="in">
+        <p class="dq">대답할 말을 고르는 동안 유리는 접힌 우산을 손목으로 두 번 흔들었다. 물어본 게 아니라 확인이었다.</p>
+        <p class="iq">대답할 말을 고르는 동안 유리는 접힌 우산을 손목으로 두 번 흔들었다.</p>
+        <p class="why">뒷문장이 앞을 설명해버립니다 — 독자가 알아챌 여지를 남기는 쪽을 제안합니다</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:34px">
+    <div>
+      <h3>카드 단위로 수락합니다</h3>
+      <p class="note">셋 중 첫째만 받고 둘째를 버릴 수 있습니다. 전부 받거나 전부 버리는 제안은 실제로는 항상 버려집니다. 수락한 것만 원자적으로 디스크에 쓰이고(temp + rename), 그 순간까지 IR은 손대지 않은 상태입니다.</p>
+    </div>
+    <div>
+      <h3>실패 모드가 바뀝니다</h3>
+      <p class="note">"이상한 JSON이 들어왔다"가 아니라 "이 문장이 마음에 안 든다"가 됩니다. 후자는 작가가 판단할 수 있는 종류의 실패입니다. 도구 경계에서 스키마 검증하고 무효 편집을 버리는 것만으로도 절제 실험에서 15.0% → 18.0%(상대 +20%)였습니다 — 검증은 UX가 아니라 성능입니다.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════════ 열린 질문 ══════════════════ -->
+<section id="open"><div class="wrap">
+  <span class="kicker">아직 안 정한 것</span>
+  <h2>갈래를 노드 안에 둘까, 노드 경계로 강제할까</h2>
+  <p class="sub">이게 IR 스키마를 확정하기 전에 정해야 하는 가장 큰 하나입니다. 위 NODE 화면에서 저는 menu를 노드 <b>안</b>에 인라인으로 그렸습니다. 다른 선택도 가능합니다.</p>
+
+  <div class="q-two">
+    <div class="qbox pick">
+      <div class="lbl">A · 인라인 허용 (위 목업이 이것)</div>
+      <h3>menu가 노드 안에 산다</h3>
+      <p class="note" style="font-size:14px">한 노드가 비트 여러 개와 갈래 하나를 함께 갖습니다. 짧은 선택지 때문에 노드가 늘어나지 않습니다.</p>
+      <ul>
+        <li class="p">산문 흐름이 끊기지 않는다 — 읽다가 갈래가 나오고 다시 이어진다</li>
+        <li class="p">"이 대사 뒤에 선택지" 같은 작은 갈래가 싸다</li>
+        <li class="m">노드 = 씬 파일 등식이 흔들린다. 노드 하나가 여러 출구를 갖는다</li>
+        <li class="m">MAP에서 상자 하나에 나가는 선이 여러 개 — 레이아웃이 복잡해진다</li>
+      </ul>
+    </div>
+    <div class="qbox">
+      <div class="lbl">B · 노드 경계로 강제</div>
+      <h3>갈래는 항상 노드를 나눈다</h3>
+      <p class="note" style="font-size:14px">menu를 만나면 노드가 끝납니다. 선택지 하나가 곧 새 노드 하나입니다.</p>
+      <ul>
+        <li class="p">그래프가 깨끗하다. 노드 하나에 출구 하나 또는 menu 하나</li>
+        <li class="p">ROUTE 계산과 도달 가능성 검사가 단순해진다</li>
+        <li class="m">선택지 두 줄 때문에 노드가 둘 늘어난다 — 파일이 폭발한다</li>
+        <li class="m">산문 흐름이 자꾸 끊긴다. 노드+소설의 장점을 스스로 깎는다</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="verdict">
+    <p style="margin:0"><b>제 기울기는 A입니다.</b> 노드는 "씬 파일"이 아니라 "작가가 한 번에 읽는 덩어리"로 재정의하고, 갈래는 그 안에 살 수 있게 둡니다. 그래야 소설로 읽히니까요. 대신 MAP은 노드 안의 menu를 상자 하단의 여러 출구 포트로 그려서 구조를 잃지 않습니다. 이걸 확정해야 <code>edges.json</code>의 모양이 정해집니다.</p>
+  </div>
+
+  <div style="margin-top:32px">
+    <h3>같이 정해야 할 작은 것들</h3>
+    <table style="margin-top:14px">
+      <tr><th style="width:24%">질문</th><th>지금 제 생각</th></tr>
+      <tr><td>첫 화면</td><td>NODE 산문. MAP은 탭 또는 우측 미니맵으로 접어둡니다. 비전 문서는 3단 + 그래프를 앞세웠는데, 노드+소설로 가면 초기 화면이 바뀝니다.</td></tr>
+      <tr><td>배경 전환 위치</td><td>비트 순서는 선형인데 산문에서는 문단 <b>경계</b>에 걸칩니다. 거터 칩을 문단 사이의 독립 행으로 두는 게 위 목업이고, 모호함이 남습니다.</td></tr>
+      <tr><td>raw Ren'Py</td><td>회색 잠긴 블록으로 통과. 시각 편집 차단, 컴파일러는 그대로 흘려보냄. 확장 지점은 <code>game/user/*.rpy</code> — 컴파일러가 절대 쓰지 않는 폴더.</td></tr>
+      <tr><td>ROUTE 성능</td><td>가상 스크롤. 경로가 100노드면 산문이 수만 자입니다.</td></tr>
+      <tr><td>표정 없을 때</td><td>거터에 정본 스프라이트 썸네일 + 표정 이름만. 플레이스홀더 스튜디오가 v1입니다.</td></tr>
+    </table>
+  </div>
+</div></section>
+
+<!-- ══════════════════ 용어 ══════════════════ -->
+<section id="gloss"><div class="wrap">
+  <span class="kicker">Glossary</span>
+  <h2>제가 쓴 말들</h2>
+  <table>
+    <tr><th style="width:20%">용어</th><th>뜻</th></tr>
+    <tr><td>NODE</td><td>씬 하나를 산문으로 읽고 쓰는 표면. 기본 작업 화면. 좌측 거터 + 우측 본문 2열.</td></tr>
+    <tr><td>MAP</td><td>노드가 상자, 갈래가 선인 그래프 표면. 구조 전용.</td></tr>
+    <tr><td>ROUTE</td><td>갈래를 고정해 여러 노드를 이어 한 편의 소설로 읽는 표면. 페이싱·중복 검사용.</td></tr>
+    <tr><td>STAGE</td><td>커서 위치의 순간을 플레이어 화면으로 그리는 읽기 전용 프리뷰. 웹 익스포트와 같은 런타임.</td></tr>
+    <tr><td>블록</td><td>산문 뷰의 한 줄 단위. <b>블록 하나 = 비트 op 하나</b>. 파싱하지 않고 투영합니다.</td></tr>
+    <tr><td>비트 op</td><td>IR의 최소 단위. <code>scene show hide say narrate play stop pause set jump menu raw</code> 등. 이름은 Ren'Py를 따릅니다.</td></tr>
+    <tr><td>거터</td><td>산문 본문 왼쪽의 좁은 열. 연출 비트(배경·스프라이트·소리·변수)가 칩으로 붙는 자리.</td></tr>
+    <tr><td>화자 칩</td><td>문단 앞의 캐릭터 표식. 누가 말하는지를 <b>정합니다</b> — 산문에서 추론하지 않습니다.</td></tr>
+    <tr><td>밀도 토글</td><td>같은 블록 리스트를 카드 밀도(썸네일 크게) / 산문 밀도(색 점으로 접기)로 바꿔 보는 스위치.</td></tr>
+    <tr><td>제안 카드</td><td>에이전트의 편집 제안. 산문 diff로 보이고, 카드 단위로 수락·거절합니다. 수락 전까지 디스크는 그대로.</td></tr>
+    <tr><td>IR</td><td>디스크의 JSON 스토리 그래프. 유일한 진실. <code>story/nodes/*.json</code> + <code>story/edges.json</code>.</td></tr>
+    <tr><td>emit</td><td>IR → <code>.rpy</code> 단방향 컴파일. 되돌리지 않습니다 — IR은 Ren'Py의 의도적 부분집합입니다.</td></tr>
+  </table>
+</div></section>
+
+<div class="foot"><div class="wrap">
+  <p style="margin:0">vnmaker · 브레인스토밍 문서 · 2026-08-31 · 선행 문서 <a href="../vision/index.html">docs/vision/index.html</a> (W0)</p>
+  <p style="margin:6px 0 0">이 문서의 배경·스프라이트는 grok CLI <code>image_gen</code> / <code>image_edit</code>으로 생성했습니다. 차트·다이어그램·목업은 전부 코드로 만들었습니다 — 정확한 글자와 구조가 필요한 것은 이미지 모델에 맡기지 않습니다.</p>
+</div></div>
+
+</body>
+</html>

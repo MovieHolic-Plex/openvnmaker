@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>vnmaker — AI-native Visual Novel Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #12110e;
+      --paper: #efe6d4;
+      --paper-dim: #cfc3a4;
+      --amber: #d4783a;
+      --gold: #c9a227;
+      --cyan: #7eb8c9;
+      --line: rgba(239, 230, 212, 0.14);
+      --muted: rgba(239, 230, 212, 0.62);
+      --danger: #c45c4a;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: "Noto Sans KR", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+    img { max-width: 100%; display: block; }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
+    nav {
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(16px);
+      background: rgba(18, 17, 14, 0.78);
+      border-bottom: 1px solid var(--line);
+    }
+    nav .wrap {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 58px; gap: 24px;
+    }
+    .brand { font-family: Fraunces, serif; font-weight: 600; letter-spacing: 0.02em; }
+    nav ul { display: flex; gap: 18px; list-style: none; margin: 0; padding: 0; font-size: 13px; }
+    nav a { color: var(--paper-dim); }
+    nav a:hover { color: var(--paper); text-decoration: none; }
+    .hero {
+      position: relative; min-height: 92vh;
+      display: grid; align-items: end;
+    }
+    .hero img.plate {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; object-position: 60% 40%;
+    }
+    .hero::after {
+      content: ""; position: absolute; inset: 0;
+      background:
+        linear-gradient(180deg, rgba(18,17,14,0.18) 0%, rgba(18,17,14,0.22) 40%, rgba(18,17,14,0.92) 100%),
+        linear-gradient(90deg, rgba(18,17,14,0.55) 0%, rgba(18,17,14,0.08) 55%);
+    }
+    .hero-copy { position: relative; z-index: 1; padding: 0 0 72px; }
+    .kicker {
+      display: inline-block; font-size: 12px; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--gold); margin-bottom: 14px;
+    }
+    h1 {
+      font-family: Fraunces, serif; font-weight: 600;
+      font-size: clamp(42px, 7vw, 84px); line-height: 1.05;
+      margin: 0 0 18px; max-width: 16ch;
+    }
+    .lede { font-size: 20px; max-width: 42ch; color: var(--paper-dim); }
+    .hero-meta {
+      display: flex; gap: 28px; margin-top: 36px; font-size: 13px; color: var(--muted);
+    }
+    .hero-meta b { display: block; color: var(--paper); font-weight: 600; }
+    section { padding: 92px 0; border-top: 1px solid var(--line); }
+    h2 {
+      font-family: Fraunces, serif; font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.15; margin: 0 0 12px; font-weight: 600;
+    }
+    h3 { font-family: Fraunces, serif; font-size: 24px; margin: 0 0 10px; font-weight: 600; }
+    .sub { color: var(--muted); max-width: 62ch; margin-bottom: 36px; }
+    .split { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: start; }
+    .split.rev { grid-template-columns: 0.9fr 1.1fr; }
+    .plate-frame { overflow: hidden; border: 1px solid var(--line); background: #090807; }
+    .plate-frame img { width: 100%; height: 100%; object-fit: cover; min-height: 360px; }
+    .cap { font-size: 12px; color: var(--muted); margin-top: 10px; }
+    .thesis {
+      font-family: Fraunces, serif; font-size: clamp(26px, 3.4vw, 40px);
+      line-height: 1.28; max-width: 22ch; font-weight: 500;
+    }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .card {
+      border: 1px solid var(--line); padding: 22px 22px 20px;
+      background: rgba(239,230,212,0.03);
+    }
+    .card .n { font-family: IBM Plex Mono, monospace; font-size: 11px; color: var(--gold); letter-spacing: 0.12em; }
+    p { margin: 0 0 14px; }
+    ul.plain { margin: 0; padding: 0 0 0 18px; }
+    ul.plain li { margin: 0 0 8px; }
+    .compare { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .compare th, .compare td {
+      text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top;
+    }
+    .compare th { color: var(--gold); font-weight: 500; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .us { color: var(--paper); }
+    .flow {
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin: 28px 0 8px;
+    }
+    .step {
+      border-top: 2px solid var(--gold); padding: 14px 10px 12px;
+      background: rgba(201,162,39,0.05);
+    }
+    .step b { display: block; font-size: 13px; margin-bottom: 6px; }
+    .step span { display: block; font-size: 12px; color: var(--muted); }
+    code, .mono { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+    pre {
+      background: #090807; border: 1px solid var(--line);
+      padding: 18px 18px 16px; overflow: auto; color: #e8dcc8;
+      font-family: "IBM Plex Mono", monospace; font-size: 12px; line-height: 1.55;
+    }
+    .warn {
+      border-left: 3px solid var(--danger);
+      padding: 14px 18px; background: rgba(196,92,74,0.08);
+      color: #f0d2cc;
+    }
+    .arch {
+      display: grid; grid-template-columns: 220px 1fr 220px; gap: 16px; align-items: stretch;
+    }
+    .col { display: flex; flex-direction: column; gap: 10px; }
+    .chip {
+      border: 1px solid var(--line); padding: 12px 14px; font-size: 13px;
+      background: rgba(126,184,201,0.05);
+    }
+    .chip strong { display: block; font-size: 12px; color: var(--gold); font-weight: 500; margin-bottom: 4px; }
+    .spine {
+      display: flex; flex-direction: column; justify-content: space-between;
+      border: 1px dashed rgba(201,162,39,0.35); padding: 16px;
+      text-align: center;
+    }
+    .spine .node {
+      background: var(--gold); color: var(--ink); padding: 10px; font-weight: 600; font-size: 13px;
+    }
+    .timeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+    .phase { padding: 0 18px 0 0; border-left: 1px solid var(--line); padding-left: 18px; }
+    .phase .when { font-family: IBM Plex Mono, monospace; font-size: 11px; color: var(--gold); }
+    .chrome {
+      display: grid; grid-template-columns: 220px 1fr 300px;
+      grid-template-rows: 40px 1fr 220px; gap: 1px;
+      background: var(--line); min-height: 520px; border: 1px solid var(--line);
+    }
+    .chrome > * { background: #141310; padding: 12px 14px; font-size: 12px; }
+    .chrome .bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; color: var(--muted); }
+    .chrome .bar b { color: var(--paper); font-weight: 500; }
+    .chrome .graph { color: var(--paper-dim); }
+    .chrome .beats { background: #181612; }
+    .chrome .chat { color: var(--muted); }
+    .chrome .play { grid-column: 1 / -1; display: grid; grid-template-columns: 160px 1fr 200px; gap: 12px; align-items: center; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); display: inline-block; margin-right: 6px; }
+    .ports { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .why-not { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .surf {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      grid-template-rows: auto auto 1fr;
+      gap: 1px; background: var(--line); border: 1px solid var(--line); min-height: 640px;
+    }
+    .surf > * { background: #141310; }
+    .surf-top {
+      grid-column: 1 / -1; padding: 10px 14px; display: flex; gap: 18px;
+      align-items: center; font-size: 12px; color: var(--muted);
+    }
+    .surf-top b { color: var(--paper); font-weight: 500; }
+    .surf-stage { position: relative; min-height: 340px; background: #0c0b09; overflow: hidden; }
+    .surf-stage .bg {
+      height: 340px;
+      background:
+        radial-gradient(ellipse at 70% 40%, #3a2a18 0%, transparent 50%),
+        linear-gradient(180deg, #1a2230 0%, #0c0b09 100%);
+    }
+    .surf-stage .who {
+      position: absolute; left: 28px; bottom: 92px;
+      background: #efe6d4; color: #12110e; padding: 4px 12px; font-size: 13px; font-weight: 600;
+    }
+    .surf-stage .line {
+      position: absolute; left: 20px; right: 20px; bottom: 18px;
+      background: rgba(18,17,14,0.78); border: 1px solid var(--line);
+      padding: 16px 18px 14px; font-size: 15px; line-height: 1.55;
+    }
+    .surf-ai { padding: 14px; font-size: 13px; grid-row: 2 / 4; }
+    .surf-ai .bubble { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); }
+    .surf-ai .bubble.me { border-color: rgba(201,162,39,0.35); }
+    .surf-ai .bubble .who { font-size: 11px; color: var(--gold); margin-bottom: 4px; }
+    .surf-strip { padding: 12px; }
+    .card-beat {
+      display: grid; grid-template-columns: 72px 1fr; gap: 10px;
+      border: 1px solid var(--line); padding: 8px; margin-bottom: 8px; font-size: 13px;
+    }
+    .card-beat.on { border-color: var(--gold); }
+    .card-beat .thumb { background: #2a2418; min-height: 48px; }
+    .card-beat .kind { font-size: 10px; color: var(--gold); letter-spacing: 0.08em; }
+    .layers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 28px; }
+    .q { border-top: 1px solid var(--line); padding: 16px 0; }
+    .q b { display: block; margin-bottom: 6px; color: var(--paper); }
+    footer { padding: 48px 0 72px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .callout-gold { color: var(--gold); font-family: Fraunces, serif; font-size: 22px; line-height: 1.35; }
+    @media (max-width: 900px) {
+      nav ul { display: none; }
+      .split, .split.rev, .grid-3, .flow, .arch, .timeline, .pair, .why-not, .ports, .steal, .layers { grid-template-columns: 1fr; }
+      .surf { grid-template-columns: 1fr; }
+      .surf-ai { grid-row: auto; }
+      .chrome { grid-template-columns: 1fr; grid-template-rows: auto; }
+      .chrome .bar, .chrome .play { grid-column: auto; }
+      .hero { min-height: 78vh; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <div class="brand">vnmaker</div>
+      <ul>
+        <li><a href="#thesis">왜</a></li>
+        <li><a href="#follow">따라할 것</a></li>
+        <li><a href="#surface">초보자 화면</a></li>
+        <li><a href="#stack">Vite</a></li>
+        <li><a href="#oauth">OAuth</a></li>
+        <li><a href="#product">제품</a></li>
+        <li><a href="#ir">IR</a></li>
+        <li><a href="#arch">게이트웨이</a></li>
+        <li><a href="#risk">리스크</a></li>
+        <li><a href="#roadmap">로드맵</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <img class="plate" data-img="hero-studio.png" alt="비 오는 골목과 떠 있는 스토리 그래프 에디터" />
+    <div class="wrap hero-copy">
+      <div class="kicker">Open source · BYO AI · 2026</div>
+      <h1>자기 모델로 쓰는 비주얼 노벨 스튜디오</h1>
+      <p class="lede">호스팅된 AI를 팔지 않는다. 사용자는 Google에 로그인하고, 자기 Antigravity / Gemini 할당량으로 씬·대사·분기·자산을 만든다.</p>
+      <div class="hero-meta">
+        <div><b>첫 프로바이더</b>Google Antigravity OAuth</div>
+        <div><b>참고 구현</b>oh-my-pi / pi-antigravity</div>
+        <div><b>형태</b>Vite 브라우저 + 로컬 Node 게이트웨이</div>
+      </div>
+    </div>
+  </header>
+
+  <section id="thesis">
+    <div class="wrap split">
+      <div>
+        <div class="kicker">Thesis</div>
+        <p class="thesis">AI native는 채팅창을 옆에 붙이는 게 아니다. 에이전트가 스토리 그래프를 직접 고친다.</p>
+        <p>Ren'Py는 엔진이고, Tyrano는 타임라인 에디터다. 둘 다 “사람이 스크립트를 쓴다”가 기본값이다. vnmaker의 기본값은 반대다. 사람은 의도를 말하고, 도구를 가진 에이전트가 캐릭터 바이블·씬 노드·선택지·이미지 프롬프트를 프로젝트 파일에 커밋한다. 사람은 그걸 읽고, 자르고, 다시 말한다.</p>
+        <p>과금 주체는 우리가 아니다. 토큰은 사용자 계정에 남는다. 그래서 오픈소스가 성립한다.</p>
+      </div>
+      <div>
+        <div class="grid-3" style="grid-template-columns:1fr">
+          <div class="card">
+            <div class="n">01 — BYOA</div>
+            <h3>Bring Your Own Account</h3>
+            <p>API 키를 우리 서버에 맡기지 않는다. OAuth는 브라우저에서 동의하고, 리프레시 토큰은 로컬 게이트웨이가 <code>~/.vnmaker/auth.json</code>에만 둔다. 브라우저 localStorage에 두지 않는다.</p>
+          </div>
+          <div class="card">
+            <div class="n">02 — Story IR</div>
+            <h3>엔진보다 먼저 데이터</h3>
+            <p>화면은 나중에 갈아끼울 수 있다. 먼저 필요한 건 씬·캐릭터·선택지·상태를 담는 중간 표현이다. 그다음 웹 런타임, 그다음 Ren'Py 익스포트.</p>
+          </div>
+          <div class="card">
+            <div class="n">03 — Tools, not prompts</div>
+            <h3>프롬프트가 아니라 도구</h3>
+            <p><code>upsert_beats</code>, <code>connect</code>, <code>upsert_character</code>. 모델은 Tyrano 컴포넌트를 쌓는다. 채팅 로그가 게임이 되면 안 된다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="kicker">Position</div>
+      <h2>이미 있는 것들과의 거리</h2>
+      <p class="sub">빈 시장이 아니다. 비어 있는 자리는 “내 구독으로 돌아가는, 그래프가 진실인 스튜디오”다.</p>
+      <table class="compare">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Ren'Py + MCP</th>
+            <th>Tyrano / VN Maker</th>
+            <th>vnmaker</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>기본 단위</td>
+            <td>.rpy 스크립트</td>
+            <td>타임라인 블록</td>
+            <td class="us">스토리 그래프 + IR JSON</td>
+          </tr>
+          <tr>
+            <td>AI</td>
+            <td>바깥 에이전트가 파일을 고침</td>
+            <td>거의 없음 / 벤더 종속</td>
+            <td class="us">에디터 안의 도구형 에이전트</td>
+          </tr>
+          <tr>
+            <td>모델 비용</td>
+            <td>각자 Claude/키</td>
+            <td>없음 또는 유료 구독</td>
+            <td class="us">사용자 OAuth 구독 (Antigravity가 1번)</td>
+          </tr>
+          <tr>
+            <td>라이선스</td>
+            <td>MIT, 20년 생태계</td>
+            <td>클로즈드</td>
+            <td class="us">오픈소스, 런타임도 우리가 가짐</td>
+          </tr>
+          <tr>
+            <td>의도적으로 안 하는 것</td>
+            <td>—</td>
+            <td>—</td>
+            <td class="us">클라우드에 작품을 가두지 않음. 폴더가 소스오브트루스.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="follow">
+    <div class="wrap">
+      <div class="kicker">What to copy</div>
+      <h2>따라할 에디터는 하나가 아니다. 표면을 쪼개 가져온다.</h2>
+      <p class="sub">비주얼 노벨 에디터의 정본은 없다. Ren'Py는 에디터가 약하고, Tyrano는 그래프가 없고, Naninovel은 Unity다. v1은 아래 네 곳에서만 훔친다. 그 밖은 나중에.</p>
+      <p class="callout-gold" style="max-width:36ch;margin-bottom:36px">쓰는 화면은 Tyrano. 미리보기는 VNM. 목차는 Naninovel. 언어는 Ren'Py.</p>
+      <div class="steal">
+        <div class="card">
+          <div class="from">1 · 기본 화면</div>
+          <h3>TyranoBuilder</h3>
+          <p>작가가 하루 종일 사는 레이아웃. 왼쪽 팔레트(Components / Assets / Scenes), 가운데 세로 컴포넌트 스택, 오른쪽 인스펙터. 컴포넌트를 끌어 쌓고, 위아래로 reorder. Preview는 Ctrl+P.</p>
+          <p>우리가 베낄 것: 이 3단, 컴포넌트 이름, 드래그로 순서. 베끼지 말 것: Live2D, 지진 이펙트, TyranoScript 탈출구.</p>
+        </div>
+        <div class="card">
+          <div class="from">2 · 커서 프리뷰</div>
+          <h3>Degica Visual Novel Maker</h3>
+          <p>선택한 커맨드까지 씬을 빨리 감아 보여주는 Live Preview. Wait / 클릭대기는 스킵. 그래서 편집 커서가 곧 화면이다.</p>
+          <p>우리가 베낄 것: 비트 선택 = 스테이지가 그 시점. Database 느낌의 캐릭터 레코드(바이블). 베끼지 말 것: RPG Maker식 Common Event 미로.</p>
+        </div>
+        <div class="card">
+          <div class="from">3 · 그래프 의미</div>
+          <h3>Naninovel Story Editor</h3>
+          <p>그래프의 노드 = 대사 한 줄이 아니라 <b>스크립트 파일 / 라벨</b>. 엣지는 jump·choice. 점선 = 조건 분기. 노드를 더블클릭하면 그 안의 라인 에디터로 들어간다. 샌드박스 플레이스홀더 자산(설명만 있고 픽셀은 가짜).</p>
+          <p>우리가 베낄 것: 이 줌 레벨, placeholder 자산, <code>@char Kohaku.Happy</code> 식 appearance. 베끼지 말 것: Unity 임베드, PWA 강요.</p>
+        </div>
+        <div class="card">
+          <div class="from">4 · 언어 · 모델 사전학습</div>
+          <h3>Ren'Py script</h3>
+          <p>에디터는 별로다. 대신 LLM이 <code>.rpy</code>를 수백만 줄 봤다. 비트 op 이름을 Ren'Py에 맞추면 에이전트가 환각을 덜 한다. 나중에 익스포트도 컴파일이다.</p>
+          <p>우리가 베낄 것: <code>scene</code> <code>show</code> <code>hide</code> <code>say</code> <code>menu</code> <code>jump</code> <code>play</code> <code>$</code>. 베끼지 말 것: Python 이스케이프, 스크린 랭귀지, 런처 UI.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="margin-top:48px">
+      <h3>의식적으로 안 따라가는 것</h3>
+      <table class="compare">
+        <thead><tr><th>도구</th><th>왜 스킵</th></tr></thead>
+        <tbody>
+          <tr><td>Twine / Inky</td><td>분기의 스케치로는 최고. 스프라이트·배경·보이스가 없다. 그래프 줌만 참고하고 본체로 쓰지 않는다.</td></tr>
+          <tr><td>StoryFlow / Blueprint 80종 노드</td><td>비주얼 스크립팅이 대본을 잡아먹는다. 작가는 노드 캔버스에서 대사를 안 쓴다.</td></tr>
+          <tr><td>artic y:draft</td><td>엔터프라이즈 데이터베이스. 1인 작가가 첫 주에 익힐 표면이 아니다.</td></tr>
+          <tr><td>Nongine</td><td>브라우저 + page/map/stage 는 형제 제품. 영감은 좋지만 19 노드 타입과 클로즈드 앱을 복제하지 않는다. 우리 차별점은 BYO OAuth 에이전트.</td></tr>
+          <tr><td>Mimmo 등 AI 내장 엔진</td><td>벤더 모델에 가둔다. 우리가 하지 않기로 한 일.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="wrap" style="margin-top:48px">
+      <h3>잠근 기본 레이아웃 — SCENE 모드</h3>
+      <p class="sub">Tyrano 3단 + VNM 프리뷰. 그래프는 탭이다. 에이전트는 서랍이다. 작가가 기본으로 보는 화면은 이것이다.</p>
+      <pre>┌─ 툴바: 파일 · SCENE|MAP · PLAY · Connect ─────────────────────────┐
+│ PALETTE          │  BEATS (컴포넌트 스택)     │  INSPECTOR         │
+│ [Components]     │  ▸ scene  bg/rain          │  선택 비트 필드    │
+│  Say  Show  Hide │  ▸ show  heroine happy L   │                    │
+│  Scene Menu Jump │  ▸ say   heroine  "우산…"   │                    │
+│ [Assets]         │  ▸ menu  빌려준다|거절     │                    │
+│ [Scenes]         │                            │                    │
+├──────────────────┴────────────────────────────┴────────────────────┤
+│ STAGE  ← 선택된 비트까지 빨리 감기 (wait/클릭 스킵)                 │
+│                         AGENT ▸  (오른쪽 서랍, 기본 접힘)          │
+└─────────────────────────────────────────────────────────────────────┘</pre>
+      <p><b>MAP 모드</b>는 Naninovel이다. 노드 = 씬 파일. 엣지 = jump/menu. 더블클릭하면 다시 SCENE으로 들어간다. 한 줄짜리 say 노드는 만들지 않는다 — 400씬에서 죽는다.</p>
+    </div>
+
+    <div class="wrap" style="margin-top:48px">
+      <h3>v1 팔레트 — Tyrano에서 남긴 12개</h3>
+      <table class="compare">
+        <thead><tr><th>그룹</th><th>컴포넌트</th><th>IR op</th><th>Ren'Py 대응</th></tr></thead>
+        <tbody>
+          <tr><td>Stage</td><td>Background</td><td><code>scene</code></td><td><code>scene bg rain</code></td></tr>
+          <tr><td>Characters</td><td>Join / Expression / Leave</td><td><code>show</code> <code>show</code>(expr) <code>hide</code></td><td><code>show eileen happy at left</code></td></tr>
+          <tr><td>Story</td><td>Say</td><td><code>say</code></td><td><code>e "…"</code></td></tr>
+          <tr><td>Story</td><td>Menu</td><td><code>menu</code></td><td><code>menu:</code></td></tr>
+          <tr><td>Flow</td><td>Jump / Label</td><td><code>jump</code> <code>label</code></td><td><code>jump cafe</code></td></tr>
+          <tr><td>Flow</td><td>Set var</td><td><code>set</code></td><td><code>$ took_umbrella = True</code></td></tr>
+          <tr><td>Audio</td><td>Music / Sound</td><td><code>play</code> <code>sound</code></td><td><code>play music "theme.ogg"</code></td></tr>
+          <tr><td>Flow</td><td>Wait click</td><td><code>pause</code></td><td><code>pause</code></td></tr>
+        </tbody>
+      </table>
+      <p>v1에 없는 것: Live2D, 화면 흔들기, 비디오, 자유 그림 레이어, 커스텀 스크립트 블록. 필요하면 그다음에 연다.</p>
+      <p>에이전트 도구는 이 12개를 조립한다. <code>upsert_beats</code>의 페이로드가 곧 위 테이블이다. 모델에게 “컴포넌트를 쌓아라”고 하면 Tyrano 사용자와 같은 일을 한다.</p>
+    </div>
+  </section>
+
+  <section id="surface">
+    <div class="wrap">
+      <div class="kicker">Beginner surface</div>
+      <h2>파일은 Ren'Py다. 초보자가 보는 건 게임이다.</h2>
+      <p class="sub">Tyrano처럼 컴포넌트 IDE를 먼저 보여주면, AI를 껴도 “도구를 배우는 숙제”가 된다. 초보자의 루프는 말하고 → 화면이 바뀌고 → 그 컷을 고치는 것이다. 스크립트는 세 번째 레이어다.</p>
+      <p class="callout-gold" style="max-width:34ch;margin-bottom:28px">진실은 .rpy. 기본 화면은 스테이지 + 스토리보드. 코드는 토글.</p>
+
+      <div class="surf">
+        <div class="surf-top">
+          <span class="dot"></span><b>비 오는 역</b>
+          <span>장면</span>
+          <span>지도</span>
+          <span style="opacity:0.45">스크립트</span>
+          <span style="margin-left:auto">Google 연결됨</span>
+        </div>
+        <div class="surf-stage">
+          <div class="bg"></div>
+          <div class="who">히로인</div>
+          <div class="line">우산, 같이 쓸래요? 이대로 맞으면 감기하겠어요.</div>
+        </div>
+        <div class="surf-ai">
+          <div class="bubble me"><div class="who">나</div>비 오는 역에서 우산을 빌려주는 사람. 거절하면 다음날 카페.</div>
+          <div class="bubble"><div class="who">에이전트</div>첫 만남 장면을 넣었어요. 아래 컷을 눌러 대사를 고치거나, 그냥 플레이하세요.</div>
+          <div class="bubble me"><div class="who">나</div>이 대사만 더 차갑게.</div>
+          <div class="bubble"><div class="who">에이전트</div>선택 중인 말만 바꿨어요. 스크립트는 안 열어도 됩니다.</div>
+        </div>
+        <div class="surf-strip">
+          <div class="card-beat"><div class="thumb"></div><div><div class="kind">배경</div>비 오는 역</div></div>
+          <div class="card-beat"><div class="thumb"></div><div><div class="kind">등장</div>히로인 · 웃음 · 왼쪽</div></div>
+          <div class="card-beat on"><div class="thumb"></div><div><div class="kind">대사</div>히로인 — 우산, 같이 쓸래요?</div></div>
+          <div class="card-beat"><div class="thumb"></div><div><div class="kind">선택</div>빌려준다 · 거절한다</div></div>
+        </div>
+      </div>
+      <p class="cap">기본 화면. 왼쪽-위가 플레이어가 보는 것. 아래가 대본. 오른쪽이 대화. 한 줄도 코드가 없다.</p>
+    </div>
+
+    <div class="wrap" style="margin-top:56px">
+      <h3>네 겹 — 한꺼번에 열지 않는다</h3>
+      <div class="layers">
+        <div class="card">
+          <div class="n">0 · 말하기</div>
+          <p>첫 실행. 빈 그래프 없음. “무슨 이야기?” 한 줄이면 placeholder 캐릭터와 첫 컷이 STAGE에 뜬다. 픽셀 없이도 실루엣+이름이면 된다 (Naninovel sandbox).</p>
+        </div>
+        <div class="card">
+          <div class="n">1 · 컷 고치기</div>
+          <p>스토리보드 카드를 누른다. 인스펙터는 한국어: 누가 / 무슨 말 / 표정 / 어디. <code>who=</code> <code>at=</code> 를 보여주지 않는다. 카드가 게임 UI를 닮는다 (이름표+대사창).</p>
+        </div>
+        <div class="card">
+          <div class="n">2 · 스크립트</div>
+          <p>툴바의 「스크립트」. 같은 씬의 <code>.rpy</code>가 옆에 동기화된다. 카드 선택 = 해당 줄 하이라이트. 초보자 기본은 꺼짐.</p>
+        </div>
+        <div class="card">
+          <div class="n">3 · 지도</div>
+          <p>길을 잃었을 때만. 노드 = 파일. say 한 줄 노드 금지.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="margin-top:48px">
+      <h3>카드가 코드의 번역이다</h3>
+      <p>디스크에는 이게 있다. 초보자는 왼쪽만 본다.</p>
+      <div class="pair">
+        <pre>scene bg rain_station
+show heroine happy at left
+heroine "우산, 같이 쓸래요?"
+menu:
+    "빌려준다":
+        $ took_umbrella = True
+        jump cafe_02
+    "거절한다":
+        jump cafe_02</pre>
+        <div>
+          <p>바이블이 <code>heroine → 히로인</code>을 들고 있다. 화면의 「히로인」을 고치면 파일의 id는 그대로다.</p>
+          <p>표정을 드롭다운에서 「웃음」으로 바꾸면 줄이 <code>show heroine happy at left</code>로 다시 쓰인다.</p>
+          <p>v1 12개 op 밖 줄(<code>$</code> 파이썬, <code>screen</code>)은 카드에 「고급」만 달고 시각 편집을 막는다. 깨진 round-trip이 초보자를 배신한다.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="margin-top:48px">
+      <h3>AI가 끼는 방식 — 채팅이 에디터가 아니다</h3>
+      <table class="compare">
+        <thead><tr><th>초보자가 하는 일</th><th>화면에 일어나는 일</th><th>하지 않는 것</th></tr></thead>
+        <tbody>
+          <tr><td>“첫 만남 씬 만들어줘”</td><td>STAGE가 바뀌고, 새 카드가 금색으로 들어온다</td><td>툴 JSON, git diff, 빈 MAP</td></tr>
+          <tr><td>카드 하나 고르고 “더 차갑게”</td><td>그 줄만 다시 씀. PLAY 커서가 그 컷</td><td>작품 전체를 재생성</td></tr>
+          <tr><td>선택지 버튼을 STAGE에서 누름</td><td>그냥 플레이. 편집 모드와 같은 런타임</td><td>별도 “미리보기 창”</td></tr>
+          <tr><td>히로인 이름을 인스펙터에서 바꿈</td><td>바이블 + 모든 say 표시명. id는 유지</td><td>파일명 강제 변경</td></tr>
+        </tbody>
+      </table>
+      <p>에이전트 턴이 끝나면 채팅보다 <b>바뀐 카드</b>가 위에 있다. 실패 모드는 긴 설명과 그대로인 화면이다.</p>
+    </div>
+  </section>
+
+  <section id="stack">
+    <div class="wrap">
+      <div class="kicker">Runtime</div>
+      <h2>Tauri는 안 쓴다. Vite만으로는 부족하다.</h2>
+      <p class="sub">Vite는 셸이 아니라 번들러다. 에디터는 브라우저 탭이다. 그래도 Antigravity는 브라우저에서 직접 부를 수 없다. 그래서 같은 머신에만 붙는 Node 게이트웨이가 필요하다. 클라우드 백엔드가 아니다.</p>
+      <div class="why-not">
+        <div class="card">
+          <div class="n">안 하는 것</div>
+          <h3>Tauri / Electron</h3>
+          <p>네이티브 패키징, 업데이터, 웹뷰 디버깅을 지금 사지 않는다. 배포 단위는 <code>pnpm dev</code>와 나중에 <code>node server.js</code>가 정적 빌드를 같이 서빙하는 것이다. 사용자는 Chrome을 연다.</p>
+        </div>
+        <div class="card">
+          <div class="n">하면 죽는 것</div>
+          <h3>순수 SPA → Google API</h3>
+          <p><code>cloudcode-pa.googleapis.com</code>은 브라우저 CORS를 열어주지 않는다. 리프레시 토큰을 localStorage에 두면 XSS 한 방으로 구독이 털린다. 프로젝트 폴더를 브라우저만으로 쓰는 것도 File System Access API에 묶인다 (Chromium, 권한 프롬프트, git과 어색).</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="margin-top:48px">
+      <h3>한 명령, 두 포트, 한 오리진</h3>
+      <p class="sub">개발 중 사용자는 <code>http://127.0.0.1:5173</code>만 본다. API는 같은 오리진 <code>/api</code>. OAuth 콜백만 Antigravity가 하드코딩한 51121을 잠시 연다.</p>
+      <div class="ports">
+        <div class="step"><b>:5173 Vite</b><span>React 에디터 · HMR · PLAY 프리뷰. 브라우저가 아는 유일한 호스트.</span></div>
+        <div class="step"><b>/api 게이트웨이</b><span>Vite <code>configureServer</code>에 Hono 마운트. 프로덕션에선 같은 Hono가 <code>dist/</code>를 서빙.</span></div>
+        <div class="step"><b>:51121 잠깐</b><span>로그인 중에만. loopback, 5분, 끝나면 close. Vite 포트와 섞지 않는다.</span></div>
+      </div>
+      <pre style="margin-top:28px">pnpm dev
+  Vite  :5173  ──configureServer──▶  Hono /api
+                                      ├ POST /api/auth/login     → 51121 열고 브라우저로 Google
+                                      ├ GET  /api/auth/status
+                                      ├ POST /api/agent/run      → CCA SSE 프록시 + 도구 루프
+                                      ├ GET  /api/project        → 폴더의 story.json
+                                      └ PUT  /api/project        → 디스크에 커밋
+
+브라우저 origin = 5173 뿐. Google 토큰은 게이트웨이 프로세스 메모리 + ~/.vnmaker/auth.json</pre>
+    </div>
+
+    <div class="wrap" style="margin-top:48px">
+      <h3>고정 스택 (v0에서 바꾸지 말 것)</h3>
+      <table class="compare">
+        <thead>
+          <tr><th>층</th><th>선택</th><th>이유</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>UI</td><td class="us">React 19 + Vite + TypeScript</td><td>노드 그래프는 <code>@xyflow/react</code>가 사실상 표준. Vue Flow도 있으나 생태계 복사 비용을 지금은 안 낸다.</td></tr>
+          <tr><td>게이트웨이</td><td class="us">Hono on Node</td><td>가벼움. Vite 미들웨어로 붙이기 쉽고, 프로덕션에서 <code>@hono/node-server</code>로 정적 파일+API 한 프로세스.</td></tr>
+          <tr><td>스키마</td><td class="us">Zod</td><td>IR 검증, 도구 인자, 디스크 round-trip.</td></tr>
+          <tr><td>상태</td><td class="us">Zustand</td><td>그래프·선택 노드·에이전트 세션. 서버 상태 없음.</td></tr>
+          <tr><td>플레이어</td><td class="us">같은 패키지 <code>packages/player</code></td><td>에디터 PLAY와 웹 익스포트가 한 런타임을 씀. Vite multi-page: <code>index.html</code> / <code>play.html</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="wrap" style="margin-top:48px">
+      <h3>레포 모양</h3>
+      <div class="pair">
+        <pre>vnmaker/
+  apps/web/                 # Vite React
+    src/ui/
+    src/vite-env.d.ts
+    index.html
+    play.html              # 익스포트/풀스크린
+  packages/gateway/        # Hono: oauth, cca, fs
+  packages/ir/             # zod 스키마 + 순수 뮤테이션
+  packages/agent/          # 도구 루프 (UI 모름)
+  packages/player/         # VN 런타임
+  docs/vision/index.html
+  pnpm-workspace.yaml</pre>
+        <div>
+          <p><b>의존 방향은 한 방향이다.</b> <code>web → agent → ir</code>, <code>gateway → agent</code>, <code>player</code>는 IR만 읽는다. UI가 CCA를 직접 fetch하지 않는다.</p>
+          <p>pnpm workspace. 패키지 매니저를 npm으로 바꾸지 않는다. Node 20+.</p>
+          <p>SvelteKit/Nuxt는 Vite 위 메타프레임워크다. SSR이 필요 없고, 파일 라우팅이 제품의 진실도 아니다. 라우트는 에디터 안 탭이다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="oauth">
+    <div class="wrap split">
+      <div>
+        <div class="kicker">Auth truth</div>
+        <h2>쓰고 싶은 건 Gemini가 아니다. Antigravity다.</h2>
+        <p>구글 계정으로 “무료/프로 코딩 할당량”을 쓰는 경로는 공식 Gemini API 키와 다르다. oh-my-pi가 나눈 이름 그대로다.</p>
+        <ul class="plain">
+          <li><b>google</b> — AI Studio / Gemini API. 키 또는 공식 과금. 이미지 생성은 <code>gemini-3-pro-image-preview</code>에 <code>responseModalities:["IMAGE"]</code>로 찍는다(Imagen이 아니다). 공개 API라 ToS가 깨끗하다.</li>
+          <li><b>google-gemini-cli</b> — Cloud Code Assist 프로덕션 (<code>cloudcode-pa.googleapis.com</code>). Gemini CLI 계열.</li>
+          <li><b>google-antigravity</b> — Antigravity 데스크톱이 쓰는 컨트롤 플레인. 엔드포인트가 <code>daily-cloudcode-pa.googleapis.com</code>인 구현이 많고, 계정에 따라 Gemini뿐 아니라 Claude·GPT-OSS가 카탈로그에 뜬다.</li>
+        </ul>
+        <p>당신이 원하는 로그인 버튼의 정확한 카피는 <b>“Google로 연결 (Antigravity)”</b>이지 “Gemini API 키 붙여넣기”가 아니다. 코드는 <a href="https://github.com/can1357/oh-my-pi">can1357/oh-my-pi</a>의 <code>packages/ai/src/registry/oauth/google-antigravity.ts</code>와 <a href="https://pi.dev/packages/pi-antigravity">pi-antigravity</a>를 이식하면 된다. 이식 위치는 <code>packages/gateway</code>다. Vite UI는 <code>POST /api/auth/login</code>만 친다.</p>
+        <div class="warn">
+          이건 비공식 어댑터다. 클라이언트 ID/시크릿은 Antigravity 데스크톱에 박혀 있는 공개 값이고, 커뮤니티 도구들이 그대로 쓴다. 제품을 “Google 공식 연동”으로 포장하면 안 된다. 설정 화면에 한 줄 경고를 넣는다.
+        </div>
+      </div>
+      <div>
+        <div class="plate-frame">
+          <img data-img="oauth-connect.png" alt="브라우저 동의 화면과 로컬 콜백을 연결하는 책상" />
+        </div>
+        <p class="cap">로컬 루프백 콜백. 토큰은 Google과 사용자 기기 사이에서만 움직인다.</p>
+      </div>
+    </div>
+
+    <div class="wrap" style="margin-top:56px">
+      <h3>이식할 플로우 — OAuth 2.0 authorization code (PKCE 아님)</h3>
+      <p class="sub">oh-my-pi와 같은 뼈대. 차이는 셸이 Tauri가 아니라 Vite 탭이라는 것. 콜백 서버는 게이트웨이 프로세스가 연다. <b>PKCE는 쓰지 않는다</b> — 데스크톱 클라이언트에 박힌 client_secret으로 교환한다.</p>
+      <div class="flow">
+        <div class="step"><b>1. State</b><span>16B 랜덤 hex. CSRF 대조용일 뿐이고 code_challenge는 보내지 않는다.</span></div>
+        <div class="step"><b>2. Auth URL</b><span>accounts.google.com/o/oauth2/v2/auth · access_type=offline · prompt=consent</span></div>
+        <div class="step"><b>3. Loopback</b><span>127.0.0.1:51121/oauth-callback 임시 HTTP 서버. 외부 바인드 금지.</span></div>
+        <div class="step"><b>4. Token</b><span>oauth2.googleapis.com/token 으로 code + client_id + client_secret 교환. refresh 필수.</span></div>
+        <div class="step"><b>5. Project</b><span>loadCodeAssist → 없으면 onboardUser(free-tier) 폴링 → cloudaicompanionProject</span></div>
+        <div class="step"><b>6. Store</b><span>게이트웨이가 ~/.vnmaker/auth.json (mode 0600). 브라우저와 git에 안 넣음.</span></div>
+      </div>
+
+      <div class="pair" style="margin-top:36px">
+        <div>
+          <h3>스코프</h3>
+          <pre>https://www.googleapis.com/auth/cloud-platform
+https://www.googleapis.com/auth/userinfo.email
+https://www.googleapis.com/auth/userinfo.profile
+https://www.googleapis.com/auth/cclog
+https://www.googleapis.com/auth/experimentsandconfigs
+/* aicode 는 넣지 않는다. 위 5개로 로그인·프로젝트 발견·모델 조회가 전부 통과했다. */</pre>
+        </div>
+        <div>
+          <h3>로그인 이후 API</h3>
+          <pre>POST …/v1internal:loadCodeAssist
+POST …/v1internal:onboardUser
+POST …/v1internal:fetchAvailableModels
+POST …/v1internal:streamGenerateContent?alt=sse
+
+headers:
+  Authorization: Bearer &lt;access&gt;
+  User-Agent: antigravity/hub/2.8.0
+    (aidev_client; os_type=darwin; arch=arm64; cl=963137146)
+  /* 백엔드가 이 버전으로 모델을 게이팅한다. 빠지면 신모델이 안 뜬다. */
+
+envelope:
+{
+  "project": "&lt;cca project&gt;",
+  "model":  "gemini-3.7-flash-tiered",
+  "request": { "contents": [...], "tools": [...] },
+  "requestType": "agent"
+}</pre>
+        </div>
+      </div>
+      <div class="warn" style="margin-top:28px">
+        <b>검증됨 (2026-08-31)</b> — 이 플로우를 <code>tools/agy-login.mjs</code>로 이식해 실제로 통과시켰다.
+        동의 → 토큰 → <code>loadCodeAssist</code>(currentTier=free-tier) → <code>cloudaicompanionProject=aicode-consumers</code> →
+        <code>fetchAvailableModels</code> 28종(Gemini 3.x 계열 + <code>claude-sonnet-4-6</code>, <code>claude-opus-4-6-thinking</code>,
+        <code>gpt-oss-120b-medium</code>) → refresh_token 재발급까지 확인. 자격증명은 <code>~/.vnmaker/auth.json</code>에 저장된다.
+        Windows에서는 0600이 적용되지 않으므로 폴더 ACL로 막아야 한다.
+      </div>
+      <p>원격/헤드리스(android-dev VM)에서는 두 가지가 동시에 필요하다. (1) Vite/게이트웨이가 VM에서 돈다. (2) 노트북 브라우저가 Google 동의 후 <code>localhost:51121</code>로 떨어진다. 노트북에서 <code>ssh -L 51121:127.0.0.1:51121 -L 5173:127.0.0.1:5173</code> 하거나, 콜백 URL을 게이트웨이 프롬프트에 붙여넣는다. 게이트웨이를 0.0.0.0에 바인딩해서 Tailscale로 열지 않는다 — 토큰 프록시다.</p>
+    </div>
+  </section>
+
+  <section id="product">
+    <div class="wrap split rev">
+      <div class="plate-frame">
+        <img data-img="editor-graph.png" alt="노드 그래프 에디터와 라이브 프리뷰" />
+      </div>
+      <div>
+        <div class="kicker">Product</div>
+        <h2>화면은 세 장이 아니다. 한 SCENE, 한 MAP</h2>
+        <p>Tyrano에서 하루를 보내고, 길을 잃으면 Naninovel 그래프를 연다. 에이전트는 세 번째 탭이 아니라 서랍이다.</p>
+        <div class="card" style="margin-bottom:12px">
+          <div class="n">SCENE</div>
+          <p>Tyrano 3단. 팔레트 · 비트 스택 · 인스펙터. 여기서 대사를 쓴다.</p>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="n">MAP</div>
+          <p>Naninovel 줌. 노드 = 씬 파일. 더블클릭하면 SCENE으로 들어간다. say 한 줄은 노드가 아니다.</p>
+        </div>
+        <div class="card">
+          <div class="n">STAGE + AGENT</div>
+          <p>VNM식: 선택 비트까지 빨리 감기. 에이전트 서랍은 도구 diff를 채팅보다 위에 둔다.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="margin-top:56px">
+      <h3>실제 크롬 — 탭이 아니라 한 화면</h3>
+      <p class="sub">Vite 라우트는 <code>/</code> (열기)와 <code>/edit</code>, <code>/play</code> 세 개면 된다. 작가가 사는 곳은 <code>/edit</code>의 사분할이다.</p>
+      <div class="chrome">
+        <div class="bar"><span class="dot"></span><b>vnmaker</b> · rain-station · connected: you@gmail · gemini-3.7-flash</div>
+        <div class="graph">
+          <b>SCENES</b><br /><br />platform-01<br />cafe-02<br />end-good<br />end-ok
+        </div>
+        <div class="beats">
+          <b>BEATS · platform-01</b>
+          <p style="margin-top:12px">scene bg rain-station<br />show heroine happy at left<br />e "우산, 같이 쓸래요?"<br />menu 빌려준다 / 거절한다</p>
+          <p style="color:var(--muted)">가운데는 Tyrano 컴포넌트 스택. 그래프가 아니다.</p>
+        </div>
+        <div class="chat">
+          <b>AGENT</b>
+          <p style="margin-top:12px">tool upsert_scene platform-01<br />tool connect → cafe-02<br /><span style="color:var(--gold)">diff 3 beats · 2 edges</span></p>
+        </div>
+        <div class="play">
+          <div>heroine / left</div>
+          <div>우산, 같이 쓸래요?</div>
+          <div>[빌려준다] [거절한다]</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap split" style="margin-top:64px">
+      <div>
+        <div class="kicker">Agent loop</div>
+        <h2>한 턴의 계약</h2>
+        <p class="callout-gold">사용자는 장면을 묘사한다. 모델은 Tyrano 스택을 남긴다. 채팅은 부록이다.</p>
+        <p>예: “비 오는 역에서 우산을 빌려주는 히로인과 첫 만남. 거절하면 다음 날 카페에서 다시 만난다.”</p>
+        <ul class="plain">
+          <li>캐릭터 2명 upsert + 외형 프롬프트</li>
+          <li>배경 2장 (플랫폼 / 카페) 프롬프트 + 생성 큐</li>
+          <li>씬 노드 3개, 선택지 2개, 플래그 <code>took_umbrella</code></li>
+          <li>대사 초안을 IR에 기록, 프리뷰 점프 포인트 설정</li>
+        </ul>
+        <p>실패 모드는 “예쁜 글을 많이 뱉고 그래프는 그대로”다. UI는 도구 호출 diff를 채팅보다 위에 둔다.</p>
+      </div>
+      <div>
+        <div class="plate-frame">
+          <img data-img="agent-loop.png" alt="씬·선택지·캐릭터 카드가 핵 주위로 연결되는 추상 그래프" />
+        </div>
+        <p class="cap">에이전트 코어. 카드는 채팅 문장이 아니라 뮤테이션이다.</p>
+      </div>
+    </div>
+
+    <div class="wrap split" style="margin-top:64px">
+      <div>
+        <div class="plate-frame">
+          <img data-img="character-bible.png" alt="히로인 캐릭터 바이블 보드" />
+        </div>
+        <p class="cap">캐릭터 바이블. 표정 시트는 이후 스프라이트 생성의 락이다.</p>
+      </div>
+      <div>
+        <div class="plate-frame">
+          <img data-img="play-preview.png" alt="비 오는 플랫폼의 비주얼 노벨 플레이 프레임" />
+        </div>
+        <p class="cap">플레이어가 보는 진실. 에디터 프리뷰와 익스포트 런타임은 같은 플레이어를 쓴다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="ir">
+    <div class="wrap">
+      <div class="kicker">Story IR v1</div>
+      <h2>그래프는 목차다. 비트는 대본이다.</h2>
+      <p class="sub">비트 op 이름은 Ren'Py다. LLM이 이미 그 단어를 안다. 화면의 한 줄은 Tyrano 컴포넌트다.</p>
+      <div class="pair">
+        <pre>Project
+  version: 1
+  meta: { title, locale }
+  bible:
+    characters[]   id, name, color, expressions[]
+                   lookPrompt   # placeholder / 이미지 큐
+    world: markdown
+    bans[]
+  vars: { took_umbrella: { type: "bool", default: false } }
+  assets: { "bg/rain": { kind: "bg", path?, prompt } }</pre>
+        <pre>story/nodes/platform-01.json
+  beats:
+    scene   bg=rain-station
+    show    who=heroine appearance=happy at=left
+    say     who=heroine text="우산, 같이 쓸래요?"
+    menu    [
+      { text:"빌려준다", set:{took_umbrella:true}, to:cafe-02 },
+      { text:"거절한다", to:cafe-02 }
+    ]
+
+# Ren'Py로 읽으면
+#   scene bg rain-station
+#   show heroine happy at left
+#   e "우산, 같이 쓸래요?"</pre>
+      </div>
+      <p style="margin-top:24px">디스크에는 한 파일이 아니라 쪼갠다. git diff가 읽혀야 한다.</p>
+      <pre>my-vn/
+  vnmaker.json           # meta, version
+  bible/characters.json
+  bible/world.md
+  story/nodes/platform-01.json
+  story/edges.json
+  assets/bg/rain-station.png
+  assets/char/heroine-neutral.png
+  .vnmaker/cursor.json    # 마지막 선택 노드, PLAY 위치 — gitignore</pre>
+      <h3 style="margin-top:40px">에이전트 도구 (v1, 닫힌 집합)</h3>
+      <table class="compare">
+        <thead><tr><th>도구</th><th>인자</th><th>부작용</th></tr></thead>
+        <tbody>
+          <tr><td><code>list_graph</code></td><td>—</td><td>없음. id/label/edge만.</td></tr>
+          <tr><td><code>read_node</code></td><td>id</td><td>없음. 비트 전체.</td></tr>
+          <tr><td><code>upsert_character</code></td><td>시트</td><td>bible/characters.json</td></tr>
+          <tr><td><code>upsert_beats</code></td><td>nodeId, beats</td><td>씬 JSON 교체 또는 패치</td></tr>
+          <tr><td><code>connect</code></td><td>from, to, when?</td><td>edges.json</td></tr>
+          <tr><td><code>queue_asset</code></td><td>kind, prompt, id</td><td>프롬프트만. 픽셀은 다른 프로바이더.</td></tr>
+          <tr><td><code>play_from</code></td><td>nodeId</td><td>에디터 커서. 디스크 아님.</td></tr>
+        </tbody>
+      </table>
+      <p>모델에게 자유 파일 쓰기를 주지 않는다. 도구 밖 쓰기는 IR 깨짐이다. 컨텍스트는 매 턴 <b>그래프 요약 + 선택 노드 전체 + 캐릭터 한 줄 요약 + 최근 도구 diff</b>만. 소설 전체를 프롬프트에 넣지 않는다.</p>
+    </div>
+  </section>
+
+  <section id="arch">
+    <div class="wrap">
+      <div class="kicker">Gateway</div>
+      <h2>브라우저가 Google을 모른다.</h2>
+      <p class="sub">게이트웨이는 localhost에만 붙는다. Tailscale 공개, ngrok, 클라우드 프록시는 제품이 아니다.</p>
+      <div class="arch">
+        <div class="col">
+          <div class="chip"><strong>apps/web</strong>Vite · React · XYFlow · Zustand</div>
+          <div class="chip"><strong>packages/player</strong>beats → 화면. DOM 캔버스.</div>
+          <div class="chip"><strong>packages/ir</strong>zod · 순수 함수 뮤테이션</div>
+        </div>
+        <div class="spine">
+          <div class="node">packages/agent</div>
+          <p style="color:var(--muted);font-size:13px">도구 레지스트리 · 턴 루프<br />SSE 이벤트를 UI로만 흘림</p>
+          <div class="node">packages/gateway</div>
+        </div>
+        <div class="col">
+          <div class="chip"><strong>antigravity</strong>OAuth · CCA envelope · 토큰 파일</div>
+          <div class="chip"><strong>gemini-api</strong>공식 키 · 이미지 생성</div>
+          <div class="chip"><strong>fs</strong>프로젝트 루트 chroot</div>
+        </div>
+      </div>
+
+      <div class="pair" style="margin-top:48px">
+        <div>
+          <h3>게이트웨이 계약</h3>
+          <pre>POST /api/auth/login
+GET  /api/auth/status     { email, projectId, quota? }
+POST /api/auth/logout
+
+POST /api/project/open   { path }   // 절대경로, 홈 밖 거부 옵션
+GET  /api/project
+PUT  /api/project/file    { rel, json }
+
+POST /api/agent/run      { message, nodeId? }
+                         text/event-stream
+                         event: text|tool|diff|error|done</pre>
+        </div>
+        <div>
+          <h3>파일 권한</h3>
+          <p>연 프로젝트 루트 밖의 <code>../</code> 쓰기는 거절. <code>auth.json</code>은 프로젝트 안에 두지 않는다.</p>
+          <p>기본 프로젝트 위치는 사용자가 고른 폴더. 게이트웨이 시작 시 <code>VNE_ROOT</code> 또는 <code>~/.vnmaker/last-root</code>.</p>
+          <p>File System Access API는 <b>안 쓴다</b>. 브라우저가 폴더를 소유하면 게이트웨이가 도구로 디스크를 못 고친다. 진실은 Node fs 한 곳이다.</p>
+        </div>
+      </div>
+
+      <h3 style="margin-top:40px">에이전트 한 턴 (게이트웨이 안)</h3>
+      <div class="flow">
+        <div class="step"><b>1. 조립</b><span>list_graph 요약 + read_node + bible 압축</span></div>
+        <div class="step"><b>2. 호출</b><span>CCA streamGenerateContent, tools=닫힌 집합</span></div>
+        <div class="step"><b>3. 도구</b><span>ir 뮤테이션 → 디스크 write → diff 이벤트</span></div>
+        <div class="step"><b>4. 반복</b><span>모델이 더 부르면 계속. 캡: 12 툴콜/턴</span></div>
+        <div class="step"><b>5. 종료</b><span>done + PLAY 커서 제안</span></div>
+        <div class="step"><b>6. UI</b><span>Zustand가 SSE로 그래프 리로드</span></div>
+      </div>
+      <p style="margin-top:20px">이미지 생성은 Antigravity 텍스트 경로와 분리한다. 1차는 프롬프트+플레이스홀더, 2차는 Gemini API 키(<code>gemini-3-pro-image-preview</code>). Antigravity로도 <code>gemini-3-pro-image</code>를 공짜로 찍을 수는 있지만, 할당량 카운터가 계정·프로젝트 단위 서버 값이라 Antigravity 데스크톱 앱과 같은 통을 쓴다. 삽화로 코딩 할당량을 태우지 않는다.</p>
+    </div>
+  </section>
+
+  <section id="risk">
+    <div class="wrap split">
+      <div>
+        <div class="kicker">Risks</div>
+        <h2>이 제품이 죽는 지점</h2>
+        <div class="card" style="margin-bottom:12px">
+          <div class="n">TOS / 클라이언트</div>
+          <p>Antigravity 데스크톱 클라이언트 ID를 재사용하는 것은 커뮤니티 관행이지 Google의 허락이 아니다. 클라 시크릿이 바뀌거나 루프백이 막히면 로그인 전체가 죽는다. <b>프로바이더를 플러그인으로 두고, 공식 Gemini API를 항상 살린다.</b></p>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="n">할당량</div>
+          <p>429와 공유 풀. 소설 생성은 토큰을 많이 먹는다. 모델 기본값은 Flash, 바이블/구조만 Pro. 사용량 UI를 <code>fetchAvailableModels</code> 쿼터에 연결한다.</p>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="n">localhost 보안</div>
+          <p>게이트웨이는 루프백 전용. 같은 머신의 다른 웹페이지가 <code>5173/api</code>를 치는 건 CSRF 형태가 된다. Origin 체크 (<code>http://127.0.0.1:5173</code>만), 로그인 POST는 동일 오리진, 토큰은 쿠키가 아니라 서버 메모리. 위험한 건 리프레시를 브라우저에 내려주는 일이다. 내리지 않는다.</p>
+        </div>
+        <div class="card">
+          <div class="n">일관성</div>
+          <p>비주얼 노벨은 캐릭터가 다음 장에서 얼굴이 바뀌면 작품이 아니다. 이미지 모델에 바이블 레퍼런스를 넣기 전까지는 텍스트 완성도로만 승부한다.</p>
+        </div>
+      </div>
+      <div>
+        <h3>보안 최소선</h3>
+        <ul class="plain">
+          <li>콜백 서버는 loopback only, 5분 타임아웃, state 검증</li>
+          <li>토큰 로그 금지. <code>~/.vnmaker/auth.json</code> mode 0600, 프로젝트 gitignore와 분리된 홈 디렉터리</li>
+          <li>게이트웨이 0.0.0.0 바인드 금지. Tailscale로 에디터를 열지 않음</li>
+          <li>우리 클라우드로 토큰 프록시하지 않음</li>
+          <li>프로젝트 루트 chroot. <code>rel</code>에 <code>..</code> 거절</li>
+          <li>User-Agent를 Antigravity IDE로 위장하는 일은 문서에 명시</li>
+        </ul>
+        <p>라이선스 초안: 앱 MIT, 사용자가 만든 작품은 사용자 것. 모델 출력의 저작권은 각 프로바이더 약관을 설정에 링크.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <div class="wrap">
+      <div class="kicker">Build order</div>
+      <h2>크게 만들지 말고, 한 루프를 닫아라</h2>
+      <div class="timeline">
+        <div class="phase">
+          <div class="when">W0 — 지금</div>
+          <h3>이 문서</h3>
+          <p>프로바이더 경계를 고정. Antigravity는 어댑터, IR은 파일, 런타임은 웹.</p>
+        </div>
+        <div class="phase">
+          <div class="when">W1–2</div>
+          <h3>로그인 + Hello 씬</h3>
+          <p>Tauri 셸이 아니다. Vite 플러그인에 Hono 마운트. Connect 버튼. <code>~/.vnmaker/auth.json</code>. 토큰으로 <code>streamGenerateContent</code> 한 방. IR 노드 하나와 PLAY에 대사 한 줄.</p>
+        </div>
+        <div class="phase">
+          <div class="when">W3–5</div>
+          <h3>도구형 에이전트</h3>
+          <p><code>upsert_beats</code> / <code>connect</code> / bible. XYFlow는 못생겨도 된다. 도구 diff가 보이면 된다. Gemini API 키 슬롯을 같은 주에 연다.</p>
+        </div>
+        <div class="phase">
+          <div class="when">W6+</div>
+          <h3>자산 큐 · 익스포트</h3>
+          <p>이미지 프로바이더. 웹 zip. 그다음 Ren'Py는 IR 컴파일러로. MCP로 Ren'Py를 조종하는 쪽이 아니라, 우리가 소스다.</p>
+        </div>
+      </div>
+      <p style="margin-top:40px">W1 완료 조건은 “예쁜 에디터”가 아니다. <b>브라우저에서 Google 동의 → 게이트웨이 토큰 → 모델이 쓴 한 줄이 PLAY에 나타나는 것.</b> 그 한 줄이 제품이다.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="kicker">Open</div>
+      <h2>아직 안 정한 것 — 다음 턴에서 닫자</h2>
+      <div class="q"><b>플레이어 렌더.</b> DOM + CSS로 충분한가, 아니면 Canvas/Pixi. v1은 DOM. Live2D는 나중.</div>
+      <div class="q"><b>한글 폰트.</b> 에디터는 시스템 폰트. PLAY는 프로젝트에 폰트를 넣는가. 익스포트 용량.</div>
+      <div class="q"><b>멀티 유저.</b> 없다. 폴더 + git. 실시간 협업은 제품이 아님.</div>
+      <div class="q"><b>공식 Gemini API를 W1에 같이 넣을지.</b> Antigravity가 막히면 개발이 선다. 키 슬롯을 같은 주에 넣는 쪽이 안전하다.</div>
+      <div class="q"><b>비트 편집기 UX.</b> 잠금: Tyrano 세로 스택. XYFlow는 MAP 탭 전용.</div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      vnmaker vision · Vite + 로컬 Hono 게이트웨이 · 비공식 Antigravity 어댑터 · 참고: oh-my-pi, pi-antigravity
+    </div>
+  </footer>
+
+  <script>
+    const CANDIDATES = [
+      "assets/",
+      "../assets/",
+      "../../../../.cursor/projects/c-Users-ubbio-Documents-vnmaker/assets/",
+      "file:///C:/Users/ubbio/.cursor/projects/c-Users-ubbio-Documents-vnmaker/assets/"
+    ];
+    function bind(img) {
+      const name = img.getAttribute("data-img");
+      let i = 0;
+      const next = () => {
+        if (i >= CANDIDATES.length) return;
+        img.onerror = () => { i += 1; next(); };
+        img.onload = () => { img.onerror = null; };
+        img.src = CANDIDATES[i] + name;
+      };
+      next();
+    }
+    document.querySelectorAll("img[data-img]").forEach(bind);
+  </script>
+</body>
+</html>

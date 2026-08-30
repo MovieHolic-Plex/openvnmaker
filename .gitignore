@@ -1,0 +1,27 @@
+# tooling workdirs
+.omo/
+.senpi/
+.grok/
+
+# deps & build
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+
+# test output
+test-results/
+playwright-report/
+blob-report/
+evidence/
+
+# env & creds
+.env
+.env.*
+!.env.example
+auth.json
+
+# os
+Thumbs.db
+.DS_Store

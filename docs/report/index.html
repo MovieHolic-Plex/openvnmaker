@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>vnmaker 컨셉 보고서 — 쉬운 말로 보는 네 개의 화면</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink:#12110e; --ink-2:#1a1815; --ink-3:#221f1a;
+  --paper:#efe6d4; --paper-dim:#cfc3a4;
+  --amber:#d4783a; --gold:#c9a227; --cyan:#7eb8c9;
+  --danger:#c45c4a; --green:#8aa86a;
+  --line:rgba(239,230,212,.14); --line-2:rgba(239,230,212,.08);
+  --muted:rgba(239,230,212,.62); --faint:rgba(239,230,212,.38);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--ink);color:var(--paper);
+  font-family:"Noto Sans KR",system-ui,sans-serif;font-size:16px;line-height:1.7;
+  -webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block;height:auto}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:"IBM Plex Mono",monospace;font-size:.88em;
+  background:var(--ink-3);border:1px solid var(--line-2);padding:1px 6px;border-radius:3px}
+.wrap{width:min(1080px,calc(100% - 44px));margin:0 auto}
+
+/* ── 상단 바 ─────────────────────────────── */
+nav{position:sticky;top:0;z-index:40;backdrop-filter:blur(16px);
+  background:rgba(18,17,14,.86);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:54px;gap:20px}
+.brand{font-family:Fraunces,serif;font-weight:600;letter-spacing:.02em;font-size:15px;white-space:nowrap}
+.brand span{color:var(--faint);font-family:"Noto Sans KR",sans-serif;font-weight:400;font-size:12px;margin-left:8px}
+nav ul{display:flex;gap:14px;list-style:none;margin:0;padding:0;font-size:13px;flex-wrap:wrap;justify-content:flex-end}
+nav a{color:var(--paper-dim)}
+nav a:hover{color:var(--paper);text-decoration:none}
+
+/* ── 표지 ────────────────────────────────── */
+.hero{position:relative;min-height:62vh;display:grid;align-items:end;overflow:hidden;
+  border-bottom:1px solid var(--line)}
+.hero img.plate{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 58%}
+.hero::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(180deg,rgba(18,17,14,.30) 0%,rgba(18,17,14,.34) 34%,rgba(18,17,14,.96) 100%),
+  linear-gradient(90deg,rgba(18,17,14,.66) 0%,rgba(18,17,14,.04) 62%)}
+.hero-copy{position:relative;z-index:1;padding:120px 0 56px}
+.kicker{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11px;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
+h1{font-family:Fraunces,serif;font-weight:600;font-size:clamp(34px,5.6vw,62px);
+  line-height:1.08;margin:0 0 16px;max-width:20ch}
+.lede{font-size:18px;max-width:44ch;color:var(--paper-dim);margin:0}
+
+/* ── 섹션 ────────────────────────────────── */
+section{padding:72px 0;border-top:1px solid var(--line)}
+section:first-of-type{border-top:0}
+h2{font-family:Fraunces,serif;font-size:clamp(25px,3.4vw,36px);line-height:1.18;margin:0 0 10px;font-weight:600}
+h2 .num{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--gold);
+  display:block;letter-spacing:.14em;margin-bottom:10px;font-weight:400}
+h3{font-family:Fraunces,serif;font-size:20px;margin:0 0 8px;font-weight:600}
+.one-line{font-size:17px;color:var(--gold);max-width:60ch;margin:0 0 26px;font-weight:500}
+.sub{color:var(--muted);max-width:66ch;margin:0 0 28px}
+p{margin:0 0 14px;max-width:70ch}
+.note{font-size:13.5px;color:var(--muted);max-width:72ch}
+
+/* ── 세 줄 요약 ──────────────────────────── */
+.tldr{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:0 0 8px}
+.tldr div{border:1px solid var(--line);background:var(--ink-2);padding:18px 18px 16px}
+.tldr b{display:block;font-family:Fraunces,serif;font-size:17px;margin-bottom:6px}
+.tldr p{font-size:14px;color:var(--muted);margin:0;max-width:none}
+
+/* ── 그림 ────────────────────────────────── */
+figure{margin:0 0 22px}
+figure img{border:1px solid var(--line);background:var(--ink-2);
+  box-shadow:0 18px 46px rgba(0,0,0,.5)}
+figcaption{font-size:12.5px;color:var(--faint);margin-top:10px;line-height:1.6}
+figcaption b{color:var(--paper-dim);font-weight:500}
+
+/* ── 쉽게 말하면 상자 ────────────────────── */
+.plain{border-left:3px solid var(--gold);background:var(--ink-2);
+  padding:16px 20px;margin:22px 0;max-width:72ch}
+.plain h4{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 8px;font-weight:500}
+.plain p{margin:0;font-size:15px;color:var(--paper-dim)}
+.plain p + p{margin-top:8px}
+
+/* ── 표 ──────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:0 0 10px}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line-2);vertical-align:top}
+th{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+  font-weight:500;border-bottom:1px solid var(--line)}
+td:first-child{white-space:nowrap;color:var(--paper)}
+td.k{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--gold)}
+tbody tr:hover{background:rgba(239,230,212,.03)}
+
+/* ── 두 칸 ───────────────────────────────── */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{border:1px solid var(--line);background:var(--ink-2);padding:20px}
+.card.pick{border-color:var(--gold)}
+.card h4{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin:0 0 10px;font-weight:500}
+.card.pick h4{color:var(--gold)}
+.card ul{margin:0;padding-left:18px;font-size:14px;color:var(--muted)}
+.card li{margin-bottom:6px}
+
+/* ── 고친 목록 ───────────────────────────── */
+.fix{list-style:none;padding:0;margin:0}
+.fix li{border:1px solid var(--line);background:var(--ink-2);padding:14px 16px;margin-bottom:10px;
+  display:grid;grid-template-columns:74px 1fr;gap:16px;align-items:baseline}
+.fix .tag{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;padding:3px 7px;text-align:center;color:var(--ink);background:var(--paper-dim)}
+.fix .tag.c{background:var(--danger);color:var(--paper)}
+.fix .tag.v{background:var(--cyan)}
+.fix p{margin:0;font-size:14.5px}
+.fix .was{color:var(--faint);font-size:13px;margin-top:4px}
+
+footer{padding:56px 0 72px;border-top:1px solid var(--line);color:var(--faint);font-size:13.5px}
+footer a{margin-right:18px}
+
+@media (max-width:840px){
+  .tldr,.two{grid-template-columns:1fr}
+  .hero-copy{padding:96px 0 40px}
+  .fix li{grid-template-columns:1fr;gap:8px}
+  .fix .tag{justify-self:start}
+}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <div class="brand">vnmaker<span>컨셉 보고서</span></div>
+  <ul>
+    <li><a href="#summary">요약</a></li>
+    <li><a href="#what">무엇을</a></li>
+    <li><a href="#node">NODE</a></li>
+    <li><a href="#map">MAP</a></li>
+    <li><a href="#route">ROUTE</a></li>
+    <li><a href="#stage">STAGE</a></li>
+    <li><a href="#ai">AI</a></li>
+    <li><a href="#open">미결</a></li>
+    <li><a href="#fixed">수정</a></li>
+  </ul>
+</div></nav>
+
+<header class="hero">
+  <img class="plate" src="../concepts/assets/bg-platform.png" alt="비 오는 밤의 기차 플랫폼 배경 이미지" />
+  <div class="wrap hero-copy">
+    <span class="kicker">보고서 · 2026-08-31</span>
+    <h1>비주얼 노벨 편집기를<br />쉬운 말로 설명하면</h1>
+    <p class="lede">컨셉 문서를 화면 그대로 찍어서, 그림 12장과 짧은 설명으로 정리했습니다. 처음 보는 사람도 따라올 수 있게 썼습니다.</p>
+  </div>
+</header>
+
+<!-- ── 요약 ──────────────────────────────── -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">01 · 세 줄 요약</span>먼저 결론부터</h2>
+    <div class="tldr">
+      <div>
+        <b>만드는 것</b>
+        <p>비주얼 노벨(선택지가 있는 이야기 게임)을 쓰는 편집기입니다. 글을 쓰는 화면이 소설처럼 생겼습니다.</p>
+      </div>
+      <div>
+        <b>핵심 아이디어</b>
+        <p>화면은 네 개지만 파일은 하나입니다. 어느 화면에서 고쳐도 같은 파일이 바뀝니다.</p>
+      </div>
+      <div>
+        <b>지금 상태</b>
+        <p>컨셉 문서 한 편이 완성됐습니다. 코드는 아직 없고, 큰 질문 하나가 열려 있습니다.</p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:22px">이 보고서의 그림은 모두 <a href="../concepts/index.html">컨셉 문서</a>를 실제로 렌더해서 찍은 스크린샷입니다. 그림을 누르면 원본 크기로 열립니다.</p>
+  </div>
+</section>
+
+<!-- ── 무엇을 ────────────────────────────── -->
+<section id="what">
+  <div class="wrap">
+    <h2><span class="num">02 · 무엇을 만드는가</span>화면은 네 개, 파일은 하나</h2>
+    <p class="one-line">같은 이야기를 네 가지 방법으로 보여주는 것뿐입니다. 진짜 원본은 디스크에 있는 파일 하나입니다.</p>
+
+    <figure>
+      <a href="shots/02-four.png" target="_blank" rel="noopener">
+        <img src="shots/02-four.png" width="1200" height="1019" loading="lazy"
+             alt="네 개의 표면을 소개하는 카드 네 장: NODE 산문, MAP 그래프, ROUTE 경로 읽기, STAGE 프리뷰" />
+      </a>
+      <figcaption><b>컨셉 문서의 네 표면 소개.</b> 카드 네 장이 각각 하나의 화면입니다. 카드 위쪽 작은 그림은 그 화면의 모양을 단순하게 그린 것입니다.</figcaption>
+    </figure>
+
+    <table>
+      <thead><tr><th>화면</th><th>무슨 화면인가</th><th>언제 쓰는가</th></tr></thead>
+      <tbody>
+        <tr><td class="k">NODE</td><td>장면 하나를 소설처럼 위에서 아래로 읽고 쓰는 화면</td><td>글을 쓸 때. 기본 화면입니다.</td></tr>
+        <tr><td class="k">MAP</td><td>장면이 상자, 선택지가 선으로 보이는 지도</td><td>이야기 전체 구조를 볼 때</td></tr>
+        <tr><td class="k">ROUTE</td><td>갈래 하나를 골라 처음부터 끝까지 이어 읽는 화면</td><td>흐름이 매끄러운지 볼 때</td></tr>
+        <tr><td class="k">STAGE</td><td>지금 커서가 있는 순간을 플레이어 눈으로 보는 화면</td><td>화면에 어떻게 나올지 확인할 때</td></tr>
+      </tbody>
+    </table>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>글 쓰는 창, 지도 창, 이어 읽기 창, 미리보기 창. 이렇게 네 개입니다. 창을 바꿔도 내용은 같습니다. 지도에서 상자를 옮기든 글 창에서 대사를 고치든, 저장되는 파일은 하나입니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 예시 ──────────────────────────────── -->
+<section id="example">
+  <div class="wrap">
+    <h2><span class="num">03 · 예시 작품</span>예시는 하나로 통일했습니다</h2>
+    <p class="one-line">설명마다 다른 예를 들면 헷갈립니다. 그래서 비 오는 플랫폼 장면 하나로 처음부터 끝까지 갑니다.</p>
+
+    <figure>
+      <a href="shots/03-example.png" target="_blank" rel="noopener">
+        <img src="shots/03-example.png" width="1200" height="785" loading="lazy"
+             alt="예시 작품 설정표와 캐릭터 바이블. 노드 네 개와 유리 캐릭터의 표정 스프라이트 목록" />
+      </a>
+      <figcaption><b>예시 작품 설정.</b> 왼쪽은 장면 목록과 파일 이름, 오른쪽은 등장인물 유리의 표정 그림 목록입니다.</figcaption>
+    </figure>
+
+    <p>이야기는 짧습니다. 비 오는 플랫폼에서 유리를 만나고, 우산을 같이 쓰거나 혼자 걸어갑니다. 그리고 다음 날 아침으로 이어집니다. 장면은 네 개입니다.</p>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>설명용 샘플 이야기입니다. 실제 배경 그림과 캐릭터 그림을 넣어서, 목업이 아니라 진짜 화면처럼 보이게 했습니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── NODE ──────────────────────────────── -->
+<section id="node">
+  <div class="wrap">
+    <h2><span class="num">04 · 화면 1</span>NODE — 소설처럼 쓰는 화면</h2>
+    <p class="one-line">대사와 지시문이 한 줄씩 위에서 아래로 흐릅니다. 표 칸에 채우는 느낌이 아니라 원고를 쓰는 느낌입니다.</p>
+
+    <figure>
+      <a href="shots/04-node.png" target="_blank" rel="noopener">
+        <img src="shots/04-node.png" width="1200" height="782" loading="lazy"
+             alt="NODE 화면 목업. 왼쪽 여백에 작은 썸네일, 가운데에 대사와 지시문이 블록으로 나열되어 있다" />
+      </a>
+      <figcaption><b>NODE 화면.</b> 가운데가 원고입니다. 왼쪽 좁은 여백(거터)에는 지금 누가 어떤 표정으로 서 있는지 작은 그림으로 보여줍니다.</figcaption>
+    </figure>
+
+    <p>블록 하나가 게임 동작 하나입니다. 대사 한 줄, 표정 바꾸기 하나, 배경 바꾸기 하나. 이 규칙을 어기지 않는 것이 이 화면의 계약입니다.</p>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>워드에서 대본 쓰는 것과 비슷합니다. 다른 점은 한 줄 한 줄이 게임이 실제로 실행하는 명령이라는 것입니다. 그래서 왼쪽에 지금 무대 상태가 계속 따라옵니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 밀도 ──────────────────────────────── -->
+<section id="density">
+  <div class="wrap">
+    <h2><span class="num">05 · 카드 보기</span>줌아웃하면 스토리보드가 됩니다</h2>
+    <p class="one-line">카드 화면을 따로 만들지 않았습니다. 같은 화면을 촘촘하게 보거나 느슨하게 보는 차이입니다.</p>
+
+    <figure>
+      <a href="shots/05-density.png" target="_blank" rel="noopener">
+        <img src="shots/05-density.png" width="1200" height="672" loading="lazy"
+             alt="같은 장면을 카드 보기와 산문 보기로 나란히 비교한 그림" />
+      </a>
+      <figcaption><b>같은 내용, 두 가지 배율.</b> 왼쪽은 그림이 큰 카드 보기, 오른쪽은 글이 이어지는 산문 보기입니다. 내용은 완전히 같습니다.</figcaption>
+    </figure>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>지도 앱의 확대/축소와 같습니다. 축소하면 그림이 커지고 훑어보기 좋아집니다. 확대하면 글이 촘촘해지고 쓰기 좋아집니다. 화면을 갈아타는 게 아니라 손잡이 하나를 돌리는 것입니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 계약 ──────────────────────────────── -->
+<section id="proj">
+  <div class="wrap">
+    <h2><span class="num">06 · 규칙</span>블록 하나 = 동작 하나</h2>
+    <p class="one-line">이 문서에서 가장 중요한 부분입니다. 눈에 보이는 글, 저장되는 파일, 게임 코드가 정확히 한 줄씩 대응합니다.</p>
+
+    <figure>
+      <a href="shots/06-projection.png" target="_blank" rel="noopener">
+        <img src="shots/06-projection.png" width="1200" height="892" loading="lazy"
+             alt="같은 내용을 세 가지 형태로 나란히 보여주는 3단 비교: 화면의 산문, 저장되는 JSON, 생성되는 Ren'Py 스크립트" />
+      </a>
+      <figcaption><b>3단 대응.</b> 왼쪽은 작가가 보는 글, 가운데는 저장되는 파일(JSON), 오른쪽은 게임이 실행할 코드입니다. 줄 순서가 서로 어긋나지 않습니다.</figcaption>
+    </figure>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>화면에서 셋째 줄을 지우면 파일에서도 셋째 항목이 지워지고, 게임 코드에서도 셋째 줄이 사라집니다. 중간에 번역이나 추측이 끼지 않습니다.</p>
+      <p>이게 지켜지면 되돌리기, 자동 저장, 협업, AI 수정 제안이 모두 쉬워집니다. 어긋나기 시작하면 전부 어려워집니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── MAP ───────────────────────────────── -->
+<section id="map">
+  <div class="wrap">
+    <h2><span class="num">07 · 화면 2</span>MAP — 장면이 상자, 갈래가 선</h2>
+    <p class="one-line">전체 구조를 한눈에 봅니다. 선 위의 글씨는 그 갈래를 타는 선택지 문구입니다.</p>
+
+    <figure>
+      <a href="shots/07-map.png" target="_blank" rel="noopener">
+        <img src="shots/07-map.png" width="1200" height="414" loading="lazy"
+             alt="MAP 그래프. 비 오는 플랫폼 노드에서 선택지 두 개가 갈라져 각각 다른 노드로 이어지고 다시 합쳐진다" />
+      </a>
+      <figcaption><b>MAP 화면.</b> 왼쪽 상자에서 갈래 두 개가 나와, 각각 다른 장면으로 가고 마지막에 다시 만납니다.</figcaption>
+    </figure>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>지하철 노선도입니다. 역이 장면이고 선이 선택지입니다. 여기서 상자를 클릭하면 그 장면의 NODE 화면으로 들어갑니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── ROUTE ─────────────────────────────── -->
+<section id="route">
+  <div class="wrap">
+    <h2><span class="num">08 · 화면 3</span>ROUTE — 한 갈래를 소설로 이어 읽기</h2>
+    <p class="one-line">갈래를 하나 고정하면, 여러 장면이 한 편의 글처럼 끊기지 않고 이어집니다.</p>
+
+    <figure>
+      <a href="shots/08-route.png" target="_blank" rel="noopener">
+        <img src="shots/08-route.png" width="1200" height="759" loading="lazy"
+             alt="ROUTE 화면. 여러 노드의 본문이 얇은 경계선만 두고 하나의 긴 산문으로 이어져 있다" />
+      </a>
+      <figcaption><b>ROUTE 화면.</b> 장면이 바뀌는 자리는 얇은 선과 작은 이름표로만 표시됩니다. 글은 계속 흐릅니다.</figcaption>
+    </figure>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>독자가 실제로 읽게 될 순서 그대로 원고를 읽어보는 화면입니다. 문장이 어색한 곳, 감정이 툭 끊기는 곳이 여기서 드러납니다.</p>
+      <p>제 생각에는 이 화면이 이 제품의 핵심입니다. 왜 이걸 소설처럼 만들어야 하는지가 설명 없이 전달됩니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── STAGE ─────────────────────────────── -->
+<section id="stage">
+  <div class="wrap">
+    <h2><span class="num">09 · 화면 4</span>STAGE — 플레이어 눈으로 보기</h2>
+    <p class="one-line">커서가 놓인 순간이 게임에서 어떻게 보이는지 그대로 띄워줍니다.</p>
+
+    <figure>
+      <a href="shots/09-stage.png" target="_blank" rel="noopener">
+        <img src="shots/09-stage.png" width="1200" height="677" loading="lazy"
+             alt="STAGE 프리뷰. 비 오는 플랫폼 배경 위에 유리 캐릭터가 서 있고 아래에 대사창이 있다" />
+      </a>
+      <figcaption><b>STAGE 화면.</b> 배경, 캐릭터, 대사창이 실제 게임 화면처럼 배치됩니다.</figcaption>
+    </figure>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>미리보기입니다. 글을 쓰다가 커서를 옮기면 이 화면도 같이 그 순간으로 움직입니다. 게임을 따로 실행할 필요가 없습니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── AI ────────────────────────────────── -->
+<section id="ai">
+  <div class="wrap">
+    <h2><span class="num">10 · AI</span>제안은 AI가, 결정은 작가가</h2>
+    <p class="one-line">AI가 원고를 몰래 바꾸지 않습니다. 바꿀 내용을 카드로 보여주고, 작가가 받거나 버립니다.</p>
+
+    <figure>
+      <a href="shots/10-diff.png" target="_blank" rel="noopener">
+        <img src="shots/10-diff.png" width="1200" height="1099" loading="lazy"
+             alt="AI 제안 카드. 지울 줄과 넣을 줄이 색으로 구분되어 있고 받기/버리기 버튼이 있다" />
+      </a>
+      <figcaption><b>제안 카드.</b> 무엇을 지우고 무엇을 넣는지 줄 단위로 보여줍니다. 작가가 버튼을 눌러야 원고가 바뀝니다.</figcaption>
+    </figure>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>맞춤법 검사기가 "이렇게 고칠까요?" 물어보는 것과 같습니다. 다만 대상이 문장 한 줄이 아니라 장면 구조까지입니다.</p>
+      <p>이게 가능한 이유는 06번의 규칙입니다. 파일이 줄 단위로 깔끔하니까, 바뀌는 부분만 정확히 집어서 보여줄 수 있습니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 미결 ──────────────────────────────── -->
+<section id="open">
+  <div class="wrap">
+    <h2><span class="num">11 · 아직 안 정한 것</span>선택지를 장면 안에 둘까, 밖에 둘까</h2>
+    <p class="one-line">이 결정 하나가 파일 구조와 지도 모양을 같이 바꿉니다. 그래서 아직 열어뒀습니다.</p>
+
+    <figure>
+      <a href="shots/11-open.png" target="_blank" rel="noopener">
+        <img src="shots/11-open.png" width="1200" height="1099" loading="lazy"
+             alt="A안과 B안을 비교한 두 카드, 그리고 함께 정해야 할 작은 질문 다섯 개가 담긴 표" />
+      </a>
+      <figcaption><b>A안 대 B안, 그리고 딸린 질문들.</b> 아래 표는 이 결정과 같이 정해야 하는 작은 항목들입니다.</figcaption>
+    </figure>
+
+    <div class="two">
+      <div class="card pick">
+        <h4>A안 · 장면 안에 둔다 (기울기)</h4>
+        <ul>
+          <li>글이 끊기지 않습니다. 읽다가 선택지가 나오고 다시 이어집니다.</li>
+          <li>짧은 선택지 때문에 장면이 늘어나지 않습니다.</li>
+          <li>대신 지도가 복잡해집니다. 상자 하나에서 선이 여러 개 나갑니다.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>B안 · 장면을 나눈다</h4>
+        <ul>
+          <li>지도가 깔끔합니다. 상자마다 출구가 하나입니다.</li>
+          <li>대신 짧은 선택지에도 장면이 두 개 늘어납니다.</li>
+          <li>글 흐름이 자꾸 끊깁니다. 소설처럼 읽는 장점을 스스로 깎습니다.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>지금 기울기는 A안입니다. 읽는 맛을 지키는 쪽입니다. 지도가 복잡해지는 문제는 상자 아래쪽에 출구를 여러 개 그려서 풀 생각입니다.</p>
+      <p>이걸 정해야 저장 파일의 모양이 정해집니다. 코드를 쓰기 전에 결정해야 하는 항목입니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 용어 ──────────────────────────────── -->
+<section id="gloss">
+  <div class="wrap">
+    <h2><span class="num">12 · 용어</span>문서에서 쓴 말들</h2>
+    <p class="one-line">새 낱말을 최소한만 만들었습니다. 여섯 개입니다.</p>
+
+    <figure>
+      <a href="shots/12-glossary.png" target="_blank" rel="noopener">
+        <img src="shots/12-glossary.png" width="1200" height="874" loading="lazy"
+             alt="용어 사전 표. 노드, 맵, 루트, 스테이지, 블록, 비트 op 여섯 개 항목" />
+      </a>
+      <figcaption><b>용어 사전.</b> 문서 맨 끝에 있습니다. 낯선 말이 나오면 여기로 돌아오면 됩니다.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ── 고친 것 ───────────────────────────── -->
+<section id="fixed">
+  <div class="wrap">
+    <h2><span class="num">13 · 검수</span>이번에 고친 것 다섯 개</h2>
+    <p class="one-line">문서를 처음부터 끝까지 렌더해서 훑었고, 결함 다섯 개를 찾아 고쳤습니다.</p>
+
+    <ul class="fix">
+      <li>
+        <span class="tag c">내용</span>
+        <div>
+          <p>예시 작품 표의 장면 개수가 틀렸습니다.</p>
+          <p class="was">"3노드"라고 적혀 있었지만 실제로 나열된 장면은 네 개 → 4노드로 고침</p>
+        </div>
+      </li>
+      <li>
+        <span class="tag c">내용</span>
+        <div>
+          <p>MAP 화면 제목의 선 개수가 그림과 안 맞았습니다.</p>
+          <p class="was">"5 edges"로 적혀 있었지만 그림상 선은 네 개 → 4 edges로 고침</p>
+        </div>
+      </li>
+      <li>
+        <span class="tag c">내용</span>
+        <div>
+          <p>카드/산문 비교 설명이 사실과 달랐습니다.</p>
+          <p class="was">"문단 수는 같고"라고 했지만 왼쪽 3블록, 오른쪽 4문단 → "같은 분량의 씬인데"로 고침</p>
+        </div>
+      </li>
+      <li>
+        <span class="tag">모순</span>
+        <div>
+          <p>NODE 목업이 문서 자신의 규칙을 어기고 있었습니다.</p>
+          <p class="was">표정 변경과 대사를 한 블록에 합쳐 그려놨는데, 다음 섹션이 "블록 하나 = 동작 하나"를 계약으로 못 박습니다 → 두 블록으로 분리</p>
+        </div>
+      </li>
+      <li>
+        <span class="tag v">시각</span>
+        <div>
+          <p>지도의 선 위 글씨가 상자를 파고들고, 썸네일에 초록 배경이 남아 있었습니다.</p>
+          <p class="was">선 라벨은 짧게 줄이고 겹치는 부분에 배경판을 깔아 가림. 썸네일 네 곳은 배경을 지운 그림으로 교체</p>
+        </div>
+      </li>
+    </ul>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>숫자가 그림과 안 맞는 곳 세 군데, 문서가 자기 규칙을 어긴 곳 한 군데, 보기 흉한 곳 두 군데를 고쳤습니다. 전부 실제로 렌더해서 눈으로 확인했습니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 다음 ──────────────────────────────── -->
+<section id="next">
+  <div class="wrap">
+    <h2><span class="num">14 · 다음</span>여기서 무엇을 하면 되는가</h2>
+    <table>
+      <thead><tr><th>순서</th><th>할 일</th><th>왜 지금</th></tr></thead>
+      <tbody>
+        <tr><td class="k">1</td><td>선택지를 장면 안에 둘지 밖에 둘지 결정</td><td>저장 파일 모양이 여기서 정해집니다. 코드보다 먼저입니다.</td></tr>
+        <tr><td class="k">2</td><td>파일 형식(스키마) 초안 작성</td><td>1번이 정해지면 바로 쓸 수 있습니다.</td></tr>
+        <tr><td class="k">3</td><td>NODE 화면만 먼저 실제로 만들기</td><td>기본 화면이고, 06번 규칙이 진짜 지켜지는지 여기서 판명됩니다.</td></tr>
+        <tr><td class="k">4</td><td>파일에서 게임 코드로 내보내기 시험</td><td>3단 대응이 말뿐인지 실제인지 확인하는 가장 싼 방법입니다.</td></tr>
+      </tbody>
+    </table>
+    <p class="note" style="margin-top:20px">STAGE와 ROUTE는 NODE와 같은 파일을 읽는 다른 창이라서, NODE가 서면 비교적 빠르게 붙습니다. MAP은 배치 계산이 들어가서 마지막이 좋습니다.</p>
+  </div>
+</section>
+
+<footer><div class="wrap">
+  <p style="margin-bottom:14px">
+    <a href="../concepts/index.html">← 원본 컨셉 문서 보기</a>
+    <a href="shots/">스크린샷 폴더</a>
+  </p>
+  <p style="margin:0;max-width:70ch">그림 12장은 컨셉 문서를 1200px 폭으로 렌더해 섹션별로 잘라낸 것입니다. 문서가 바뀌면 다시 찍어야 합니다.</p>
+</div></footer>
+
+</body>
+</html>
