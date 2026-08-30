@@ -14,6 +14,9 @@ importers:
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
+      lamejs:
+        specifier: 1.2.1
+        version: 1.2.1
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -39,6 +42,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: 6.1.1
         version: 6.1.1(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.13))
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -48,6 +54,9 @@ importers:
 
   packages/content:
     devDependencies:
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -441,6 +450,9 @@ packages:
     resolution: {integrity: sha512-e6rvdUCiQCAuumZslxRJWR/Doq4VpPR82kqclvcS0efgt430SlGIk05vdCN58+VrzgtIcfNODjozVielycD4Sw==}
     engines: {node: '>=16'}
 
+  lamejs@1.2.1:
+    resolution: {integrity: sha512-s7bxvjvYthw6oPLCm5pFxvA84wUROODB8jEO2+CE1adhKgrIvVOlmMgY8zyugxGrvRaDHNJanOiS21/emty6dQ==}
+
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
     engines: {node: '>= 12.0.0'}
@@ -594,6 +606,9 @@ packages:
 
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
+
+  use-strict@1.0.1:
+    resolution: {integrity: sha512-IeiWvvEXfW5ltKVMkxq6FvNf2LojMKvB2OCeja6+ct24S1XOmQw2dGr2JyndwACWAGJva9B7yPHwAmeA9QCqAQ==}
 
   vite@8.2.2:
     resolution: {integrity: sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q==}
@@ -866,6 +881,10 @@ snapshots:
     dependencies:
       is-inside-container: 1.0.0
 
+  lamejs@1.2.1:
+    dependencies:
+      use-strict: 1.0.1
+
   lightningcss-android-arm64@1.33.0:
     optional: true
 
@@ -996,6 +1015,8 @@ snapshots:
   typescript@5.9.3: {}
 
   undici-types@8.3.0: {}
+
+  use-strict@1.0.1: {}
 
   vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(tsx@4.23.13):
     dependencies:

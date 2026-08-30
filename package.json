@@ -18,7 +18,8 @@
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
-    "typescript": "5.9.3",
-    "@types/node": "26.4.0"
+    "@types/node": "26.4.0",
+    "lamejs": "1.2.1",
+    "typescript": "5.9.3"
   }
 }
