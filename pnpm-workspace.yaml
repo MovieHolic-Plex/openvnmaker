@@ -1,0 +1,11 @@
+packages:
+  - "packages/*"
+
+onlyBuiltDependencies:
+  - esbuild
+
+minimumReleaseAgeExclude:
+  - tsx
+
+allowBuilds:
+  esbuild: set this to true or false

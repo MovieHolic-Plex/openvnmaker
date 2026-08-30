@@ -1,0 +1,151 @@
+{
+  "items": [
+    {
+      "id": "bg-title",
+      "out": "packages/app/public/assets/bg/title.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "A wide establishing view of a Korean university campus on a late-June afternoon, with a brick humanities building rising behind a broad lawn and a row of ginkgo trees along the path. A few adult university students in casual summer clothes walk far in the distance carrying tote bags. Painted as a traditional watercolour on cold-press paper with soft bleeding washes, visible paper grain and generous white space in a muted warm palette. Wide horizontal composition with the lower third left calm and uncluttered, lit by hazy summer afternoon light."
+    },
+    {
+      "id": "bg-campus-gate",
+      "out": "packages/app/public/assets/bg/campus-gate.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "The main gate of a Korean university seen from just inside the campus at midday, with a weathered stone gate pillar on the left and a sloping tree-lined road of ginkgo trees leading away. A notice board stands beside the path and the air feels bright and cicada-loud. Traditional watercolour on cold-press paper, soft bleeding pigment, loose brush edges, visible paper texture, muted warm greens and dusty ochres. Wide composition with an open uncluttered lower third under high summer light."
+    },
+    {
+      "id": "bg-lawn-sunset",
+      "out": "packages/app/public/assets/bg/lawn-sunset.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "The central lawn plaza of a Korean university at sunset, long orange light raking across the grass toward a low stone bench in the middle distance. The silhouette of a library building sits at the horizon and a few empty picnic blankets are scattered on the grass. Traditional watercolour on cold-press paper with wet-in-wet skies, soft bleeding washes and visible paper grain in warm amber and violet tones. Wide composition, calm empty lower third, backlit golden-hour glow."
+    },
+    {
+      "id": "bg-art-studio",
+      "out": "packages/app/public/assets/bg/art-studio.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "The interior of a university painting studio in the afternoon, with several wooden easels holding stretched canvases and more canvases leaning against a paint-stained wall. Jars of brushes and puddled watercolour washes sit on a worktable beneath tall north-facing windows. Traditional watercolour on cold-press paper, loose bleeding pigment, visible paper texture, muted ochre and slate palette with accidental colour blooms. Interior composition with a quiet uncluttered lower third and soft diffuse window light."
+    },
+    {
+      "id": "bg-library-window",
+      "out": "packages/app/public/assets/bg/library-window.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "A university library reading desk beside a tall window during rain, with a small lamp glowing on the desk and a stack of books at its edge. Raindrops streak the glass and the campus trees beyond blur into soft green washes. Traditional watercolour on cold-press paper with wet-in-wet bleeding, visible paper grain and generous white space in cool grey-green tones. Quiet composition with an open lower third, lit by cool overcast daylight."
+    },
+    {
+      "id": "bg-campus-cafe",
+      "out": "packages/app/public/assets/bg/campus-cafe.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "The window counter of a small cafe inside a Korean university building in the afternoon, with a worn wooden counter, two tall iced americano cups and a closed laptop resting on the table. Blurred figures sit at the back of the room. Traditional watercolour on cold-press paper, soft bleeding washes, loose brush edges and visible paper texture in warm caramel and cream tones. Interior composition with a calm uncluttered lower third and warm afternoon light."
+    },
+    {
+      "id": "bg-corridor-rain",
+      "out": "packages/app/public/assets/bg/corridor-rain.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "A university lecture-building corridor during the summer monsoon, a long tiled floor reflecting grey light down its length beside a row of tall windows streaming with heavy rain. A folded umbrella leans against the wall next to empty benches. Traditional watercolour on cold-press paper with cool bleeding greys, wet reflections and visible paper grain. Deep one-point composition with an open uncluttered lower third under dim rainy daylight."
+    },
+    {
+      "id": "bg-rooftop-night",
+      "out": "packages/app/public/assets/bg/rooftop-night.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "The rooftop of a university engineering building at night, a low concrete parapet in the foreground and a humming ventilation unit off to one side. The city skyline glitters beyond in scattered warm lights under a summer night sky with thin drifting clouds. Traditional watercolour on cold-press paper with deep indigo washes bleeding into the sky and visible paper grain, small warm lamp-yellow accents. Wide composition with a calm uncluttered lower third and soft night ambience."
+    },
+    {
+      "id": "bg-riverside-dusk",
+      "out": "packages/app/public/assets/bg/riverside-dusk.png",
+      "aspect": "16:9",
+      "key": false,
+      "prompt": "A wooden bench on a stream-side path behind a university at dusk, reeds leaning along the water and a low footbridge crossing in the middle distance. The sky washes from peach to violet while streetlamps just begin to glow. Traditional watercolour on cold-press paper, wet-in-wet gradient sky, soft bleeding pigment and visible paper texture in peach, lilac and sage tones. Wide composition with a quiet uncluttered lower third at last light."
+    },
+    {
+      "id": "sprite-seorin-neutral",
+      "out": "packages/app/public/assets/sprite/seorin-neutral.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 23-year-old South Korean woman, a fourth-year university painting major, painted from mid-thigh up, centred and facing the viewer with a calm neutral expression, mouth relaxed, looking straight at the viewer. She or he has straight black hair falling just below her shoulders, swept over one side and tied low, no bangs, calm narrow eyes and pale lips. She wears an off-white linen shirt faintly stained with dried watercolour, sleeves rolled to the elbow, indigo jeans and a thin silver necklace. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-seorin-smile",
+      "out": "packages/app/public/assets/sprite/seorin-smile.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 23-year-old South Korean woman, a fourth-year university painting major, painted from mid-thigh up, centred and facing the viewer with a warm gentle smile with softened eyes. She or he has straight black hair falling just below her shoulders, swept over one side and tied low, no bangs, calm narrow eyes and pale lips. She wears an off-white linen shirt faintly stained with dried watercolour, sleeves rolled to the elbow, indigo jeans and a thin silver necklace. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-seorin-sad",
+      "out": "packages/app/public/assets/sprite/seorin-sad.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 23-year-old South Korean woman, a fourth-year university painting major, painted from mid-thigh up, centred and facing the viewer with a downcast melancholy expression, eyes lowered and brows slightly drawn. She or he has straight black hair falling just below her shoulders, swept over one side and tied low, no bangs, calm narrow eyes and pale lips. She wears an off-white linen shirt faintly stained with dried watercolour, sleeves rolled to the elbow, indigo jeans and a thin silver necklace. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-seorin-surprised",
+      "out": "packages/app/public/assets/sprite/seorin-surprised.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 23-year-old South Korean woman, a fourth-year university painting major, painted from mid-thigh up, centred and facing the viewer with a surprised expression with raised eyebrows, widened eyes and slightly parted lips. She or he has straight black hair falling just below her shoulders, swept over one side and tied low, no bangs, calm narrow eyes and pale lips. She wears an off-white linen shirt faintly stained with dried watercolour, sleeves rolled to the elbow, indigo jeans and a thin silver necklace. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-dohyun-neutral",
+      "out": "packages/app/public/assets/sprite/dohyun-neutral.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 24-year-old South Korean man, a fourth-year university industrial-design major who plays in a band club, painted from mid-thigh up, centred and facing the viewer with a calm neutral expression, mouth relaxed, looking straight at the viewer. She or he has short slightly tousled brown hair and eyes that crease when he smiles. He wears a loose mustard T-shirt under an open light-denim jacket and a leather-band watch on his wrist. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-dohyun-smile",
+      "out": "packages/app/public/assets/sprite/dohyun-smile.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 24-year-old South Korean man, a fourth-year university industrial-design major who plays in a band club, painted from mid-thigh up, centred and facing the viewer with a warm gentle smile with softened eyes. She or he has short slightly tousled brown hair and eyes that crease when he smiles. He wears a loose mustard T-shirt under an open light-denim jacket and a leather-band watch on his wrist. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-dohyun-sad",
+      "out": "packages/app/public/assets/sprite/dohyun-sad.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 24-year-old South Korean man, a fourth-year university industrial-design major who plays in a band club, painted from mid-thigh up, centred and facing the viewer with a downcast melancholy expression, eyes lowered and brows slightly drawn. She or he has short slightly tousled brown hair and eyes that crease when he smiles. He wears a loose mustard T-shirt under an open light-denim jacket and a leather-band watch on his wrist. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-dohyun-surprised",
+      "out": "packages/app/public/assets/sprite/dohyun-surprised.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 24-year-old South Korean man, a fourth-year university industrial-design major who plays in a band club, painted from mid-thigh up, centred and facing the viewer with a surprised expression with raised eyebrows, widened eyes and slightly parted lips. She or he has short slightly tousled brown hair and eyes that crease when he smiles. He wears a loose mustard T-shirt under an open light-denim jacket and a leather-band watch on his wrist. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-mirae-neutral",
+      "out": "packages/app/public/assets/sprite/mirae-neutral.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 21-year-old South Korean woman, a third-year university computer-science student, painted from mid-thigh up, centred and facing the viewer with a calm neutral expression, mouth relaxed, looking straight at the viewer. She or he has a bright brown chin-length bob with a light fringe and round eyes. She wears a lavender zip-up hoodie over a white tee with a crossbody bag strap across one shoulder. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-mirae-smile",
+      "out": "packages/app/public/assets/sprite/mirae-smile.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 21-year-old South Korean woman, a third-year university computer-science student, painted from mid-thigh up, centred and facing the viewer with a warm gentle smile with softened eyes. She or he has a bright brown chin-length bob with a light fringe and round eyes. She wears a lavender zip-up hoodie over a white tee with a crossbody bag strap across one shoulder. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-mirae-sad",
+      "out": "packages/app/public/assets/sprite/mirae-sad.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 21-year-old South Korean woman, a third-year university computer-science student, painted from mid-thigh up, centred and facing the viewer with a downcast melancholy expression, eyes lowered and brows slightly drawn. She or he has a bright brown chin-length bob with a light fringe and round eyes. She wears a lavender zip-up hoodie over a white tee with a crossbody bag strap across one shoulder. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    },
+    {
+      "id": "sprite-mirae-surprised",
+      "out": "packages/app/public/assets/sprite/mirae-surprised.png",
+      "aspect": "3:4",
+      "key": true,
+      "prompt": "A single character portrait of a 21-year-old South Korean woman, a third-year university computer-science student, painted from mid-thigh up, centred and facing the viewer with a surprised expression with raised eyebrows, widened eyes and slightly parted lips. She or he has a bright brown chin-length bob with a light fringe and round eyes. She wears a lavender zip-up hoodie over a white tee with a crossbody bag strap across one shoulder. The background is a completely plain pure white empty background with no scenery, no props, no furniture and no cast shadow anywhere behind the figure. Painted as a full-colour traditional watercolour on cold-press paper with soft bleeding pigment, loose brush edges and visible paper texture, in a muted warm palette. Centred vertical composition under soft diffuse daylight, the figure occupying most of the frame."
+    }
+  ]
+}
