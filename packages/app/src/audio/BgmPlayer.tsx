@@ -45,10 +45,13 @@ export function BgmPlayer({ track, volume, unlocked }: Props) {
     void active.play().catch(() => undefined);
     const startedAt = performance.now();
     const idleFrom = idle?.volume ?? 0;
+    const clamp = (value: number) => Math.min(1, Math.max(0, value));
     const step = (now: number) => {
-      const t = Math.min(1, (now - startedAt) / FADE_MS);
-      active.volume = Math.min(1, volume * t);
-      if (idle) idle.volume = Math.max(0, idleFrom * (1 - t));
+      // rAF 타임스탬프는 performance.now() 보다 살짝 앞설 수 있다. 물리지 않으면 volume 이 음수가 되고
+      // HTMLMediaElement 가 IndexSizeError 를 던진다.
+      const t = clamp((now - startedAt) / FADE_MS);
+      active.volume = clamp(volume * t);
+      if (idle) idle.volume = clamp(idleFrom * (1 - t));
       if (t < 1) {
         rafRef.current = requestAnimationFrame(step);
         return;
@@ -65,7 +68,7 @@ export function BgmPlayer({ track, volume, unlocked }: Props) {
 
   useEffect(() => {
     const active = slots.active === "a" ? aRef.current : bRef.current;
-    if (active && rafRef.current === null) active.volume = volume;
+    if (active && rafRef.current === null) active.volume = Math.min(1, Math.max(0, volume));
   }, [volume, slots.active]);
 
   const idOf = (slot: SlotName) => (slot === slots.active ? "bgm-audio" : "bgm-audio-idle");

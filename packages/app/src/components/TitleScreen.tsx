@@ -9,7 +9,7 @@ interface Props {
 export function TitleScreen({ title, subtitle, hasSave, onStart, onContinue }: Props) {
   return (
     <section className="title-screen" data-testid="title-screen">
-      <img className="title-bg" src="/assets/bg/title.png" alt="" aria-hidden="true" />
+      <img className="title-bg" data-testid="bg-image" src="/assets/bg/title.png" alt="" aria-hidden="true" />
       <div className="title-wash" />
       <div className="title-plate">
         <p className="title-eyebrow">vnmaker presents</p>

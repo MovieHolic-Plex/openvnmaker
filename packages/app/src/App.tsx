@@ -133,6 +133,16 @@ export function App() {
     dispatch({ type: "restore", sceneId: save.sceneId, lineIndex: save.lineIndex, affection: save.affection });
   }, []);
 
+  if (state.error !== null) {
+    return (
+      <main className="vn-root">
+        <p className="fatal" data-testid="fatal">
+          {state.error}
+        </p>
+      </main>
+    );
+  }
+
   if (state.phase === "title") {
     return (
       <main className="vn-root" onClick={unlock}>
