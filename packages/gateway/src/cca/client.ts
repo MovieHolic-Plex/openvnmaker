@@ -20,10 +20,11 @@ export interface ModelEntry {
   readonly supportsThinking?: boolean;
   readonly supportsImages?: boolean;
   readonly recommended?: boolean;
-  readonly quota?: ModelQuota;
+  /** 업스트림과 같은 이름을 쓴다. 필드명을 바꾸면 소비자가 두 이름을 다 알아야 한다. */
+  readonly quotaInfo?: ModelQuota;
 }
 
-interface RawModel {
+export interface RawModel {
   readonly displayName?: string;
   readonly modelProvider?: string;
   readonly apiProvider?: string;
@@ -141,17 +142,15 @@ export async function discoverProject(accessToken: string): Promise<string> {
   return projectId;
 }
 
-export async function fetchAvailableModels(accessToken: string): Promise<{ models: ModelEntry[]; host: string }> {
-  const { data, host } = await ccaCall<{ models?: Record<string, RawModel> }>(
-    "fetchAvailableModels",
-    accessToken,
-    {},
-  );
-  const raw = data.models ?? {};
-  const models: ModelEntry[] = Object.keys(raw)
+/**
+ * 업스트림 맵을 정렬된 배열로 편다. 순수 함수라 네트워크 없이 검사할 수 있다.
+ */
+export function mapModels(raw: Record<string, RawModel> | undefined): ModelEntry[] {
+  const source = raw ?? {};
+  return Object.keys(source)
     .sort()
     .map((id) => {
-      const m = raw[id];
+      const m = source[id];
       const fraction = m?.quotaInfo?.remainingFraction;
       return {
         id,
@@ -162,7 +161,7 @@ export async function fetchAvailableModels(accessToken: string): Promise<{ model
         ...(m?.recommended === undefined ? {} : { recommended: m.recommended }),
         ...(typeof fraction === "number"
           ? {
-              quota: {
+              quotaInfo: {
                 remainingFraction: fraction,
                 ...(m?.quotaInfo?.resetTime === undefined ? {} : { resetTime: m.quotaInfo.resetTime }),
               },
@@ -170,5 +169,13 @@ export async function fetchAvailableModels(accessToken: string): Promise<{ model
           : {}),
       };
     });
-  return { models, host };
+}
+
+export async function fetchAvailableModels(accessToken: string): Promise<{ models: ModelEntry[]; host: string }> {
+  const { data, host } = await ccaCall<{ models?: Record<string, RawModel> }>(
+    "fetchAvailableModels",
+    accessToken,
+    {},
+  );
+  return { models: mapModels(data.models), host };
 }

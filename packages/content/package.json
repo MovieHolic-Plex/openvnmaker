@@ -11,6 +11,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "stats": "tsx src/stats.ts",
     "test": "node --test --import tsx test/script.test.ts test/assets.test.ts"
   },
   "devDependencies": {

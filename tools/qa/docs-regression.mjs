@@ -24,6 +24,22 @@ for (const rel of targets) {
   page.on("pageerror", (err) => errors.push(String(err)));
   await page.goto(pathToFileURL(join(ROOT, rel)).href, { waitUntil: "load" });
   await page.waitForLoadState("networkidle").catch(() => undefined);
+  // loading="lazy" 이미지는 화면에 들어와야 디코드된다. 끝까지 훑어서 전부 강제로 로드시킨다.
+  // 로드가 끝나기 전에 맨 위로 다시 올리면 뷰토 밖 이미지가 로드를 시작하지 않는다. 기다린 다에 올린다.
+  await page.evaluate(async () => {
+    const step = Math.max(200, Math.floor(window.innerHeight * 0.8));
+    for (let y = 0; y <= document.body.scrollHeight; y += step) {
+      window.scrollTo(0, y);
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  });
+  await page
+    .waitForFunction(() => [...document.querySelectorAll("img")].every((img) => img.complete && img.naturalWidth > 0), null, {
+      timeout: 20_000,
+    })
+    .catch(() => undefined);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForLoadState("networkidle").catch(() => undefined);
   const stats = await page.evaluate(() => {
     const images = [...document.querySelectorAll("img")];
     return {
@@ -34,7 +50,7 @@ for (const rel of targets) {
   });
   const name = rel.split("/")[1];
   await page.screenshot({ path: join(OUT, `docs-${name}.png`), fullPage: false });
-  const ok = stats.loaded > 0 && errors.length === 0;
+  const ok = stats.loaded > 0 && stats.loaded === stats.total && errors.length === 0;
   console.log(`${rel} title="${stats.title}" img ${stats.loaded}/${stats.total} errors=${errors.length} ${ok ? "OK" : "FAIL"}`);
   if (!ok) failed += 1;
   await page.close();
