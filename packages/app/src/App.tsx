@@ -1,7 +1,8 @@
 import { script } from "@vnmaker/content";
 import type { VnScript } from "@vnmaker/content";
+import { helloNode } from "@vnmaker/ir";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { fetchAuthStatus, generateLine, startLogin, type AuthStatus } from "./api/gateway.js";
+import { fetchAuthStatus, generateLine, saveNode, startLogin, type AuthStatus } from "./api/gateway.js";
 import { BgmPlayer } from "./audio/BgmPlayer.js";
 import { playSfx } from "./audio/sfx.js";
 import { ChoiceMenu } from "./components/ChoiceMenu.js";
@@ -158,6 +159,7 @@ export function App() {
     setHelloError(null);
     try {
       const result = await generateLine();
+      await saveNode(helloNode(result.text));
       unlock();
       bootScript(helloScript(result.text));
     } catch (err) {

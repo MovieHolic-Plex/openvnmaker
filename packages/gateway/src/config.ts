@@ -75,6 +75,8 @@ export const LOAD_CODE_ASSIST_METADATA = { ideType: "ANTIGRAVITY" } as const;
 
 export const PROVIDER = "google-antigravity";
 export const AUTH_FILE = join(homedir(), ".vnmaker", "auth.json");
+/** W1–2 기본 프로젝트. 한 줄 받기 가 여기 story/nodes/hello.json 을 남긴다. */
+export const PROJECT_DIR = process.env.VNMAKER_PROJECT_DIR ?? join(homedir(), ".vnmaker", "projects", "default");
 export const GATEWAY_VERSION = "0.1.0";
 
 /**

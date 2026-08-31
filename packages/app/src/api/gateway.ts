@@ -73,3 +73,15 @@ export async function generateLine(): Promise<GenerateResponse> {
     unofficial: body["unofficial"] === true,
   };
 }
+
+export async function saveNode(node: unknown): Promise<string> {
+  const res = await fetch("/api/project/nodes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(node),
+    signal: AbortSignal.timeout(8_000),
+  });
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(String(body["error"] ?? `save ${res.status}`));
+  return typeof body["path"] === "string" ? body["path"] : "";
+}

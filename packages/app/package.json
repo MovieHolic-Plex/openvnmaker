@@ -13,7 +13,8 @@
   "dependencies": {
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "@vnmaker/content": "workspace:*"
+    "@vnmaker/content": "workspace:*",
+    "@vnmaker/ir": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "19.2.18",
