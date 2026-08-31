@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { GATEWAY_VERSION } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
 import { modelRoutes } from "./routes/models.js";
+import { imageRoutes } from "./routes/images.js";
 import type { CredentialStore } from "./auth/credentials.js";
 
 export interface GatewayDeps {
@@ -26,6 +27,7 @@ export function createApp(deps: GatewayDeps): Hono {
   app.get("/api/health", (c) => c.json({ ok: true, version: GATEWAY_VERSION }));
   app.route("/api/auth", authRoutes(deps));
   app.route("/api", modelRoutes(deps));
+  app.route("/api", imageRoutes(deps));
 
   return app;
 }

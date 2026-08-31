@@ -45,6 +45,25 @@ curl http://127.0.0.1:51120/api/models               # 만료 시 자동 갱신
 
 Windows 에서는 `chmod 0600` 이 무시되므로 `%USERPROFILE%\.vnmaker` 폴더 ACL 을 직접 좁혀야 한다.
 
+## 이미지 생성
+
+삽화도 같은 agy 경로로 뽑는다. 게이트웨이가 봉투(`responseModalities:["IMAGE"]`, `project` 필수)를
+감추고 결과를 `~/.vnmaker/images` 에 파일로 떨어뜨린다. 응답에 base64 를 싣지 않는다.
+
+```bash
+curl http://127.0.0.1:51120/api/image/config          # 기본 모델 · 허용 비율
+curl -X POST http://127.0.0.1:51120/api/image/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"수채화 캠퍼스 배경, 인물 없음","aspectRatio":"16:9","name":"bg-campus"}'
+curl -o bg.jpg http://127.0.0.1:51120/api/image/file/bg-campus.jpg
+
+pnpm qa:image                                         # 실계정 1회 호출 실측 (증거 evidence/image/)
+```
+
+기본 모델은 `gemini-3.1-flash-image` 다. 이 계정 카탈로그에 실제로 있는 id 를 골랐고,
+바뀌면 `VNMAKER_IMAGE_MODEL` 로 덮어쓴다. **이 카운터는 코딩 할당량과 같은 통이다** —
+삽화를 뽑으면 텍스트 몫이 같이 줄고 Antigravity 데스크톱 앱과도 공유된다. CI 에 물리지 마라.
+
 ## 검증
 
 ```bash

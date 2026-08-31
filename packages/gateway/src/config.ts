@@ -39,6 +39,19 @@ export const CCA_HOSTS = [
 
 export const FREE_TIER_ID = "free-tier";
 export const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * 이미지 생성 경로도 agy 다(사용자 결정 2026-08-31). 텍스트와 같은 계정+프로젝트 카운터를
+ * 쓰므로 삽화를 뽑으면 코딩 할당량이 같이 줄고, Antigravity 데스크톱 앱과도 같은 통이다.
+ * 기본 모델은 실측 카탈로그에 실제로 있는 id 다 — 참조 구현의 gemini-3-pro-image 는
+ * 이 계정 카탈로그에 없다. 카탈로그가 바뀌면 VNMAKER_IMAGE_MODEL 로 덮어써라.
+ */
+export const IMAGE_MODEL = process.env.VNMAKER_IMAGE_MODEL ?? "gemini-3.1-flash-image";
+/** 이미지는 텍스트보다 훨씬 오래 걸린다. 30s 로는 못 받는다. */
+export const IMAGE_TIMEOUT_MS = Number(process.env.VNMAKER_IMAGE_TIMEOUT_MS ?? 180_000);
+export const IMAGE_DIR = process.env.VNMAKER_IMAGE_DIR ?? join(homedir(), ".vnmaker", "images");
+export const IMAGE_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;
+
 export const CALLBACK_TIMEOUT_MS = 300_000;
 export const ONBOARD_TIMEOUT_MS = 30_000;
 export const ONBOARD_POLL_INTERVAL_MS = 1_000;
