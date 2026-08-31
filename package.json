@@ -12,10 +12,11 @@
     "dev:gateway": "pnpm --filter @vnmaker/gateway dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "pnpm -r test && node tools/audio-check.mjs",
     "e2e": "playwright test",
     "qa:gateway": "node tools/qa/gateway-live.mjs",
     "qa:docs": "node tools/qa/docs-regression.mjs",
+    "qa:audio": "node tools/audio-check.mjs",
     "assets:audio": "node tools/audio-gen.mjs"
   },
   "devDependencies": {
