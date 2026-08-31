@@ -27,6 +27,28 @@ export async function imageLoaded(page: Page, testId: string): Promise<number> {
   }, testId);
 }
 
+/**
+ * 요소가 실제로 눈에 보일 때까지 기다린다.
+ * toBeVisible() 은 바운딩 박스만 본다. opacity:0 에서 페이드인하는 요소는
+ * 애니메이션이 시작되기도 전에 "보인다"고 판정되고, 그 순간 찍은 스크린샷은 빈 화면이 된다.
+ * 그래서 자손까지 실제 계산된 opacity 를 확인한다.
+ */
+export async function waitForOpaque(page: Page, testId: string, minOpacity = 0.99): Promise<void> {
+  await page.waitForFunction(
+    ({ id, min }) => {
+      const root = document.querySelector(`[data-testid="${id}"]`);
+      if (!(root instanceof HTMLElement)) return false;
+      const nodes = [root, ...root.querySelectorAll("*")];
+      return nodes.every((node) => {
+        if (!(node instanceof HTMLElement)) return true;
+        return Number.parseFloat(getComputedStyle(node).opacity) >= min;
+      });
+    },
+    { id: testId, min: minOpacity },
+    { timeout: 10_000 },
+  );
+}
+
 export async function bgmTime(page: Page): Promise<number> {
   return page.evaluate(() => {
     const el = document.querySelector('[data-testid="bgm-audio"]');

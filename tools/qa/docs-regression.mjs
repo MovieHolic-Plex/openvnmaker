@@ -14,7 +14,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const OUT = join(ROOT, "evidence/regression");
 mkdirSync(OUT, { recursive: true });
 
-const targets = ["docs/vision/index.html", "docs/concepts/index.html", "docs/report/index.html"];
+const targets = [
+  "docs/vision/index.html",
+  "docs/concepts/index.html",
+  "docs/report/index.html",
+  "docs/qa-report/index.html",
+];
 
 const browser = await chromium.launch();
 let failed = 0;

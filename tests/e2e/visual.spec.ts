@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { imageLoaded, vnState } from "./helpers.js";
+import { imageLoaded, vnState, waitForOpaque } from "./helpers.js";
 
 const SIZES = [
   { name: "desktop-1280x720", width: 1280, height: 720 },
@@ -33,6 +33,8 @@ for (const size of SIZES) {
       await page.getByTestId("advance-button").click();
     }
     await expect(page.getByTestId("choice-menu")).toBeVisible();
+    // choice-in 애니메이션이 opacity:0 에서 시작한다. 다 올라온 뒤에 찍어야 메뉴가 담긴다.
+    await waitForOpaque(page, "choice-menu");
     await page.screenshot({ path: `${dir}/03-choices.png` });
 
     await page.getByTestId("history-button").click();
