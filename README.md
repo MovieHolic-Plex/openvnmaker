@@ -20,8 +20,8 @@ docs/contract       시나리오·UI 계약 (스토리 바이블, data-testid �
 
 ```bash
 pnpm install
-pnpm dev              # 플레이어  http://127.0.0.1:5173
-pnpm dev:gateway      # 게이트웨이 http://127.0.0.1:51120
+pnpm dev              # 플레이어 + 게이트웨이 마운트  http://127.0.0.1:5173
+pnpm dev:gateway      # 독립 게이트웨이 http://127.0.0.1:51120 (qa 스크립트용)
 ```
 
 게이트웨이는 **127.0.0.1 전용**이다. OAuth 토큰을 프록시하므로 `0.0.0.0` 에 바인딩하거나
@@ -37,7 +37,10 @@ ssh -L 51120:127.0.0.1:51120 -L 5173:127.0.0.1:5173 <host>
 curl -X POST http://127.0.0.1:51120/api/auth/login   # 브라우저 동의
 curl http://127.0.0.1:51120/api/auth/status
 curl http://127.0.0.1:51120/api/models               # 만료 시 자동 갱신
+curl -X POST http://127.0.0.1:51120/api/generate     # W1 한 줄. prompt 생략 시 기본 프롬프트
 ```
+
+타이틀의 **Google 연결** 과 **한 줄 받기** 가 같은 경로다. `pnpm dev` 만 띄우면 Vite 가 `/api` 를 게이트웨이에 붙이므로 브라우저에서 바로 된다.
 
 자격증명은 `~/.vnmaker/auth.json` 의 `google-antigravity` 키에 저장된다.
 **비공식 어댑터다.** 구글 공식 연동이 아니고, tier 는 항상 `free-tier` 로 응답한다.
@@ -58,6 +61,7 @@ curl -X POST http://127.0.0.1:51120/api/image/generate \
 curl -o bg.jpg http://127.0.0.1:51120/api/image/file/bg-campus.jpg
 
 pnpm qa:image                                         # 실계정 1회 호출 실측 (증거 evidence/image/)
+pnpm qa:generate                                      # W1 텍스트 한 줄 실측 (증거 evidence/generate/)
 ```
 
 기본 모델은 `gemini-3.1-flash-image` 다. 이 계정 카탈로그에 실제로 있는 id 를 골랐고,

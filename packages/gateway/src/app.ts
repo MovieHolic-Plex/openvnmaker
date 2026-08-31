@@ -4,6 +4,7 @@ import { GATEWAY_VERSION } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
 import { modelRoutes } from "./routes/models.js";
 import { imageRoutes } from "./routes/images.js";
+import { generateRoutes } from "./routes/generate.js";
 import type { CredentialStore } from "./auth/credentials.js";
 
 export interface GatewayDeps {
@@ -28,6 +29,7 @@ export function createApp(deps: GatewayDeps): Hono {
   app.route("/api/auth", authRoutes(deps));
   app.route("/api", modelRoutes(deps));
   app.route("/api", imageRoutes(deps));
+  app.route("/api", generateRoutes(deps));
 
   return app;
 }

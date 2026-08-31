@@ -16,6 +16,7 @@
     "e2e": "playwright test",
     "qa:gateway": "node tools/qa/gateway-live.mjs",
     "qa:image": "node tools/qa/image-live.mjs",
+    "qa:generate": "node tools/qa/generate-live.mjs",
     "qa:docs": "node tools/qa/docs-regression.mjs",
     "qa:audio": "node tools/audio-check.mjs",
     "assets:audio": "node tools/audio-gen.mjs"

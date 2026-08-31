@@ -49,6 +49,20 @@ export const REQUEST_TIMEOUT_MS = 30_000;
 export const IMAGE_MODEL = process.env.VNMAKER_IMAGE_MODEL ?? "gemini-3.1-flash-image";
 /** 이미지는 텍스트보다 훨씬 오래 걸린다. 30s 로는 못 받는다. */
 export const IMAGE_TIMEOUT_MS = Number(process.env.VNMAKER_IMAGE_TIMEOUT_MS ?? 180_000);
+
+/**
+ * W1 텍스트 기본 모델. 카탈로그에 있는 id 만 쓴다.
+ * `gemini-3.7-flash-low` 는 thinking 이 maxOutputTokens 를 거의 다 먹어서
+ * 대사 한 글자만 남긴다(실측 thoughtsTokenCount 251 / candidatesTokenCount 1).
+ * thinking 플래그가 없는 `gemini-2.5-flash` 가 한 줄용이다. 덮어쓰려면 VNMAKER_TEXT_MODEL.
+ */
+export const TEXT_MODEL = process.env.VNMAKER_TEXT_MODEL ?? "gemini-2.5-flash";
+export const GENERATE_TIMEOUT_MS = Number(process.env.VNMAKER_GENERATE_TIMEOUT_MS ?? 90_000);
+/** 한 줄만 받는다. 이 캡을 올리면 소설을 통째로 뽑아 쿼터를 태운다. */
+export const GENERATE_MAX_OUTPUT_TOKENS = 512;
+export const HELLO_PROMPT =
+  "한국 대학 캠퍼스 여름 오후를 배경으로 한 비주얼 노벨 내레이션을 한 줄만 써라. " +
+  "한글 40자에서 80자. 따옴표·제목·설명 없이 본문만. 성인 대학생 세계이고 교복과 미성년은 등장시키지 마라.";
 export const IMAGE_DIR = process.env.VNMAKER_IMAGE_DIR ?? join(homedir(), ".vnmaker", "images");
 export const IMAGE_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;
 

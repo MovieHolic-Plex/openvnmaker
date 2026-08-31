@@ -104,6 +104,20 @@ body {
   color: var(--ink-soft);
 }
 
+.title-auth {
+  margin: 14px 0 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.title-error {
+  margin: 12px 0 0;
+  max-width: 42ch;
+  font-size: 0.85rem;
+  color: #8a3a32;
+}
+
 .title-rule {
   width: 92px; height: 2px;
   margin: 20px 0;
