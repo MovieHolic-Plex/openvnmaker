@@ -13,21 +13,6 @@ function mountGateway() {
       const { createApp } = await import("../gateway/src/app.ts");
       const { createFileStore } = await import("../gateway/src/auth/credentials.ts");
       const app = createApp({ store: createFileStore() });
-      // #region agent log
-      fetch("http://127.0.0.1:7330/ingest/088c962c-eab4-4360-b110-81b67b33fb9f", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4259b0" },
-        body: JSON.stringify({
-          sessionId: "4259b0",
-          runId: "w1",
-          hypothesisId: "C",
-          location: "packages/app/vite.config.ts:configureServer",
-          message: "gateway mounted on vite",
-          data: { prefix: "/api" },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       server.middlewares.use((req, res, next) => {
         const url = req.url ?? "";
         if (!url.startsWith("/api")) {

@@ -64,24 +64,7 @@ export function App() {
   useEffect(() => {
     setSettings(loadSettings());
     setSavedAt(loadSave()?.savedAt ?? null);
-    void fetchAuthStatus().then((next) => {
-      setAuth(next);
-      // #region agent log
-      fetch("http://127.0.0.1:7330/ingest/088c962c-eab4-4360-b110-81b67b33fb9f", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4259b0" },
-        body: JSON.stringify({
-          sessionId: "4259b0",
-          runId: "w1",
-          hypothesisId: "E",
-          location: "packages/app/src/App.tsx:mount",
-          message: "auth status",
-          data: { reachable: next.reachable, authenticated: next.authenticated, hasEmail: Boolean(next.email) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    });
+    void fetchAuthStatus().then(setAuth);
   }, []);
 
   const scene = currentScene(vnScript, state);
@@ -175,39 +158,9 @@ export function App() {
     setHelloError(null);
     try {
       const result = await generateLine();
-      // #region agent log
-      fetch("http://127.0.0.1:7330/ingest/088c962c-eab4-4360-b110-81b67b33fb9f", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4259b0" },
-        body: JSON.stringify({
-          sessionId: "4259b0",
-          runId: "w1",
-          hypothesisId: "D",
-          location: "packages/app/src/App.tsx:onHello",
-          message: "hello line received, booting PLAY",
-          data: { textLength: result.text.length, preview: result.text.slice(0, 40), model: result.model },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       unlock();
       bootScript(helloScript(result.text));
     } catch (err) {
-      // #region agent log
-      fetch("http://127.0.0.1:7330/ingest/088c962c-eab4-4360-b110-81b67b33fb9f", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4259b0" },
-        body: JSON.stringify({
-          sessionId: "4259b0",
-          runId: "w1",
-          hypothesisId: "D",
-          location: "packages/app/src/App.tsx:onHello",
-          message: "hello line failed",
-          data: { error: err instanceof Error ? err.message.slice(0, 240) : String(err).slice(0, 240) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       setHelloError(err instanceof Error ? err.message : String(err));
     } finally {
       setHelloBusy(false);

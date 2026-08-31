@@ -109,29 +109,6 @@ export async function generateText(accessToken: string, params: GenerateParams):
     try {
       const raw = await postGenerate(host, accessToken, body, controller.signal);
       const parsed = collectText(parseSseChunks(raw) as ResponseChunk[]);
-      // #region agent log
-      fetch("http://127.0.0.1:7330/ingest/088c962c-eab4-4360-b110-81b67b33fb9f", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4259b0" },
-        body: JSON.stringify({
-          sessionId: "4259b0",
-          runId: "w1",
-          hypothesisId: "A",
-          location: "packages/gateway/src/cca/generate.ts:generateText",
-          message: "cca generate parsed",
-          data: {
-            host,
-            model,
-            textLength: parsed.text.length,
-            blockReason: parsed.blockReason ?? null,
-            rawChars: raw.length,
-            thoughtsTokenCount: (parsed.usage?.["thoughtsTokenCount"] as number | undefined) ?? 0,
-            candidatesTokenCount: (parsed.usage?.["candidatesTokenCount"] as number | undefined) ?? 0,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       if (parsed.text === "" || parsed.text.length < 8) {
         const detail = parsed.blockReason
           ? `blockReason ${parsed.blockReason}`

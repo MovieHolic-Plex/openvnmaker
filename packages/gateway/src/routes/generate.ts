@@ -48,21 +48,6 @@ export function generateRoutes({ store }: GatewayDeps): Hono {
         projectId,
         ...(typeof body.model === "string" && body.model !== "" ? { model: body.model } : {}),
       });
-      // #region agent log
-      fetch("http://127.0.0.1:7330/ingest/088c962c-eab4-4360-b110-81b67b33fb9f", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4259b0" },
-        body: JSON.stringify({
-          sessionId: "4259b0",
-          runId: "w1",
-          hypothesisId: "B",
-          location: "packages/gateway/src/routes/generate.ts:POST /generate",
-          message: "generate route ok",
-          data: { model: result.model, host: result.host, textLength: result.text.length, preview: result.text.slice(0, 40) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return c.json({
         text: result.text,
         model: result.model,
@@ -72,21 +57,6 @@ export function generateRoutes({ store }: GatewayDeps): Hono {
         unofficial: true,
       });
     } catch (err) {
-      // #region agent log
-      fetch("http://127.0.0.1:7330/ingest/088c962c-eab4-4360-b110-81b67b33fb9f", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4259b0" },
-        body: JSON.stringify({
-          sessionId: "4259b0",
-          runId: "w1",
-          hypothesisId: "A",
-          location: "packages/gateway/src/routes/generate.ts:POST /generate",
-          message: "generate route error",
-          data: { error: err instanceof Error ? err.message.slice(0, 240) : String(err).slice(0, 240) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
     }
   });
