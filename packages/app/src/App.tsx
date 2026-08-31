@@ -2,7 +2,7 @@ import { script } from "@vnmaker/content";
 import type { VnScript } from "@vnmaker/content";
 import { helloNode } from "@vnmaker/ir";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { fetchAuthStatus, generateLine, saveNode, startLogin, type AuthStatus } from "./api/gateway.js";
+import { fetchAuthStatus, generateLine, runAgent, saveNode, startLogin, type AgentDiff, type AuthStatus } from "./api/gateway.js";
 import { BgmPlayer } from "./audio/BgmPlayer.js";
 import { playSfx } from "./audio/sfx.js";
 import { ChoiceMenu } from "./components/ChoiceMenu.js";
@@ -16,7 +16,7 @@ import { TitleScreen } from "./components/TitleScreen.js";
 import { reduce } from "./engine/reducer.js";
 import { currentLine, currentScene, speakerColor, speakerName, spritesAt } from "./engine/selectors.js";
 import { initialState, type VnAction, type VnState } from "./engine/types.js";
-import { helloScript } from "./helloScript.js";
+import { helloScript, scriptFromNode } from "./helloScript.js";
 import { useTypewriter } from "./hooks/useTypewriter.js";
 import { defaultSettings, loadSave, loadSettings, writeSave, writeSettings, type Settings } from "./storage/persist.js";
 
@@ -29,6 +29,7 @@ declare global {
       typing: boolean;
       phase: string;
       error: string | null;
+      lastDiff: string | null;
     };
   }
 }
@@ -59,7 +60,9 @@ export function App() {
   const [auth, setAuth] = useState<AuthStatus>(offlineAuth);
   const [connectBusy, setConnectBusy] = useState(false);
   const [helloBusy, setHelloBusy] = useState(false);
+  const [agentBusy, setAgentBusy] = useState(false);
   const [helloError, setHelloError] = useState<string | null>(null);
+  const [agentDiffs, setAgentDiffs] = useState<readonly AgentDiff[]>([]);
   const autoTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -81,8 +84,9 @@ export function App() {
       typing,
       phase: state.phase,
       error: state.error,
+      lastDiff: agentDiffs[0]?.summary ?? null,
     };
-  }, [state, typing]);
+  }, [state, typing, agentDiffs]);
 
   useEffect(() => {
     if (state.phase !== "scene" || !line?.sfx || !unlocked) return;
@@ -169,6 +173,25 @@ export function App() {
     }
   }, [bootScript, unlock]);
 
+  const onAgent = useCallback(
+    async (message: string) => {
+      setAgentBusy(true);
+      setHelloError(null);
+      try {
+        const result = await runAgent(message, "hello");
+        if (result.node === null) throw new Error("에이전트가 노드를 안 남겼다");
+        setAgentDiffs(result.diffs);
+        unlock();
+        bootScript(scriptFromNode(result.node));
+      } catch (err) {
+        setHelloError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setAgentBusy(false);
+      }
+    },
+    [bootScript, unlock],
+  );
+
   const nameOf = useCallback(
     (speaker: string | null) => {
       if (speaker === null) return null;
@@ -219,6 +242,7 @@ export function App() {
           auth={auth}
           connectBusy={connectBusy}
           helloBusy={helloBusy}
+          agentBusy={agentBusy}
           helloError={helloError}
           onConnect={() => {
             unlock();
@@ -228,6 +252,11 @@ export function App() {
             unlock();
             playSfx("ui-click", settings.sfxVolume);
             void onHello();
+          }}
+          onAgent={(message) => {
+            unlock();
+            playSfx("ui-click", settings.sfxVolume);
+            void onAgent(message);
           }}
           onStart={() => {
             unlock();
@@ -316,6 +345,11 @@ export function App() {
           onHistory={() => setPanel((p) => (p === "history" ? "none" : "history"))}
           onSettings={() => setPanel((p) => (p === "settings" ? "none" : "settings"))}
         />
+        {agentDiffs.length > 0 && (
+          <p className="agent-diff" data-testid="agent-diff">
+            {agentDiffs.map((diff) => diff.summary).join(" · ")}
+          </p>
+        )}
         {state.phase === "scene" && (
           <DialogueBox
             speaker={nameOf(speaking)}

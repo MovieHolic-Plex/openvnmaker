@@ -70,3 +70,23 @@ test("깨진 노드 JSON 은 400", async () => {
   });
   assert.equal(res.status, 400);
 });
+
+test("listNodes 는 쓴 노드를 돌려준다", async () => {
+  const store = createMemoryProjectStore();
+  await store.writeNode(node);
+  const listed = await store.listNodes();
+  assert.deepEqual(
+    listed.map((item) => item.id),
+    ["hello"],
+  );
+});
+
+test("edges 를 왕복한다", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vnmaker-ir-"));
+  const store = createFileProjectStore(root);
+  await store.writeEdges([{ from: "hello", to: "cafe-02" }]);
+  const edges = await store.readEdges();
+  assert.equal(edges.length, 1);
+  assert.equal(edges[0]?.from, "hello");
+  assert.equal(edges[0]?.to, "cafe-02");
+});

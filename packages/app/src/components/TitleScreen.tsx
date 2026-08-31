@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { AuthStatus } from "../api/gateway.js";
 
 interface Props {
@@ -7,9 +8,11 @@ interface Props {
   readonly auth: AuthStatus;
   readonly connectBusy: boolean;
   readonly helloBusy: boolean;
+  readonly agentBusy: boolean;
   readonly helloError: string | null;
   readonly onConnect: () => void;
   readonly onHello: () => void;
+  readonly onAgent: (message: string) => void;
   readonly onStart: () => void;
   readonly onContinue: () => void;
 }
@@ -28,12 +31,17 @@ export function TitleScreen({
   auth,
   connectBusy,
   helloBusy,
+  agentBusy,
   helloError,
   onConnect,
   onHello,
+  onAgent,
   onStart,
   onContinue,
 }: Props) {
+  const [instruction, setInstruction] = useState("이 대사만 더 차갑게");
+  const busy = helloBusy || agentBusy;
+
   return (
     <section className="title-screen" data-testid="title-screen">
       <img className="title-bg" data-testid="bg-image" src="/assets/bg/title.png" alt="" aria-hidden="true" />
@@ -74,12 +82,39 @@ export function TitleScreen({
             type="button"
             className="ink-button"
             data-testid="hello-button"
-            disabled={helloBusy || !auth.authenticated}
+            disabled={busy || !auth.authenticated}
             onClick={onHello}
           >
             {helloBusy ? "쓰는 중" : "한 줄 받기"}
           </button>
         </div>
+        <form
+          className="title-agent"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const text = instruction.trim();
+            if (text === "" || busy || !auth.authenticated) return;
+            onAgent(text);
+          }}
+        >
+          <input
+            className="title-agent-input"
+            data-testid="agent-input"
+            value={instruction}
+            disabled={busy || !auth.authenticated}
+            onChange={(event) => setInstruction(event.target.value)}
+            placeholder="그래프에 할 말"
+            maxLength={2000}
+          />
+          <button
+            type="submit"
+            className="ink-button"
+            data-testid="agent-button"
+            disabled={busy || !auth.authenticated || instruction.trim() === ""}
+          >
+            {agentBusy ? "고치는 중" : "지시하기"}
+          </button>
+        </form>
         {helloError !== null && (
           <p className="title-error" data-testid="hello-error">
             {helloError}

@@ -85,3 +85,41 @@ export async function saveNode(node: unknown): Promise<string> {
   if (!res.ok) throw new Error(String(body["error"] ?? `save ${res.status}`));
   return typeof body["path"] === "string" ? body["path"] : "";
 }
+
+export interface AgentDiff {
+  readonly tool: string;
+  readonly summary: string;
+}
+
+export interface AgentResponse {
+  readonly text: string;
+  readonly diffs: readonly AgentDiff[];
+  readonly playFrom: string | null;
+  readonly node: unknown;
+}
+
+export async function runAgent(message: string, nodeId?: string): Promise<AgentResponse> {
+  const res = await fetch("/api/agent/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, ...(nodeId === undefined ? {} : { nodeId }) }),
+    signal: AbortSignal.timeout(180_000),
+  });
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(String(body["error"] ?? `agent ${res.status}`));
+  const diffs = Array.isArray(body["diffs"])
+    ? body["diffs"].flatMap((item) => {
+        if (item === null || typeof item !== "object") return [];
+        const row = item as Record<string, unknown>;
+        const tool = typeof row["tool"] === "string" ? row["tool"] : "";
+        const summary = typeof row["summary"] === "string" ? row["summary"] : "";
+        return tool === "" ? [] : [{ tool, summary }];
+      })
+    : [];
+  return {
+    text: typeof body["text"] === "string" ? body["text"] : "",
+    diffs,
+    playFrom: typeof body["playFrom"] === "string" ? body["playFrom"] : null,
+    node: body["node"] ?? null,
+  };
+}

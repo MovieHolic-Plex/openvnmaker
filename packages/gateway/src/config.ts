@@ -60,6 +60,9 @@ export const TEXT_MODEL = process.env.VNMAKER_TEXT_MODEL ?? "gemini-2.5-flash";
 export const GENERATE_TIMEOUT_MS = Number(process.env.VNMAKER_GENERATE_TIMEOUT_MS ?? 90_000);
 /** 한 줄만 받는다. 이 캡을 올리면 소설을 통째로 뽑아 쿼터를 태운다. */
 export const GENERATE_MAX_OUTPUT_TOKENS = 512;
+/** 에이전트 도구 인자는 비트 배열이라 한 줄보다 길다. */
+export const AGENT_MAX_OUTPUT_TOKENS = 2048;
+export const AGENT_MAX_TOOL_CALLS = 12;
 export const HELLO_PROMPT =
   "한국 대학 캠퍼스 여름 오후를 배경으로 한 비주얼 노벨 내레이션을 한 줄만 써라. " +
   "한글 40자에서 80자. 따옴표·제목·설명 없이 본문만. 성인 대학생 세계이고 교복과 미성년은 등장시키지 마라.";

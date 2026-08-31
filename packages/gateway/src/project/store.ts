@@ -2,7 +2,7 @@
  * 로컬 프로젝트 파일. 모델에게 자유 경로를 주지 않는다 — 노드 id 만 받는다.
  * 기본 루트는 ~/.vnmaker/projects/default.
  */
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PROJECT_DIR } from "../config.js";
 
@@ -14,9 +14,18 @@ export interface ProjectNode {
   readonly beats: readonly unknown[];
 }
 
+export interface ProjectEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly when?: string;
+}
+
 export interface ProjectStore {
   writeNode(node: ProjectNode): Promise<{ path: string }>;
   readNode(id: string): Promise<ProjectNode | null>;
+  listNodes(): Promise<readonly ProjectNode[]>;
+  readEdges(): Promise<readonly ProjectEdge[]>;
+  writeEdges(edges: readonly ProjectEdge[]): Promise<{ path: string }>;
 }
 
 export function assertSafeNodeId(id: string): string {
@@ -40,8 +49,23 @@ function asNode(value: unknown): ProjectNode {
   };
 }
 
+function asEdge(value: unknown): ProjectEdge {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("엣지가 객체가 아니다");
+  }
+  const raw = value as Record<string, unknown>;
+  if (typeof raw["from"] !== "string" || typeof raw["to"] !== "string") throw new Error("엣지에 from/to 가 없다");
+  const when = raw["when"];
+  return {
+    from: assertSafeNodeId(raw["from"]),
+    to: assertSafeNodeId(raw["to"]),
+    ...(typeof when === "string" && when !== "" ? { when } : {}),
+  };
+}
+
 export function createMemoryProjectStore(seed: readonly ProjectNode[] = []): ProjectStore {
   const nodes = new Map<string, ProjectNode>(seed.map((node) => [node.id, node]));
+  let edges: ProjectEdge[] = [];
   return {
     async writeNode(node) {
       const parsed = asNode(node);
@@ -54,6 +78,16 @@ export function createMemoryProjectStore(seed: readonly ProjectNode[] = []): Pro
       } catch {
         return null;
       }
+    },
+    async listNodes() {
+      return [...nodes.values()];
+    },
+    async readEdges() {
+      return edges;
+    },
+    async writeEdges(next) {
+      edges = next.map(asEdge);
+      return { path: "story/edges.json" };
     },
   };
 }
@@ -89,6 +123,43 @@ export function createFileProjectStore(root: string = PROJECT_DIR): ProjectStore
       } catch {
         return null;
       }
+    },
+    async listNodes() {
+      let names: string[];
+      try {
+        names = await readdir(join(root, "story", "nodes"));
+      } catch {
+        return [];
+      }
+      const nodes: ProjectNode[] = [];
+      for (const name of names) {
+        if (!name.endsWith(".json")) continue;
+        const id = name.slice(0, -5);
+        const node = await this.readNode(id);
+        if (node) nodes.push(node);
+      }
+      return nodes;
+    },
+    async readEdges() {
+      let raw: string;
+      try {
+        raw = await readFile(join(root, "story", "edges.json"), "utf8");
+      } catch {
+        return [];
+      }
+      try {
+        const parsed = JSON.parse(raw) as { edges?: unknown };
+        if (!Array.isArray(parsed.edges)) return [];
+        return parsed.edges.map(asEdge);
+      } catch {
+        return [];
+      }
+    },
+    async writeEdges(next) {
+      const edges = next.map(asEdge);
+      await mkdir(join(root, "story"), { recursive: true });
+      await writeFile(join(root, "story", "edges.json"), `${JSON.stringify({ edges }, null, 2)}\n`, "utf8");
+      return { path: "story/edges.json" };
     },
   };
 }

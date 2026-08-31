@@ -6,6 +6,15 @@ export function projectRoutes(deps: GatewayDeps): Hono {
   const project = deps.project ?? createFileProjectStore();
   const routes = new Hono();
 
+  routes.get("/project", async (c) => {
+    const nodes = await project.listNodes();
+    const edges = await project.readEdges();
+    return c.json({
+      nodes: nodes.map((node) => ({ id: node.id, ...(node.label === undefined ? {} : { label: node.label }) })),
+      edges,
+    });
+  });
+
   routes.get("/project/nodes/:id", async (c) => {
     const node = await project.readNode(c.req.param("id"));
     if (!node) return c.json({ error: "노드가 없다" }, 404);

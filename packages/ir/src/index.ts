@@ -129,3 +129,61 @@ export function compileNode(node: StoryNode, characters: readonly Character[]): 
     scenes: [scene],
   };
 }
+
+export interface StoryEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly when?: string;
+}
+
+export function parseBeats(value: unknown): Beat[] {
+  if (!Array.isArray(value)) throw new Error("노드 beats 가 없다");
+  return value.map(parseBeat);
+}
+
+export function upsertBeats(node: StoryNode, beats: readonly unknown[]): StoryNode {
+  const parsed = parseBeats(beats);
+  if (!parsed.some((beat) => beat.op === "say")) throw new Error("say 비트가 없다");
+  return { ...node, beats: parsed };
+}
+
+export function parseEdge(value: unknown): StoryEdge {
+  const raw = asRecord(value);
+  if (typeof raw["from"] !== "string" || typeof raw["to"] !== "string") throw new Error("엣지에 from/to 가 없다");
+  const from = assertSafeNodeId(raw["from"]);
+  const to = assertSafeNodeId(raw["to"]);
+  const when = raw["when"];
+  return {
+    from,
+    to,
+    ...(typeof when === "string" && when !== "" ? { when } : {}),
+  };
+}
+
+export function connectEdges(edges: readonly StoryEdge[], link: { from: string; to: string; when?: string }): StoryEdge[] {
+  const next = parseEdge(link);
+  if (edges.some((edge) => edge.from === next.from && edge.to === next.to && (edge.when ?? "") === (next.when ?? ""))) {
+    return [...edges];
+  }
+  return [...edges, next];
+}
+
+export function listGraph(
+  nodes: readonly StoryNode[],
+  edges: readonly StoryEdge[],
+): { nodes: { id: string; label: string | undefined }[]; edges: StoryEdge[] } {
+  return {
+    nodes: nodes.map((node) => ({ id: node.id, label: node.label })),
+    edges: [...edges],
+  };
+}
+
+export function diffBeats(before: readonly Beat[], after: readonly Beat[]): { before: Beat | undefined; after: Beat | undefined }[] {
+  const length = Math.max(before.length, after.length);
+  const changed: { before: Beat | undefined; after: Beat | undefined }[] = [];
+  for (let i = 0; i < length; i += 1) {
+    if (JSON.stringify(before[i]) === JSON.stringify(after[i])) continue;
+    changed.push({ before: before[i], after: after[i] });
+  }
+  return changed;
+}

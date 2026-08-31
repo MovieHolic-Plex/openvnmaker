@@ -6,12 +6,15 @@ import { modelRoutes } from "./routes/models.js";
 import { imageRoutes } from "./routes/images.js";
 import { generateRoutes } from "./routes/generate.js";
 import { projectRoutes } from "./routes/project.js";
+import { agentRoutes } from "./routes/agent.js";
 import type { CredentialStore } from "./auth/credentials.js";
 import { createFileProjectStore, type ProjectStore } from "./project/store.js";
+import type { AgentModel } from "./agent/run.js";
 
 export interface GatewayDeps {
   readonly store: CredentialStore;
   readonly project?: ProjectStore;
+  readonly agentModel?: AgentModel;
 }
 
 /**
@@ -19,7 +22,11 @@ export interface GatewayDeps {
  */
 export function createApp(deps: GatewayDeps): Hono {
   const project = deps.project ?? createFileProjectStore();
-  const wired: GatewayDeps = { store: deps.store, project };
+  const wired: GatewayDeps = {
+    store: deps.store,
+    project,
+    ...(deps.agentModel ? { agentModel: deps.agentModel } : {}),
+  };
   const app = new Hono();
 
   app.use(
@@ -36,6 +43,7 @@ export function createApp(deps: GatewayDeps): Hono {
   app.route("/api", imageRoutes(wired));
   app.route("/api", generateRoutes(wired));
   app.route("/api", projectRoutes(wired));
+  app.route("/api", agentRoutes(wired));
 
   return app;
 }

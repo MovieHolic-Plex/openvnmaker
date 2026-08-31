@@ -9,7 +9,7 @@ Vite + React 플레이어가 시나리오를 재생한다. 함께 들어 있는 
 ```
 packages/app        Vite + React VN 플레이어 (엔진은 React 밖의 순수 리듀서)
 packages/gateway    Hono 게이트웨이 — Antigravity OAuth, 모델 카탈로그 + 할당량 프록시
-packages/ir         스토리 IR — 노드 JSON 파싱과 PLAY 스크립트 컴파일
+packages/ir         스토리 IR — 노드 JSON, upsert_beats/connect, PLAY 컴파일
 packages/content    시나리오 스키마 · 에셋 매니페스트 · script.json · 콘텐츠 체커
 tools/imagegen      grok CLI 병렬 이미지 생성기 + 순수 JS PNG 알파 키어
 tools/audio         무의존 DSP 로 OST·효과음 합성, lamejs 로 MP3 인코딩
@@ -40,9 +40,12 @@ curl http://127.0.0.1:51120/api/auth/status
 curl http://127.0.0.1:51120/api/models               # 만료 시 자동 갱신
 curl -X POST http://127.0.0.1:51120/api/generate     # W1 한 줄. prompt 생략 시 기본 프롬프트
 curl http://127.0.0.1:51120/api/project/nodes/hello   # W1–2 IR 노드 (한 줄 받기가 디스크에 남김)
+curl -X POST http://127.0.0.1:51120/api/agent/run \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"이 대사만 더 차갑게","nodeId":"hello"}'
 ```
 
-타이틀의 **Google 연결** 과 **한 줄 받기** 가 같은 경로다. `pnpm dev` 만 띄우면 Vite 가 `/api` 를 게이트웨이에 붙이므로 브라우저에서 바로 된다. **한 줄 받기** 는 대사를 PLAY 에 올리기 전에 `~/.vnmaker/projects/default/story/nodes/hello.json` 에 IR 노드를 남긴다.
+타이틀의 **Google 연결** / **한 줄 받기** / **지시하기** 가 같은 게이트웨이다. `pnpm dev` 만 띄우면 Vite 가 `/api` 를 붙인다. **한 줄 받기** 는 `~/.vnmaker/projects/default/story/nodes/hello.json` 을 만들고, **지시하기** 는 닫힌 도구(`upsert_beats` · `connect` · `play_from`)만으로 그 파일을 고친다. 모델에게 자유 파일 쓰기를 주지 않는다.
 
 자격증명은 `~/.vnmaker/auth.json` 의 `google-antigravity` 키에 저장된다.
 **비공식 어댑터다.** 구글 공식 연동이 아니고, tier 는 항상 `free-tier` 로 응답한다.
