@@ -8,12 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test --import tsx test/engine.test.ts"
+    "test": "node --test --import tsx test/engine.test.ts test/hello.test.ts"
   },
   "dependencies": {
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "@vnmaker/content": "workspace:*"
+    "@vnmaker/content": "workspace:*",
+    "@vnmaker/ir": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "19.2.18",

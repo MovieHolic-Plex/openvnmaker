@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { script } from "@vnmaker/content";
+import type { VnScript } from "@vnmaker/content";
+import { helloNode } from "@vnmaker/ir";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { fetchAuthStatus, generateLine, runAgent, saveNode, startLogin, type AgentDiff, type AuthStatus } from "./api/gateway.js";
 import { BgmPlayer } from "./audio/BgmPlayer.js";
 import { playSfx } from "./audio/sfx.js";
 import { ChoiceMenu } from "./components/ChoiceMenu.js";
@@ -13,6 +16,7 @@ import { TitleScreen } from "./components/TitleScreen.js";
 import { reduce } from "./engine/reducer.js";
 import { currentLine, currentScene, speakerColor, speakerName, spritesAt } from "./engine/selectors.js";
 import { initialState, type VnAction, type VnState } from "./engine/types.js";
+import { helloScript, scriptFromNode } from "./helloScript.js";
 import { useTypewriter } from "./hooks/useTypewriter.js";
 import { defaultSettings, loadSave, loadSettings, writeSave, writeSettings, type Settings } from "./storage/persist.js";
 
@@ -25,15 +29,26 @@ declare global {
       typing: boolean;
       phase: string;
       error: string | null;
+      lastDiff: string | null;
     };
   }
 }
 
 type Panel = "none" | "history" | "settings";
 
+const offlineAuth: AuthStatus = {
+  reachable: false,
+  authenticated: false,
+  email: null,
+  projectId: null,
+  error: null,
+};
+
 export function App() {
+  const scriptRef = useRef<VnScript>(script);
+  const [vnScript, setVnScript] = useState<VnScript>(script);
   const [state, dispatch] = useReducer(
-    (s: VnState, a: VnAction) => reduce(script, s, a),
+    (s: VnState, a: VnAction) => reduce(scriptRef.current, s, a),
     script,
     initialState,
   );
@@ -42,15 +57,22 @@ export function App() {
   const [auto, setAuto] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [auth, setAuth] = useState<AuthStatus>(offlineAuth);
+  const [connectBusy, setConnectBusy] = useState(false);
+  const [helloBusy, setHelloBusy] = useState(false);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [helloError, setHelloError] = useState<string | null>(null);
+  const [agentDiffs, setAgentDiffs] = useState<readonly AgentDiff[]>([]);
   const autoTimer = useRef<number | null>(null);
 
   useEffect(() => {
     setSettings(loadSettings());
     setSavedAt(loadSave()?.savedAt ?? null);
+    void fetchAuthStatus().then(setAuth);
   }, []);
 
-  const scene = currentScene(script, state);
-  const line = currentLine(script, state);
+  const scene = currentScene(vnScript, state);
+  const line = currentLine(vnScript, state);
   const text = line?.text ?? "";
   const { shown, typing, finish } = useTypewriter(text, state.phase === "scene" ? settings.textSpeed : 0);
 
@@ -62,8 +84,9 @@ export function App() {
       typing,
       phase: state.phase,
       error: state.error,
+      lastDiff: agentDiffs[0]?.summary ?? null,
     };
-  }, [state, typing]);
+  }, [state, typing, agentDiffs]);
 
   useEffect(() => {
     if (state.phase !== "scene" || !line?.sfx || !unlocked) return;
@@ -110,10 +133,72 @@ export function App() {
     writeSettings(next);
   }, []);
 
-  const nameOf = useCallback((speaker: string | null) => {
-    if (speaker === null) return null;
-    return speakerName(script, speaker as never);
+  const bootScript = useCallback((next: VnScript) => {
+    scriptRef.current = next;
+    setVnScript(next);
+    dispatch({ type: "start" });
   }, []);
+
+  const backToTitle = useCallback(() => {
+    scriptRef.current = script;
+    setVnScript(script);
+    dispatch({ type: "backToTitle" });
+  }, []);
+
+  const onConnect = useCallback(async () => {
+    setConnectBusy(true);
+    setHelloError(null);
+    try {
+      const next = await startLogin();
+      setAuth(next);
+    } catch (err) {
+      setHelloError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConnectBusy(false);
+    }
+  }, []);
+
+  const onHello = useCallback(async () => {
+    setHelloBusy(true);
+    setHelloError(null);
+    try {
+      const result = await generateLine();
+      await saveNode(helloNode(result.text));
+      unlock();
+      bootScript(helloScript(result.text));
+    } catch (err) {
+      setHelloError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setHelloBusy(false);
+    }
+  }, [bootScript, unlock]);
+
+  const onAgent = useCallback(
+    async (message: string) => {
+      setAgentBusy(true);
+      setHelloError(null);
+      try {
+        const result = await runAgent(message, "hello");
+        if (result.node === null) throw new Error("에이전트가 노드를 안 남겼다");
+        setAgentDiffs(result.diffs);
+        unlock();
+        bootScript(scriptFromNode(result.node));
+      } catch (err) {
+        setHelloError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setAgentBusy(false);
+      }
+    },
+    [bootScript, unlock],
+  );
+
+  const nameOf = useCallback(
+    (speaker: string | null) => {
+      if (speaker === null) return null;
+      return speakerName(vnScript, speaker as never);
+    },
+    [vnScript],
+  );
 
   const bgmTrack = useMemo(() => {
     if (state.phase === "title") return "main-theme";
@@ -130,6 +215,8 @@ export function App() {
   const onLoad = useCallback(() => {
     const save = loadSave();
     if (!save) return;
+    scriptRef.current = script;
+    setVnScript(script);
     dispatch({ type: "restore", sceneId: save.sceneId, lineIndex: save.lineIndex, affection: save.affection });
   }, []);
 
@@ -149,18 +236,39 @@ export function App() {
         <PaperTexture />
         <BgmPlayer track={bgmTrack} volume={settings.bgmVolume} unlocked={unlocked} />
         <TitleScreen
-          title={script.title}
-          subtitle={script.subtitle}
+          title={vnScript.title}
+          subtitle={vnScript.subtitle}
           hasSave={savedAt !== null}
+          auth={auth}
+          connectBusy={connectBusy}
+          helloBusy={helloBusy}
+          agentBusy={agentBusy}
+          helloError={helloError}
+          onConnect={() => {
+            unlock();
+            void onConnect();
+          }}
+          onHello={() => {
+            unlock();
+            playSfx("ui-click", settings.sfxVolume);
+            void onHello();
+          }}
+          onAgent={(message) => {
+            unlock();
+            playSfx("ui-click", settings.sfxVolume);
+            void onAgent(message);
+          }}
           onStart={() => {
             unlock();
             playSfx("ui-click", settings.sfxVolume);
-            dispatch({ type: "start" });
+            bootScript(script);
           }}
           onContinue={() => {
             unlock();
             const save = loadSave();
             if (!save) return;
+            scriptRef.current = script;
+            setVnScript(script);
             dispatch({ type: "restore", sceneId: save.sceneId, lineIndex: save.lineIndex, affection: save.affection });
           }}
         />
@@ -177,7 +285,7 @@ export function App() {
         <EndingScreen
           title={state.endingTitle ?? "END"}
           affection={state.affection}
-          onBack={() => dispatch({ type: "backToTitle" })}
+          onBack={backToTitle}
         />
         <div className="grain-overlay" aria-hidden="true" />
       </main>
@@ -237,10 +345,15 @@ export function App() {
           onHistory={() => setPanel((p) => (p === "history" ? "none" : "history"))}
           onSettings={() => setPanel((p) => (p === "settings" ? "none" : "settings"))}
         />
+        {agentDiffs.length > 0 && (
+          <p className="agent-diff" data-testid="agent-diff">
+            {agentDiffs.map((diff) => diff.summary).join(" · ")}
+          </p>
+        )}
         {state.phase === "scene" && (
           <DialogueBox
             speaker={nameOf(speaking)}
-            color={speakerColor(script, speaking as never)}
+            color={speakerColor(vnScript, speaking as never)}
             text={shown}
             typing={typing}
           />

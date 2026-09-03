@@ -9,6 +9,7 @@ Vite + React 플레이어가 시나리오를 재생한다. 함께 들어 있는 
 ```
 packages/app        Vite + React VN 플레이어 (엔진은 React 밖의 순수 리듀서)
 packages/gateway    Hono 게이트웨이 — Antigravity OAuth, 모델 카탈로그 + 할당량 프록시
+packages/ir         스토리 IR — 노드 JSON, upsert_beats/connect, PLAY 컴파일
 packages/content    시나리오 스키마 · 에셋 매니페스트 · script.json · 콘텐츠 체커
 tools/imagegen      grok CLI 병렬 이미지 생성기 + 순수 JS PNG 알파 키어
 tools/audio         무의존 DSP 로 OST·효과음 합성, lamejs 로 MP3 인코딩
@@ -20,8 +21,8 @@ docs/contract       시나리오·UI 계약 (스토리 바이블, data-testid �
 
 ```bash
 pnpm install
-pnpm dev              # 플레이어  http://127.0.0.1:5173
-pnpm dev:gateway      # 게이트웨이 http://127.0.0.1:51120
+pnpm dev              # 플레이어 + 게이트웨이 마운트  http://127.0.0.1:5173
+pnpm dev:gateway      # 독립 게이트웨이 http://127.0.0.1:51120 (qa 스크립트용)
 ```
 
 게이트웨이는 **127.0.0.1 전용**이다. OAuth 토큰을 프록시하므로 `0.0.0.0` 에 바인딩하거나
@@ -37,13 +38,41 @@ ssh -L 51120:127.0.0.1:51120 -L 5173:127.0.0.1:5173 <host>
 curl -X POST http://127.0.0.1:51120/api/auth/login   # 브라우저 동의
 curl http://127.0.0.1:51120/api/auth/status
 curl http://127.0.0.1:51120/api/models               # 만료 시 자동 갱신
+curl -X POST http://127.0.0.1:51120/api/generate     # W1 한 줄. prompt 생략 시 기본 프롬프트
+curl http://127.0.0.1:51120/api/project/nodes/hello   # W1–2 IR 노드 (한 줄 받기가 디스크에 남김)
+curl -X POST http://127.0.0.1:51120/api/agent/run \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"이 대사만 더 차갑게","nodeId":"hello"}'
 ```
+
+타이틀의 **Google 연결** / **한 줄 받기** / **지시하기** 가 같은 게이트웨이다. `pnpm dev` 만 띄우면 Vite 가 `/api` 를 붙인다. **한 줄 받기** 는 `~/.vnmaker/projects/default/story/nodes/hello.json` 을 만들고, **지시하기** 는 닫힌 도구(`upsert_beats` · `connect` · `play_from`)만으로 그 파일을 고친다. 모델에게 자유 파일 쓰기를 주지 않는다.
 
 자격증명은 `~/.vnmaker/auth.json` 의 `google-antigravity` 키에 저장된다.
 **비공식 어댑터다.** 구글 공식 연동이 아니고, tier 는 항상 `free-tier` 로 응답한다.
 할당량 카운터는 계정+프로젝트 단위 서버 값이라서 Antigravity 데스크톱 앱과 같은 통을 쓴다.
 
 Windows 에서는 `chmod 0600` 이 무시되므로 `%USERPROFILE%\.vnmaker` 폴더 ACL 을 직접 좁혀야 한다.
+
+## 이미지 생성
+
+삽화도 같은 agy 경로로 뽑는다. 게이트웨이가 봉투(`responseModalities:["IMAGE"]`, `project` 필수)를
+감추고 결과를 `~/.vnmaker/images` 에 파일로 떨어뜨린다. 응답에 base64 를 싣지 않는다.
+
+```bash
+curl http://127.0.0.1:51120/api/image/config          # 기본 모델 · 허용 비율
+curl -X POST http://127.0.0.1:51120/api/image/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"수채화 캠퍼스 배경, 인물 없음","aspectRatio":"16:9","name":"bg-campus"}'
+curl -o bg.jpg http://127.0.0.1:51120/api/image/file/bg-campus.jpg
+
+pnpm qa:image                                         # 실계정 1회 호출 실측 (증거 evidence/image/)
+pnpm qa:generate                                      # W1 텍스트 한 줄 실측 (증거 evidence/generate/)
+pnpm qa:hello                                         # 타이틀에서 한 줄 받기 + IR 파일 (Vite 가 떠 있어야 함)
+```
+
+기본 모델은 `gemini-3.1-flash-image` 다. 이 계정 카탈로그에 실제로 있는 id 를 골랐고,
+바뀌면 `VNMAKER_IMAGE_MODEL` 로 덮어쓴다. **이 카운터는 코딩 할당량과 같은 통이다** —
+삽화를 뽑으면 텍스트 몫이 같이 줄고 Antigravity 데스크톱 앱과도 공유된다. CI 에 물리지 마라.
 
 ## 검증
 

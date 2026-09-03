@@ -39,6 +39,36 @@ export const CCA_HOSTS = [
 
 export const FREE_TIER_ID = "free-tier";
 export const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * 이미지 생성 경로도 agy 다(사용자 결정 2026-08-31). 텍스트와 같은 계정+프로젝트 카운터를
+ * 쓰므로 삽화를 뽑으면 코딩 할당량이 같이 줄고, Antigravity 데스크톱 앱과도 같은 통이다.
+ * 기본 모델은 실측 카탈로그에 실제로 있는 id 다 — 참조 구현의 gemini-3-pro-image 는
+ * 이 계정 카탈로그에 없다. 카탈로그가 바뀌면 VNMAKER_IMAGE_MODEL 로 덮어써라.
+ */
+export const IMAGE_MODEL = process.env.VNMAKER_IMAGE_MODEL ?? "gemini-3.1-flash-image";
+/** 이미지는 텍스트보다 훨씬 오래 걸린다. 30s 로는 못 받는다. */
+export const IMAGE_TIMEOUT_MS = Number(process.env.VNMAKER_IMAGE_TIMEOUT_MS ?? 180_000);
+
+/**
+ * W1 텍스트 기본 모델. 카탈로그에 있는 id 만 쓴다.
+ * `gemini-3.7-flash-low` 는 thinking 이 maxOutputTokens 를 거의 다 먹어서
+ * 대사 한 글자만 남긴다(실측 thoughtsTokenCount 251 / candidatesTokenCount 1).
+ * thinking 플래그가 없는 `gemini-2.5-flash` 가 한 줄용이다. 덮어쓰려면 VNMAKER_TEXT_MODEL.
+ */
+export const TEXT_MODEL = process.env.VNMAKER_TEXT_MODEL ?? "gemini-2.5-flash";
+export const GENERATE_TIMEOUT_MS = Number(process.env.VNMAKER_GENERATE_TIMEOUT_MS ?? 90_000);
+/** 한 줄만 받는다. 이 캡을 올리면 소설을 통째로 뽑아 쿼터를 태운다. */
+export const GENERATE_MAX_OUTPUT_TOKENS = 512;
+/** 에이전트 도구 인자는 비트 배열이라 한 줄보다 길다. */
+export const AGENT_MAX_OUTPUT_TOKENS = 2048;
+export const AGENT_MAX_TOOL_CALLS = 12;
+export const HELLO_PROMPT =
+  "한국 대학 캠퍼스 여름 오후를 배경으로 한 비주얼 노벨 내레이션을 한 줄만 써라. " +
+  "한글 40자에서 80자. 따옴표·제목·설명 없이 본문만. 성인 대학생 세계이고 교복과 미성년은 등장시키지 마라.";
+export const IMAGE_DIR = process.env.VNMAKER_IMAGE_DIR ?? join(homedir(), ".vnmaker", "images");
+export const IMAGE_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;
+
 export const CALLBACK_TIMEOUT_MS = 300_000;
 export const ONBOARD_TIMEOUT_MS = 30_000;
 export const ONBOARD_POLL_INTERVAL_MS = 1_000;
@@ -48,6 +78,8 @@ export const LOAD_CODE_ASSIST_METADATA = { ideType: "ANTIGRAVITY" } as const;
 
 export const PROVIDER = "google-antigravity";
 export const AUTH_FILE = join(homedir(), ".vnmaker", "auth.json");
+/** W1–2 기본 프로젝트. 한 줄 받기 가 여기 story/nodes/hello.json 을 남긴다. */
+export const PROJECT_DIR = process.env.VNMAKER_PROJECT_DIR ?? join(homedir(), ".vnmaker", "projects", "default");
 export const GATEWAY_VERSION = "0.1.0";
 
 /**

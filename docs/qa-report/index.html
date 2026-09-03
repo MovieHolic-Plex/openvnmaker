@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>vnmaker QA 보고서 — 여름의 잔상, 실제 브라우저에서 끝까지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink:#12110e; --ink-2:#1a1815; --ink-3:#221f1a;
+  --paper:#efe6d4; --paper-dim:#cfc3a4;
+  --amber:#d4783a; --gold:#c9a227; --cyan:#7eb8c9;
+  --danger:#c45c4a; --green:#8aa86a;
+  --line:rgba(239,230,212,.14); --line-2:rgba(239,230,212,.08);
+  --muted:rgba(239,230,212,.62); --faint:rgba(239,230,212,.38);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--ink);color:var(--paper);
+  font-family:"Noto Sans KR",system-ui,sans-serif;font-size:16px;line-height:1.7;
+  -webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block;height:auto}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:"IBM Plex Mono",monospace;font-size:.88em;
+  background:var(--ink-3);border:1px solid var(--line-2);padding:1px 6px;border-radius:3px}
+pre{font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.65;
+  background:var(--ink-2);border:1px solid var(--line);padding:16px 18px;margin:0 0 16px;
+  overflow-x:auto;color:var(--paper-dim)}
+pre b{color:var(--paper);font-weight:500}
+pre .ok{color:var(--green)}
+pre .no{color:var(--danger)}
+pre .cm{color:var(--faint)}
+.wrap{width:min(1080px,calc(100% - 44px));margin:0 auto}
+
+/* ── 상단 바 ─────────────────────────────── */
+nav{position:sticky;top:0;z-index:40;backdrop-filter:blur(16px);
+  background:rgba(18,17,14,.86);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:54px;gap:20px}
+.brand{font-family:Fraunces,serif;font-weight:600;letter-spacing:.02em;font-size:15px;white-space:nowrap}
+.brand span{color:var(--faint);font-family:"Noto Sans KR",sans-serif;font-weight:400;font-size:12px;margin-left:8px}
+nav ul{display:flex;gap:14px;list-style:none;margin:0;padding:0;font-size:13px;flex-wrap:wrap;justify-content:flex-end}
+nav a{color:var(--paper-dim)}
+nav a:hover{color:var(--paper);text-decoration:none}
+
+/* ── 표지 ────────────────────────────────── */
+.hero{position:relative;min-height:62vh;display:grid;align-items:end;overflow:hidden;
+  border-bottom:1px solid var(--line)}
+.hero img.plate{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 42%}
+.hero::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(180deg,rgba(18,17,14,.30) 0%,rgba(18,17,14,.36) 34%,rgba(18,17,14,.96) 100%),
+  linear-gradient(90deg,rgba(18,17,14,.68) 0%,rgba(18,17,14,.04) 62%)}
+.hero-copy{position:relative;z-index:1;padding:120px 0 56px}
+.kicker{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11px;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
+h1{font-family:Fraunces,serif;font-weight:600;font-size:clamp(32px,5.2vw,58px);
+  line-height:1.08;margin:0 0 16px;max-width:22ch}
+.lede{font-size:18px;max-width:46ch;color:var(--paper-dim);margin:0}
+
+/* ── 섹션 ────────────────────────────────── */
+section{padding:72px 0;border-top:1px solid var(--line)}
+section:first-of-type{border-top:0}
+h2{font-family:Fraunces,serif;font-size:clamp(25px,3.4vw,36px);line-height:1.18;margin:0 0 10px;font-weight:600}
+h2 .num{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--gold);
+  display:block;letter-spacing:.14em;margin-bottom:10px;font-weight:400}
+h3{font-family:Fraunces,serif;font-size:20px;margin:34px 0 12px;font-weight:600}
+.one-line{font-size:17px;color:var(--gold);max-width:60ch;margin:0 0 26px;font-weight:500}
+.sub{color:var(--muted);max-width:66ch;margin:0 0 28px}
+p{margin:0 0 14px;max-width:70ch}
+.note{font-size:13.5px;color:var(--muted);max-width:72ch}
+
+/* ── 세 줄 요약 ──────────────────────────── */
+.tldr{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:0 0 26px}
+.tldr div{border:1px solid var(--line);background:var(--ink-2);padding:18px 18px 16px}
+.tldr b{display:block;font-family:Fraunces,serif;font-size:17px;margin-bottom:6px}
+.tldr p{font-size:14px;color:var(--muted);margin:0;max-width:none}
+
+/* ── 숫자 ────────────────────────────────── */
+.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line-2);
+  border:1px solid var(--line)}
+.nums div{background:var(--ink-2);padding:18px 20px}
+.nums .v{font-family:Fraunces,serif;font-size:27px;line-height:1.1;color:var(--paper)}
+.nums .v.pass{color:var(--green)}
+.nums .l{font-size:12.5px;color:var(--faint);margin-top:6px}
+
+/* ── 그림 ────────────────────────────────── */
+figure{margin:0 0 22px}
+figure img{border:1px solid var(--line);background:var(--ink-2);
+  box-shadow:0 18px 46px rgba(0,0,0,.5)}
+figcaption{font-size:12.5px;color:var(--faint);margin-top:10px;line-height:1.6}
+figcaption b{color:var(--paper-dim);font-weight:500}
+
+/* ── 스크린샷 격자 ───────────────────────── */
+.shots{display:grid;gap:14px;margin:0 0 12px}
+.shots.wide{grid-template-columns:repeat(2,1fr)}
+.shots.tall{grid-template-columns:repeat(5,1fr)}
+.shots figure{margin:0}
+.shots img{border:1px solid var(--line);background:var(--ink-2)}
+.shots.wide img{aspect-ratio:16/9;object-fit:cover}
+.shots.tall img{aspect-ratio:390/844;object-fit:cover}
+.shots figcaption{margin-top:8px;font-size:12px}
+.shots .k{font-family:"IBM Plex Mono",monospace;color:var(--gold);font-size:11px;
+  letter-spacing:.1em;display:block;margin-bottom:2px}
+
+/* ── 쉽게 말하면 상자 ────────────────────── */
+.plain{border-left:3px solid var(--gold);background:var(--ink-2);
+  padding:16px 20px;margin:22px 0;max-width:72ch}
+.plain h4{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 8px;font-weight:500}
+.plain p{margin:0;font-size:15px;color:var(--paper-dim)}
+.plain p + p{margin-top:8px}
+
+/* ── 표 ──────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:0 0 10px}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line-2);vertical-align:top}
+th{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+  font-weight:500;border-bottom:1px solid var(--line)}
+td:first-child{white-space:nowrap;color:var(--paper)}
+td.k{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--gold)}
+td.f{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--muted);white-space:normal}
+tbody tr:hover{background:rgba(239,230,212,.03)}
+.badge{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;padding:3px 8px;color:var(--ink);background:var(--green);white-space:nowrap}
+.badge.warn{background:var(--gold)}
+.badge.bad{background:var(--danger);color:var(--paper)}
+
+/* ── 두 칸 ───────────────────────────────── */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{border:1px solid var(--line);background:var(--ink-2);padding:20px}
+.card.pick{border-color:var(--gold)}
+.card h4{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin:0 0 10px;font-weight:500}
+.card.pick h4{color:var(--gold)}
+.card ul{margin:0;padding-left:18px;font-size:14px;color:var(--muted)}
+.card li{margin-bottom:6px}
+
+/* ── 고친 목록 ───────────────────────────── */
+.fix{list-style:none;padding:0;margin:0 0 24px}
+.fix li{border:1px solid var(--line);background:var(--ink-2);padding:14px 16px;margin-bottom:10px;
+  display:grid;grid-template-columns:74px 1fr;gap:16px;align-items:baseline}
+.fix .tag{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;padding:3px 7px;text-align:center;color:var(--ink);background:var(--paper-dim)}
+.fix .tag.c{background:var(--danger);color:var(--paper)}
+.fix .tag.v{background:var(--cyan)}
+.fix p{margin:0;font-size:14.5px}
+.fix .was{color:var(--faint);font-size:13px;margin-top:4px}
+
+footer{padding:56px 0 72px;border-top:1px solid var(--line);color:var(--faint);font-size:13.5px}
+footer a{margin-right:18px}
+
+@media (max-width:840px){
+  .tldr,.two,.nums,.shots.wide{grid-template-columns:1fr}
+  .shots.tall{grid-template-columns:repeat(2,1fr)}
+  .hero-copy{padding:96px 0 40px}
+  .fix li{grid-template-columns:1fr;gap:8px}
+  .fix .tag{justify-self:start}
+}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <div class="brand">vnmaker<span>QA 보고서</span></div>
+  <ul>
+    <li><a href="#summary">요약</a></li>
+    <li><a href="#criteria">검증표</a></li>
+    <li><a href="#play">완주</a></li>
+    <li><a href="#visual">시각 QA</a></li>
+    <li><a href="#gateway">게이트웨이</a></li>
+    <li><a href="#defects">잡은 결함</a></li>
+    <li><a href="#regression">회귀</a></li>
+    <li><a href="#open">미결</a></li>
+  </ul>
+</div></nav>
+
+<header class="hero">
+  <img class="plate" src="shots/play-01-title.jpg" alt="여름의 잔상 타이틀 화면. 수채화로 그린 여름 캠퍼스 배경 위에 제목이 놓여 있다." />
+  <div class="wrap hero-copy">
+    <span class="kicker">QA 보고서 · 2026-08-31</span>
+    <h1>여름의 잔상,<br />실제 브라우저에서<br />끝까지 돌았다</h1>
+    <p class="lede">게이트웨이와 VN 플레이어를 만들고, 실제 크로미움으로 타이틀부터 엔딩까지 플레이한 기록입니다. 화면은 전부 진짜 앱을 찍은 스크린샷입니다.</p>
+  </div>
+</header>
+
+<!-- ── 요약 ──────────────────────────────── -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">01 · 세 줄 요약</span>먼저 결론부터</h2>
+    <div class="tldr">
+      <div>
+        <b>만든 것</b>
+        <p>Antigravity OAuth 를 감싼 Hono 게이트웨이와, 수채화 아트의 React VN 플레이어. 한국 대학 캠퍼스 중편 <em>여름의 잔상</em> 한 편이 들어 있습니다.</p>
+      </div>
+      <div>
+        <b>확인한 방법</b>
+        <p>단위 테스트, playwright e2e, 실제 크로미움 스크린샷, 실제 OAuth 접속, 오디오 길이 실측. 문서로 주장하지 않고 매번 돌려서 남겼습니다.</p>
+      </div>
+      <div>
+        <b>지금 상태</b>
+        <p>기준 6개 전부 통과. PR 3건이 main 에 병합됐고, 병합 트리에서 e2e 를 다시 돌려 같은 결과를 확인했습니다.</p>
+      </div>
+    </div>
+
+    <div class="nums">
+      <div><div class="v pass">31/31</div><div class="l">단위 테스트 (content 10 · gateway 10 · app 11)</div></div>
+      <div><div class="v pass">9/9</div><div class="l">playwright e2e, 실제 크로미움 3.9분</div></div>
+      <div><div class="v pass">15/15</div><div class="l">오디오 길이·프레임 검사 (BGM 5 · SFX 10)</div></div>
+      <div><div class="v">9,581자</div><div class="l">본문 한글 글자 수 · 씬 11 · 대사 451줄 · 엔딩 3</div></div>
+      <div><div class="v">21장</div><div class="l">grok image_gen 수채화 (배경 9 · 스프라이트 12)</div></div>
+      <div><div class="v">0건</div><div class="l">금지 토큰 12종 적발 · 깨진 씬 참조 · 없는 에셋</div></div>
+    </div>
+
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>"돌아갑니다"라는 말을 믿지 않아도 되게 만들었습니다. 아래 그림은 전부 테스트가 앱을 실제로 띄워서 찍은 것이고, 숫자는 전부 그때 나온 출력입니다.</p>
+      <p>이 페이지 자체도 <code>tools/qa/docs-regression.mjs</code> 가 크로미움으로 열어 이미지 로드를 세는 대상입니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 검증표 ────────────────────────────── -->
+<section id="criteria">
+  <div class="wrap">
+    <h2><span class="num">02 · 기준과 증거</span>여섯 가지를 어떻게 확인했나</h2>
+    <p class="one-line">기준마다 실행 가능한 명령 하나와 파일로 남은 증거 하나를 붙였습니다.</p>
+
+    <table>
+      <thead><tr><th>기준</th><th>무엇을 확인</th><th>결과</th><th>증거</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">C1</td>
+          <td>실제 브라우저에서 타이틀부터 엔딩까지 완주. 두 번째 선택지로 다른 엔딩, 저장·불러오기 복원까지.</td>
+          <td><span class="badge">pass</span></td>
+          <td class="f">pnpm e2e → 9 passed / 3.9m<br />evidence/e2e-playthrough/*.png</td>
+        </tr>
+        <tr>
+          <td class="k">C2</td>
+          <td>게이트웨이 OAuth 실접속. status 가 provider·email·projectId 를 주고, 모델 카탈로그가 쿼터를 붙여 온다.</td>
+          <td><span class="badge">pass</span></td>
+          <td class="f">HTTP 200, 모델 28건 전부 quotaInfo 보유<br />evidence/gateway/curl-live.txt, models.json</td>
+        </tr>
+        <tr>
+          <td class="k">C3</td>
+          <td>대본 분량과 콘텐츠 정책. 한글 9,500~12,000자, 금지 토큰 12종 0건, 성인 대학생만 등장.</td>
+          <td><span class="badge">pass</span></td>
+          <td class="f">9,581자 · content 테스트 10/10<br />evidence/content/stats.txt</td>
+        </tr>
+        <tr>
+          <td class="k">C4</td>
+          <td>깨진 상태 처리. 저장 데이터가 깨져도 타이틀 부팅, 없는 씬 복원 시 오류 문구, 자격증명 없는 홈에서 401.</td>
+          <td><span class="badge">pass</span></td>
+          <td class="f">edge.spec.ts 3/3<br />evidence/gateway/curl-no-credentials.txt</td>
+        </tr>
+        <tr>
+          <td class="k">C5</td>
+          <td>인접 표면 무회귀. 이식 후에도 <code>tools/agy-login.mjs status</code> 가 동작하고 기존 기획 문서가 그대로 렌더된다.</td>
+          <td><span class="badge">pass</span></td>
+          <td class="f">vision 6/6 · concepts 9/9 · report 12/12, errors=0<br />evidence/regression/</td>
+        </tr>
+        <tr>
+          <td class="k">C6</td>
+          <td>수채화 아트 디렉션과 레이아웃. 1280×720 과 390×844 에서 타이틀·대사·선택지·기록·엔딩.</td>
+          <td><span class="badge">pass</span></td>
+          <td class="f">visual.spec.ts 2/2, 캡처 10장<br />evidence/visual-qa/</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">C1 은 병합된 <code>main</code> 트리에서 한 번 더 돌렸습니다. 병합 결과가 검증한 워크트리와 바이트 단위로 같은지 확인한 뒤에 종료했습니다.</p>
+  </div>
+</section>
+
+<!-- ── 완주 ──────────────────────────────── -->
+<section id="play">
+  <div class="wrap">
+    <h2><span class="num">03 · 완주 기록</span>여덟 막을 지나 엔딩까지</h2>
+    <p class="one-line">테스트가 시작하기를 누르고, 451줄을 넘기고, 선택지를 고르고, 엔딩 화면에 도착할 때까지 각 막에서 한 장씩 찍었습니다.</p>
+    <p class="sub">막이 바뀔 때마다 배경 이미지와 스프라이트가 각각 <code>naturalWidth &gt; 0</code> 인지, BGM 의 <code>currentTime</code> 이 실제로 흐르는지 확인합니다. 그림만 있고 소리가 죽어 있으면 통과하지 않습니다.</p>
+
+    <div class="shots wide">
+      <figure><img src="shots/play-01-title.jpg" loading="lazy" alt="타이틀 화면" /><figcaption><span class="k">01 · title</span>여름 캠퍼스 타이틀. 시작하기·이어하기·설정.</figcaption></figure>
+      <figure><img src="shots/play-s01-gate.jpg" loading="lazy" alt="캠퍼스 정문 장면" /><figcaption><span class="k">s01 · gate</span>정문. 미래가 처음 등장하는 막.</figcaption></figure>
+      <figure><img src="shots/play-s02-studio.jpg" loading="lazy" alt="실기실 장면" /><figcaption><span class="k">s02 · studio</span>실기실. 물감 냄새와 첫 대화.</figcaption></figure>
+      <figure><img src="shots/play-s03-cafe.jpg" loading="lazy" alt="캠퍼스 카페 장면" /><figcaption><span class="k">s03 · cafe</span>카페. 서린이 합류한다.</figcaption></figure>
+      <figure><img src="shots/play-s04-lawn.jpg" loading="lazy" alt="해질녘 잔디밭 장면" /><figcaption><span class="k">s04 · lawn</span>잔디밭 해질녘. 첫 선택지 직전.</figcaption></figure>
+      <figure><img src="shots/play-s05-library.jpg" loading="lazy" alt="도서관 창가 장면" /><figcaption><span class="k">s05 · library</span>도서관 창가. 갈래가 갈리는 지점.</figcaption></figure>
+      <figure><img src="shots/play-s06-rooftop.jpg" loading="lazy" alt="밤 옥상 장면" /><figcaption><span class="k">s06 · rooftop</span>밤 옥상. 조명이 가장 어두운 막.</figcaption></figure>
+      <figure><img src="shots/play-s07-studio-night.jpg" loading="lazy" alt="밤의 실기실 장면" /><figcaption><span class="k">s07 · studio night</span>밤 실기실. 그림이 완성되는 막.</figcaption></figure>
+      <figure><img src="shots/play-s08-riverside.jpg" loading="lazy" alt="강변 노을 장면" /><figcaption><span class="k">s08 · riverside</span>강변. 세 엔딩 중 하나로 향한다.</figcaption></figure>
+      <figure><img src="shots/play-99-ending.jpg" loading="lazy" alt="엔딩 화면" /><figcaption><span class="k">99 · ending</span>엔딩 카드. 여기까지 끊김 없이 도달했다.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ── 시각 QA ───────────────────────────── -->
+<section id="visual">
+  <div class="wrap">
+    <h2><span class="num">04 · 시각 QA</span>데스크톱과 모바일, 같은 다섯 화면</h2>
+    <p class="one-line">해상도를 바꿔 같은 다섯 상태를 찍습니다. 대사가 잘리는지, 한글이 깨지는지, 스프라이트가 배경 위에 제대로 합성되는지 눈으로 봅니다.</p>
+
+    <h3>데스크톱 1280×720</h3>
+    <div class="shots wide">
+      <figure><img src="shots/qa-d-01-title.jpg" loading="lazy" alt="데스크톱 타이틀 화면" /><figcaption><span class="k">01 · title</span>타이틀.</figcaption></figure>
+      <figure><img src="shots/qa-d-02-dialogue.jpg" loading="lazy" alt="데스크톱 대사 화면" /><figcaption><span class="k">02 · dialogue</span>스프라이트가 있는 대사. 타이프라이터가 끝난 상태.</figcaption></figure>
+      <figure><img src="shots/qa-d-03-choices.jpg" loading="lazy" alt="데스크톱 선택지 화면" /><figcaption><span class="k">03 · choices</span>선택지 두 개가 완전히 떠오른 상태.</figcaption></figure>
+      <figure><img src="shots/qa-d-04-history.jpg" loading="lazy" alt="데스크톱 기록 화면" /><figcaption><span class="k">04 · history</span>기록. 지나온 대사를 되짚는 패널.</figcaption></figure>
+      <figure><img src="shots/qa-d-05-ending.jpg" loading="lazy" alt="데스크톱 엔딩 화면" /><figcaption><span class="k">05 · ending</span>엔딩.</figcaption></figure>
+    </div>
+
+    <h3>모바일 390×844</h3>
+    <div class="shots tall">
+      <figure><img src="shots/qa-m-01-title.jpg" loading="lazy" alt="모바일 타이틀 화면" /><figcaption><span class="k">01 · title</span></figcaption></figure>
+      <figure><img src="shots/qa-m-02-dialogue.jpg" loading="lazy" alt="모바일 대사 화면" /><figcaption><span class="k">02 · dialogue</span></figcaption></figure>
+      <figure><img src="shots/qa-m-03-choices.jpg" loading="lazy" alt="모바일 선택지 화면" /><figcaption><span class="k">03 · choices</span></figcaption></figure>
+      <figure><img src="shots/qa-m-04-history.jpg" loading="lazy" alt="모바일 기록 화면" /><figcaption><span class="k">04 · history</span></figcaption></figure>
+      <figure><img src="shots/qa-m-05-ending.jpg" loading="lazy" alt="모바일 엔딩 화면" /><figcaption><span class="k">05 · ending</span></figcaption></figure>
+    </div>
+    <p class="note">모바일에서는 대사창이 화면 아래로 붙고 메뉴가 접힙니다. 세로 화면에서도 대사 클리핑은 없었습니다.</p>
+  </div>
+</section>
+
+<!-- ── 게이트웨이 ────────────────────────── -->
+<section id="gateway">
+  <div class="wrap">
+    <h2><span class="num">05 · 게이트웨이 OAuth</span>실제로 붙었고, 만료도 태워 봤다</h2>
+    <p class="one-line">모의 서버가 아니라 실제 Google Antigravity 토큰 엔드포인트로 확인했습니다.</p>
+
+    <h3>로그인된 상태</h3>
+    <pre><b>$ curl -i http://127.0.0.1:51120/api/auth/status</b>
+<span class="ok">HTTP/1.1 200 OK</span>
+content-type: application/json
+
+{"authenticated":<span class="ok">true</span>,"provider":"google-antigravity","email":"hyeon···@gmail.com",
+ "projectId":"aicode-consumers","expiresInSeconds":1057,"tier":"free-tier","unofficial":true}
+
+<b>$ curl -s http://127.0.0.1:51120/api/models | jq '.models | length'</b>
+<span class="ok">28</span>   <span class="cm"># 28건 전부 quotaInfo.remainingFraction 보유</span></pre>
+    <p class="note">이메일은 보고서에서만 가렸습니다. 토큰 값은 어떤 증거 파일에도 기록하지 않습니다. <code>tier: free-tier</code> 는 정상이며 계정 등급 그대로입니다.</p>
+
+    <h3>자격증명이 없는 상태</h3>
+    <pre><b>$ curl -i .../api/auth/status</b>   <span class="cm"># auth.json 없는 임시 홈으로 기동</span>
+<span class="ok">HTTP/1.1 200 OK</span>
+{"authenticated":<span class="no">false</span>}
+
+<b>$ curl -i .../api/models</b>
+<span class="no">HTTP/1.1 401 Unauthorized</span>
+{"error":"로그인이 필요하다"}</pre>
+
+    <h3>만료 토큰 갱신</h3>
+    <pre><span class="cm"># 원본 ~/.vnmaker/auth.json 은 읽기만 했다. 임시 복사본의 expires 를 과거로
+# 강제해 refresh 분기를 실제로 태우고, 검증 스크립트는 직후 삭제했다.</span>
+status                 <span class="ok">200</span>
+refreshed              <span class="ok">true</span>
+accessRotated          <span class="ok">true</span>
+newExpiresAheadOfOld   <span class="ok">true</span>
+expiresInSec           3299
+refreshTokenPreserved  <span class="ok">true</span>
+projectPreserved       <span class="ok">true</span>
+modelsWithNewToken     <span class="ok">200</span>  count: 28
+realFileUntouched      <span class="ok">true</span></pre>
+    <div class="plain">
+      <h4>쉽게 말하면</h4>
+      <p>토큰이 만료된 뒤에도 갱신 토큰으로 새 토큰을 받아 저장하고, 그 새 토큰으로 모델 목록 28건을 다시 받아옵니다. 갱신 판단은 만료 5분 전에 미리 하기 때문에, 여유가 남아 있을 때 <code>refreshed:false</code> 가 나오는 것은 정상입니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 잡은 결함 ─────────────────────────── -->
+<section id="defects">
+  <div class="wrap">
+    <h2><span class="num">06 · 잡은 결함</span>테스트가 먼저 틀렸던 것들</h2>
+    <p class="one-line">처음 e2e 를 돌렸을 때 5개가 빨간불이었습니다. 그중 진짜 버그와, 감사 중에 뒤늦게 드러난 두 건을 남깁니다.</p>
+
+    <ul class="fix">
+      <li><span class="tag c">코드</span><div>
+        <p>BGM 크로스페이드에서 볼륨이 음수가 되어 <code>IndexSizeError</code>.</p>
+        <p class="was">rAF 타임스탬프가 <code>performance.now()</code> 보다 앞설 수 있었다. 0~1 로 클램프.</p>
+      </div></li>
+      <li><span class="tag c">코드</span><div>
+        <p>없는 씬 id 로 복원하면 화면은 타이틀에 머물러 사용자가 문제를 못 봤다.</p>
+        <p class="was">앱이 <code>state.error</code> 를 최우선으로 렌더하도록 바꿨다. edge 테스트가 이 문구를 확인한다.</p>
+      </div></li>
+      <li><span class="tag v">계약</span><div>
+        <p>타이틀 배경 <code>img</code> 에 계약된 <code>data-testid="bg-image"</code> 가 없었다.</p>
+        <p class="was">테스트가 찾을 훅을 앱이 안 내보내고 있었다. 추가.</p>
+      </div></li>
+      <li><span class="tag c">에셋</span><div>
+        <p><code>bgm/daily.mp3</code> 가 41.77초로 실측되어 오디오 검사 14/15 실패.</p>
+        <p class="was">신스 소스는 5패스라 52.17초여야 했는데 4패스 시절 산출물이 커밋돼 있었고, 어떤 test 스크립트도 <code>audio-check</code> 를 돌리지 않아 묻혀 있었다. 재생성 52.22초 + 루트 <code>test</code> 에 검사를 연결해 이제 15/15.</p>
+      </div></li>
+      <li><span class="tag v">테스트</span><div>
+        <p>선택지 스크린샷이 페이드인 도중에 찍혀 메뉴가 거의 안 보였다.</p>
+        <p class="was"><code>toBeVisible()</code> 은 바운딩 박스만 본다. <code>opacity:0</code> 에서 올라오는 요소는 애니메이션이 시작되기도 전에 "보인다"고 판정된다. 자손까지 계산된 <code>opacity</code> 를 확인하는 <code>waitForOpaque</code> 를 넣었다.</p>
+      </div></li>
+    </ul>
+
+    <h3>선택지 캡처: 전 · 후</h3>
+    <div class="shots wide">
+      <figure><img src="shots/bug-choices-before.jpg" loading="lazy" alt="수정 전 선택지 화면. 선택지 메뉴가 거의 투명해서 글자만 희미하게 보인다." /><figcaption><span class="k">before</span>메뉴가 <code>opacity</code> 거의 0. 글자 윤곽만 남았다. 테스트는 초록불이었다.</figcaption></figure>
+      <figure><img src="shots/qa-d-03-choices.jpg" loading="lazy" alt="수정 후 선택지 화면. 두 개의 선택지가 또렷하게 보인다." /><figcaption><span class="k">after</span>두 선택지가 완전히 올라온 뒤 캡처. 같은 테스트, 같은 순간.</figcaption></figure>
+    </div>
+    <p class="note">초록불이던 테스트가 빈 화면을 증거로 남기고 있었습니다. 스크린샷을 사람이 열어 보지 않으면 이런 건 안 걸립니다.</p>
+  </div>
+</section>
+
+<!-- ── 회귀 ──────────────────────────────── -->
+<section id="regression">
+  <div class="wrap">
+    <h2><span class="num">07 · 인접 표면</span>기존 문서는 그대로인가</h2>
+    <p class="one-line">게이트웨이를 이식하면서 기존 기획 문서 사이트를 건드리지 않았는지, 크로미움으로 열어 이미지 개수까지 셌습니다.</p>
+
+    <div class="shots wide">
+      <figure><img src="shots/reg-vision.jpg" loading="lazy" alt="vision 문서 렌더 화면" /><figcaption><span class="k">docs/vision</span>이미지 6/6, 콘솔 오류 0.</figcaption></figure>
+      <figure><img src="shots/reg-concepts.jpg" loading="lazy" alt="concepts 문서 렌더 화면" /><figcaption><span class="k">docs/concepts</span>이미지 9/9, 콘솔 오류 0.</figcaption></figure>
+      <figure><img src="shots/reg-report.jpg" loading="lazy" alt="컨셉 보고서 렌더 화면" /><figcaption><span class="k">docs/report</span>이미지 12/12, 콘솔 오류 0. <code>loading="lazy"</code> 는 끝까지 스크롤해 강제 로드한다.</figcaption></figure>
+    </div>
+    <p class="note"><code>tools/agy-login.mjs status</code> 도 이식 후 그대로 동작합니다. 게이트웨이가 같은 <code>~/.vnmaker/auth.json</code> 을 공유하고, 기존 스크립트를 지우지 않았습니다.</p>
+  </div>
+</section>
+
+<!-- ── 미결 ──────────────────────────────── -->
+<section id="open">
+  <div class="wrap">
+    <h2><span class="num">08 · 남은 것</span>아직 하지 않은 말</h2>
+
+    <div class="two">
+      <div class="card pick">
+        <h4>알려진 한계</h4>
+        <ul>
+          <li>OST·SFX 는 로컬 신스 합성입니다. 분위기는 맞지만 연주 음원은 아닙니다.</li>
+          <li>계정은 <code>free-tier</code> 입니다. 쿼터가 낮은 것은 버그가 아니라 등급입니다.</li>
+          <li>playwright 번들 ffmpeg 에는 PNG 디코더가 없어, 스프라이트 알파 키잉과 이 보고서용 이미지 축소를 각각 직접 만든 도구로 처리했습니다.</li>
+          <li>브라우저 자동 재생 정책 때문에 오디오는 사용자 조작 이후에 시작합니다. 테스트도 클릭 후에 <code>currentTime</code> 을 봅니다.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>다음에 할 일</h4>
+        <ul>
+          <li><code>waitForOpaque</code> 수정과 이 보고서를 커밋해 브랜치에 올리기.</li>
+          <li>시각 QA 캡처에 사람 눈 리뷰 단계를 명시적으로 넣기. 초록불만으로는 부족합니다.</li>
+          <li>게이트웨이 쿼터를 플레이어 UI 에 노출해, 생성이 막힐 때 이유가 보이게 하기.</li>
+          <li>편집기 표면(NODE·MAP·ROUTE·STAGE)은 아직 컨셉 문서 상태입니다.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap">
+  <a href="../vision/index.html">비전 문서</a>
+  <a href="../concepts/index.html">네 개의 표면</a>
+  <a href="../report/index.html">컨셉 보고서</a>
+  <a href="https://github.com/MovieHolic-Plex/vnmaker">저장소</a>
+  <p style="margin-top:18px;max-width:none">vnmaker QA 보고서 · 2026-08-31 · 브랜치 <code>feat/vn-studio</code> → <code>main</code> (PR #1·#2·#3 병합). 스크린샷은 <code>evidence/</code> 원본을 <code>tools/qa/shrink-shots.mjs</code> 로 줄인 것입니다.</p>
+</div></footer>
+
+</body>
+</html>

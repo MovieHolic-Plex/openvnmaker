@@ -15,6 +15,7 @@ test-results/
 playwright-report/
 blob-report/
 evidence/
+.qa-tmp/
 
 # env & creds
 .env

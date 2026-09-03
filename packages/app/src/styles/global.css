@@ -104,6 +104,56 @@ body {
   color: var(--ink-soft);
 }
 
+.title-auth {
+  margin: 14px 0 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.title-error {
+  margin: 12px 0 0;
+  max-width: 42ch;
+  font-size: 0.85rem;
+  color: #8a3a32;
+}
+
+.title-agent {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  width: min(100%, 28rem);
+}
+
+.title-agent-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1.5px solid rgba(58, 53, 46, 0.45);
+  border-radius: 2px;
+  background: rgba(246, 241, 230, 0.72);
+  color: var(--ink);
+  font-family: var(--font-body, inherit);
+  font-size: 0.92rem;
+}
+
+.agent-diff {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  z-index: 6;
+  max-width: min(70ch, calc(100% - 48px));
+  margin: 0;
+  padding: 8px 14px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(176, 107, 82, 0.45);
+  background: rgba(246, 241, 230, 0.88);
+  color: var(--ink);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
 .title-rule {
   width: 92px; height: 2px;
   margin: 20px 0;
