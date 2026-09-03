@@ -4,7 +4,8 @@
  *
  * 게이트는 모델이나 API 연결 문제가 아니라 omo-ai 플러그인이 세션 안에서 굴리는
  * 상태 머신이다. 규칙은 omo-task.js 번들에 박혀 있으므로 상수를 베끼지 않고
- * 실제 번들에서 읽어 온다. 번들이 바뀌면 이 도구의 판정도 같이 바뀐다.
+ * 실제 번들에서 읽어 온다. 번들 파싱에 실패한 부분만 아래 상수로 되돌리며,
+ * 그때는 출력에 fallback 이라고 밝힌다.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -28,8 +29,15 @@ export const FALLBACK_RULES = {
     /계획(?:서)?(?:부터|을|를|\s)*\s*(?:먼저\s*)?(?:세워|세우|짜|작성해|수립해)/,
     /(?:먼저|우선)\s*계획(?:서)?(?:을|를)?\s*(?:세워|세우|짜|작성해|수립해)/,
   ],
-  /** 자연어 매칭 전에 지워지는 블록. 시스템이 끼워 넣은 텍스트는 사용자 요청이 아니다. */
-  strip: [/<ultrawork-mode>[\s\S]*?<\/ultrawork-mode>/gi, /<system-reminder>[\s\S]*?<\/system-reminder>/gi],
+  /** 스킬 태그에서 스킬 이름을 캐낸다. 태그는 요청과 호출 양쪽으로 등록된다. */
+  skillTag: /<skill\s+name="([^"]+)"/gi,
+  /** 자연어 매칭 전에 지워지는 블록. 순서는 번들과 같이 ultrawork/reminder 다음 skill 이다. */
+  strip: [
+    /<ultrawork-mode>[\s\S]*?<\/ultrawork-mode>/gi,
+    /<system-reminder>[\s\S]*?<\/system-reminder>/gi,
+    /<skill\s+name="[^"]*"[\s\S]*?<\/skill>/gi,
+    /<skill\s+name="[^"]*"[\s\S]*$/i,
+  ],
 };
 
 /** omo-task.js 번들을 찾는다. 전역 bun 설치와 cwd 상위 node_modules 를 모두 본다. */
@@ -65,7 +73,7 @@ function sliceRegexLiteral(src, start) {
     else if (ch === "/" && !inClass) {
       let j = i + 1;
       while (j < src.length && /[a-z]/.test(src[j])) j += 1;
-      return { body: src.slice(start + 1, i), flags: src.slice(i + 1, j), end: j };
+      return { re: new RegExp(src.slice(start + 1, i), src.slice(i + 1, j)), end: j };
     }
     i += 1;
   }
@@ -83,7 +91,7 @@ function parseRegexArray(src, anchor) {
     if (src[i] === "/") {
       const lit = sliceRegexLiteral(src, i);
       if (!lit) return null;
-      out.push(new RegExp(lit.body, lit.flags));
+      out.push(lit.re);
       i = lit.end;
       continue;
     }
@@ -96,62 +104,83 @@ function parseRegexArray(src, anchor) {
   return out.length > 0 ? out : null;
 }
 
-/** 번들에서 게이트 표와 탐지 규칙을 읽는다. 하나라도 실패하면 fallback 을 쓴다. */
+/** `이름=[/<접두>` 형태의 배열 선언을 앵커로 잡아 정규식들을 읽는다. */
+function parseArrayByPrefix(src, prefixPattern) {
+  const m = src.match(prefixPattern);
+  if (!m) return null;
+  return parseRegexArray(src, m[0].slice(0, m[0].indexOf("[") + 1));
+}
+
+/** 게이트 표를 키 이름에 의존하지 않고 통째로 읽는다. */
+function parseGates(src) {
+  const at = src.search(/var\s+\w+=\{\w+:\{requiresSkills:/);
+  if (at === -1) return { gates: null, complete: false };
+  const chunk = src.slice(at, at + 800);
+  const end = chunk.indexOf("};");
+  const body = end === -1 ? chunk : chunk.slice(0, end);
+  const gates = {};
+  const entry = /([A-Za-z_$][\w$]*):\{requiresSkills:\[([^\]]*)\],requiresPlanArtifact:(!0|!1),forbidsSkills:\[([^\]]*)\]\}/g;
+  const list = (raw) => [...raw.matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+  for (const m of body.matchAll(entry)) {
+    gates[m[1]] = { requiresSkills: list(m[2]), requiresPlanArtifact: m[3] === "!0", forbidsSkills: list(m[4]) };
+  }
+  // 선언에 있는 항목 수와 읽어 낸 수가 다르면 규칙이 바뀐 것이다. 조용히 넘기지 않는다.
+  const declared = (body.match(/requiresSkills:/g) ?? []).length;
+  const complete = declared > 0 && declared === Object.keys(gates).length;
+  return { gates: Object.keys(gates).length > 0 ? gates : null, complete };
+}
+
+/** 번들에서 게이트 표와 탐지 규칙을 읽는다. 실패한 항목만 fallback 으로 채운다. */
 export function parseRules(bundlePath) {
   if (!bundlePath || !existsSync(bundlePath)) {
-    return { ...FALLBACK_RULES, source: "fallback", reason: "번들을 찾지 못했다" };
+    return { ...FALLBACK_RULES, source: "fallback", bundlePath: null, reason: "번들을 찾지 못했다" };
   }
   const src = readFileSync(bundlePath, "utf8");
   const problems = [];
 
-  const gateAt = src.search(/var\s+\w+=\{metis:\{requiresSkills:/);
-  let gates = null;
-  if (gateAt !== -1) {
-    const chunk = src.slice(gateAt, gateAt + 400);
-    gates = {};
-    for (const m of chunk.matchAll(
-      /(metis|momus):\{requiresSkills:\[([^\]]*)\],requiresPlanArtifact:(!0|!1),forbidsSkills:\[([^\]]*)\]\}/g,
-    )) {
-      const list = (raw) => [...raw.matchAll(/"([^"]+)"/g)].map((x) => x[1]);
-      gates[m[1]] = {
-        requiresSkills: list(m[2]),
-        requiresPlanArtifact: m[3] === "!0",
-        forbidsSkills: list(m[4]),
-      };
-    }
-    if (Object.keys(gates).length === 0) gates = null;
-  }
+  const { gates, complete } = parseGates(src);
   if (!gates) problems.push("게이트 표");
+  else if (!complete) problems.push("게이트 표 일부 항목");
 
   let keyword = null;
   const kwAt = src.search(/\w+=\{"ulw-plan":\//);
   if (kwAt !== -1) {
     const lit = sliceRegexLiteral(src, src.indexOf("/", src.indexOf('"ulw-plan":', kwAt)));
-    if (lit) keyword = { "ulw-plan": new RegExp(lit.body, lit.flags) };
+    if (lit) keyword = { "ulw-plan": lit.re };
   }
   if (!keyword) problems.push("키워드 규칙");
 
-  const naturalAnchor = src.match(/\w+=\[\/\\b\(\?:make\|write\|create/);
-  const natural = naturalAnchor ? parseRegexArray(src, naturalAnchor[0].slice(0, naturalAnchor[0].indexOf("[") + 1)) : null;
+  const natural = parseArrayByPrefix(src, /\w+=\[\/\\b\(\?:make\|write\|create/);
   if (!natural) problems.push("자연어 규칙");
 
-  const stripAnchor = src.match(/\w+=\[\/<ultrawork-mode>/);
-  const strip = stripAnchor ? parseRegexArray(src, stripAnchor[0].slice(0, stripAnchor[0].indexOf("[") + 1)) : null;
-  if (!strip) problems.push("블록 제거 규칙");
+  // 번들은 ultrawork/reminder 블록을 먼저 지우고, 이어서 skill 블록을 지운다.
+  const injected = parseArrayByPrefix(src, /\w+=\[\/<ultrawork-mode>/);
+  const skillBlocks = parseArrayByPrefix(src, /\w+=\[\/<skill\\s\+name=/);
+  if (!injected) problems.push("주입 블록 제거 규칙");
+  if (!skillBlocks) problems.push("스킬 블록 제거 규칙");
 
-  const ok = problems.length === 0;
+  let skillTag = null;
+  const tagAt = src.search(/\w+=\/<skill\\s\+name="\(\[\^"\]\+\)"\//);
+  if (tagAt !== -1) {
+    const lit = sliceRegexLiteral(src, src.indexOf("/", tagAt));
+    if (lit) skillTag = lit.re;
+  }
+  if (!skillTag) problems.push("스킬 태그 규칙");
+
+  const strip = injected && skillBlocks ? [...injected, ...skillBlocks] : FALLBACK_RULES.strip;
   return {
     gates: gates ?? FALLBACK_RULES.gates,
     keyword: keyword ?? FALLBACK_RULES.keyword,
     natural: natural ?? FALLBACK_RULES.natural,
-    strip: strip ?? FALLBACK_RULES.strip,
-    source: ok ? "bundle" : "partial",
+    skillTag: skillTag ?? FALLBACK_RULES.skillTag,
+    strip,
+    source: problems.length === 0 ? "bundle" : "partial",
     bundlePath,
-    reason: ok ? null : `${problems.join(", ")} 파싱 실패 → 그 부분만 fallback`,
+    reason: problems.length === 0 ? null : `${problems.join(", ")} 파싱 실패 → 그 부분만 fallback`,
   };
 }
 
-/** 자연어 판정 전에 시스템이 끼워 넣은 블록을 지운다. */
+/** 자연어 판정 전에 주입 블록과 스킬 블록을 지운다. 번들과 같은 순서다. */
 export function stripInjectedBlocks(text, rules) {
   let out = text;
   for (const re of rules.strip) out = out.replace(re, "");
@@ -159,27 +188,75 @@ export function stripInjectedBlocks(text, rules) {
 }
 
 /**
- * 사용자 발화가 ulw-plan 요청으로 인정되는지 본다.
- * `/skill:ulw-plan` 접두사, 키워드, 자연어 순으로 검사한다.
+ * 사용자 발화 한 건을 번들의 input 핸들러와 같은 순서로 해석한다.
+ *
+ * 번들은 스킬을 두 갈래로 기록한다. requested 는 requiresSkills 판정에,
+ * invoked 는 forbidsSkills 판정에 쓰인다. 슬래시 명령과 스킬 태그는 양쪽 모두에
+ * 들어가지만 키워드와 자연어는 requested 에만 들어간다.
+ *
+ * 주의: 번들은 source 가 "extension" 인 메시지를 통째로 무시한다. 여기서는 사용자가
+ * 직접 친 발화만 검사한다고 보고 그 갈래는 재현하지 않는다.
  */
-export function matchUserRequest(text, rules) {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("/skill:")) {
-    const sp = trimmed.indexOf(" ");
-    const name = (sp === -1 ? trimmed.slice(7) : trimmed.slice(7, sp)).trim();
-    if (name === "ulw-plan") return { matched: true, via: "slash", detail: "/skill:ulw-plan" };
+export function analyzeUserText(text, rules) {
+  const requested = new Set();
+  const invoked = new Set();
+
+  if (text.startsWith("/skill:")) {
+    const sp = text.indexOf(" ");
+    const name = (sp === -1 ? text.slice(7) : text.slice(7, sp)).trim();
+    if (name.length > 0) {
+      requested.add(name);
+      invoked.add(name);
+    }
+    return finish(requested, invoked, "slash", `/skill:${name}`);
   }
-  const cleaned = stripInjectedBlocks(trimmed, rules);
+
+  for (const m of text.matchAll(rules.skillTag)) {
+    const name = m[1]?.trim();
+    if (name !== undefined && name.length > 0) {
+      requested.add(name);
+      invoked.add(name);
+    }
+  }
+  const tagged = requested.size > 0;
+
+  const cleaned = stripInjectedBlocks(text, rules);
+  let via = tagged ? "skill-tag" : null;
+  let detail = tagged ? `<skill name="${[...requested].join(", ")}">` : null;
+
   for (const [skill, re] of Object.entries(rules.keyword)) {
-    if (re.test(cleaned)) return { matched: true, via: "keyword", detail: `${skill} ${re}` };
+    if (re.test(cleaned)) {
+      requested.add(skill);
+      if (via === null) {
+        via = "keyword";
+        detail = `${skill} ${re}`;
+      }
+    }
   }
-  for (const re of rules.natural) {
-    if (re.test(cleaned)) return { matched: true, via: "natural", detail: String(re) };
+  const hit = rules.natural.find((re) => re.test(cleaned));
+  if (hit !== undefined) {
+    requested.add("ulw-plan");
+    if (via === null) {
+      via = "natural";
+      detail = String(hit);
+    }
   }
-  return { matched: false, via: null, detail: null };
+  return finish(requested, invoked, via, detail);
 }
 
-/** .omo/plans/*.md 를 훑는다. 존재 여부만 본다 — 세션 접촉 여부는 밖에서 알 수 없다. */
+function finish(requested, invoked, via, detail) {
+  const planRequested = requested.has("ulw-plan");
+  return {
+    requested: [...requested],
+    invoked: [...invoked],
+    planRequested,
+    matched: planRequested,
+    via: planRequested ? via : null,
+    detail: planRequested ? detail : null,
+  };
+}
+
+/** .omo/plans/*.md 를 훑는다. 존재만 볼 수 있고 세션 접촉 여부는 알 수 없다. */
 export function scanPlanArtifacts(root = ROOT) {
   const dir = join(root, ".omo", "plans");
   if (!existsSync(dir)) return [];
@@ -192,11 +269,19 @@ export function scanPlanArtifacts(root = ROOT) {
     .sort((a, b) => b.mtime.localeCompare(a.mtime));
 }
 
-/** 규칙 + 디스크 상태를 합쳐 진단 결과를 만든다. */
+/**
+ * 규칙 + 디스크 상태를 합쳐 진단 결과를 만든다.
+ *
+ * 세 조건 중 어느 것도 밖에서 "통과"라고 단정할 수 없다. 세션 메모리를 볼 수 없기
+ * 때문이다. 확실히 말할 수 있는 것은 플랜 파일이 아예 없을 때 뿐이라서, 상태를
+ * blocked / unknown 두 가지로만 낸다.
+ */
 export function diagnose({ root = ROOT, env = process.env, texts = [] } = {}) {
   const rules = parseRules(findBundle(env, root));
-  const plans = scanPlanArtifacts(root);
+  const files = scanPlanArtifacts(root);
   const gate = rules.gates.momus ?? FALLBACK_RULES.gates.momus;
+  const forbidden = new Set(gate.forbidsSkills);
+
   return {
     rules: {
       source: rules.source,
@@ -204,36 +289,40 @@ export function diagnose({ root = ROOT, env = process.env, texts = [] } = {}) {
       reason: rules.reason,
       keyword: Object.fromEntries(Object.entries(rules.keyword).map(([k, v]) => [k, String(v)])),
       natural: rules.natural.map(String),
+      strip: rules.strip.map(String),
+      skillTag: String(rules.skillTag),
     },
     gates: rules.gates,
     conditions: [
       {
         id: "user-requested",
         label: `사용자가 이번 세션에서 ${gate.requiresSkills.join(", ")} 을 직접 요청했는가`,
-        observable: false,
+        state: "unknown",
         note: "세션 메모리에만 있어 밖에서는 확인할 수 없다. 아래 패턴 중 하나가 사용자 발화에 있어야 한다.",
       },
       {
         id: "plan-artifact",
-        label: ".omo/plans/*.md 플랜 파일이 이번 세션에서 열렸는가",
-        observable: true,
-        found: plans,
-        pass: plans.length > 0,
+        label: ".omo/plans/*.md 플랜 파일을 이번 세션에서 열었는가",
+        state: files.length > 0 ? "unknown" : "blocked",
+        files,
         note:
-          plans.length > 0
-            ? "파일은 있다. 다만 게이트는 '이번 세션에서 읽거나 쓴' 것을 요구하므로 세션 안에서 한 번 열어야 한다."
-            : "플랜 파일이 없다. ulw-plan 워크플로로 먼저 플랜을 만들어야 한다.",
+          files.length > 0
+            ? "디스크에 파일은 있다. 다만 게이트는 '이번 세션에서 읽거나 쓴' 것을 요구하므로, 파일이 있다는 사실만으로는 통과라고 말할 수 없다. 세션 안에서 한 번 열어야 한다."
+            : "플랜 파일이 하나도 없다. 이 조건은 확실히 막혀 있다. ulw-plan 워크플로로 플랜을 먼저 만들어야 한다.",
       },
       {
         id: "forbidden-skill",
-        label: `${gate.forbidsSkills.join(", ")} 를 이미 호출하지 않았는가`,
-        observable: false,
-        note: "세션에서 /ulw-execute 를 한 번이라도 부르면 그 세션에서는 momus 가 영구히 잠긴다. 새 세션을 열어야 한다.",
+        label: `${gate.forbidsSkills.join(", ")} 를 아직 호출하지 않았는가`,
+        state: "unknown",
+        note: `세션에서 /skill:${gate.forbidsSkills[0]} 를 치거나 <skill name="${gate.forbidsSkills[0]}"> 태그가 발화에 들어가면 그 세션에서는 momus 가 영구히 잠긴다. 그때는 새 세션을 열어야 한다.`,
       },
     ],
-    textChecks: texts.map((t) => ({ text: t, ...matchUserRequest(t, rules) })),
+    textChecks: texts.map((t) => {
+      const a = analyzeUserText(t, rules);
+      return { text: t, ...a, forbiddenInvoked: a.invoked.filter((s) => forbidden.has(s)) };
+    }),
     unlockRecipe: [
-      "새 세션을 연다 (같은 세션에서 /ulw-execute 를 이미 불렀다면 필수).",
+      "새 세션을 연다 (같은 세션에서 ulw-execute 를 이미 호출했다면 필수).",
       "사용자가 직접 `/skill:ulw-plan` 을 치거나, 발화에 `ulw-plan` 을 넣거나, `계획을 먼저 세워줘` 처럼 자연어 패턴에 맞게 말한다.",
       "그 세션 안에서 .omo/plans/*.md 플랜 파일을 만들거나 읽어 아티팩트를 접촉시킨다.",
       "그 다음에야 momus 스폰이 허용된다.",
@@ -241,11 +330,15 @@ export function diagnose({ root = ROOT, env = process.env, texts = [] } = {}) {
   };
 }
 
+const STATE_MARK = { blocked: "확실히 막힘", unknown: "세션상태(확인불가)" };
+
 function renderText(d) {
   const line = (s = "") => console.log(s);
+  const origin =
+    d.rules.source === "bundle" ? "omo 번들 실측" : d.rules.source === "partial" ? "일부 fallback (번들 파싱 실패)" : "fallback (번들을 못 찾음)";
   line("momus / metis 플랜 게이트 진단");
   line("=".repeat(48));
-  line(`규칙 출처: ${d.rules.source === "bundle" ? "omo 번들 실측" : d.rules.source === "partial" ? "일부 fallback (번들 파싱 실패)" : "fallback (번들 파싱 실패)"}`);
+  line(`규칙 출처: ${origin}`);
   if (d.rules.bundlePath) line(`번들: ${d.rules.bundlePath}`);
   if (d.rules.reason) line(`주의: ${d.rules.reason}`);
   line();
@@ -254,14 +347,11 @@ function renderText(d) {
     line(`  ${name}: 필요스킬=${g.requiresSkills.join(",")} 플랜파일필요=${g.requiresPlanArtifact ? "예" : "아니오"} 금지스킬=${g.forbidsSkills.join(",")}`);
   }
   line();
-  line("조건별 상태");
+  line("조건별 상태 — 세션 메모리를 볼 수 없어 '통과'는 밖에서 단정할 수 없다");
   for (const c of d.conditions) {
-    const mark = c.observable ? (c.pass ? "통과" : "실패") : "세션상태(확인불가)";
-    line(`  [${mark}] ${c.label}`);
+    line(`  [${STATE_MARK[c.state]}] ${c.label}`);
     line(`         ${c.note}`);
-    if (c.found?.length) {
-      for (const f of c.found) line(`         - ${f.name} ${f.bytes}b ${f.mtime}`);
-    }
+    for (const f of c.files ?? []) line(`         - ${f.name} ${f.bytes}b ${f.mtime}`);
   }
   line();
   line("ulw-plan 요청으로 인정되는 패턴");
@@ -271,9 +361,12 @@ function renderText(d) {
     line();
     line("발화 검사");
     for (const t of d.textChecks) {
-      line(`  ${t.matched ? "해제됨" : "해제안됨"} :: ${t.text}`);
-      if (t.matched) line(`         매칭(${t.via}) ${t.detail}`);
+      line(`  ${t.planRequested ? "ulw-plan 요청으로 인정됨" : "요청으로 인정되지 않음"} :: ${t.text}`);
+      if (t.planRequested) line(`         매칭(${t.via}) ${t.detail}`);
       else line("         어떤 패턴에도 걸리지 않는다. 표현을 바꿔야 한다.");
+      if (t.forbiddenInvoked.length > 0) {
+        line(`         경고: 이 발화는 금지 스킬 ${t.forbiddenInvoked.join(", ")} 를 호출된 것으로 등록해 세션을 영구히 잠근다.`);
+      }
     }
   }
   line();
@@ -304,6 +397,10 @@ const HELP = `사용법: node tools/momus-gate-doctor.mjs [옵션]
   --json            기계가 읽는 JSON 으로 출력한다
   --help            이 도움말
 
+진단에 성공하면 0 으로 끝난다. 게이트가 막혀 있다는 것은 진단 결과이지
+이 도구의 실패가 아니므로 종료 코드로 알리지 않는다. 인자가 틀렸거나 진단
+자체가 불가능할 때만 1 로 끝난다.
+
 환경변수 OMO_PLUGIN_PATH 로 omo-ai 플러그인 경로를 지정할 수 있다.`;
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
@@ -316,8 +413,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     const d = diagnose({ texts });
     if (json) console.log(JSON.stringify(d, null, 2));
     else renderText(d);
-    const artifact = d.conditions.find((c) => c.id === "plan-artifact");
-    process.exit(artifact.pass ? 0 : 1);
+    process.exit(0);
   } catch (err) {
     console.error(`진단 실패: ${err.message}`);
     process.exit(1);
