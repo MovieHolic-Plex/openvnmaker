@@ -12,7 +12,7 @@
     "dev:gateway": "pnpm --filter @vnmaker/gateway dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test && node tools/audio-check.mjs && node --test tools/momus-gate-doctor.test.mjs",
+    "test": "pnpm -r test && node tools/audio-check.mjs && node --test tools/momus-gate-doctor.test.mjs tools/momus-gate-runbook.test.mjs",
     "e2e": "playwright test",
     "qa:gateway": "node tools/qa/gateway-live.mjs",
     "qa:image": "node tools/qa/image-live.mjs",
