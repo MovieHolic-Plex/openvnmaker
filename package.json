@@ -12,7 +12,7 @@
     "dev:gateway": "pnpm --filter @vnmaker/gateway dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test && node tools/audio-check.mjs",
+    "test": "pnpm -r test && node tools/audio-check.mjs && node --test tools/momus-gate-doctor.test.mjs",
     "e2e": "playwright test",
     "qa:gateway": "node tools/qa/gateway-live.mjs",
     "qa:image": "node tools/qa/image-live.mjs",
@@ -20,7 +20,8 @@
     "qa:hello": "node tools/qa/hello-browser.mjs",
     "qa:docs": "node tools/qa/docs-regression.mjs",
     "qa:audio": "node tools/audio-check.mjs",
-    "assets:audio": "node tools/audio-gen.mjs"
+    "assets:audio": "node tools/audio-gen.mjs",
+    "doctor:momus": "node tools/momus-gate-doctor.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
