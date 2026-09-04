@@ -1,10 +1,10 @@
 interface Props {
   readonly title: string;
-  readonly affection: number;
+  readonly affection?: number;
   readonly onBack: () => void;
 }
 
-export function EndingScreen({ title, affection, onBack }: Props) {
+export function EndingScreen({ title, onBack }: Props) {
   return (
     <section className="ending-screen" data-testid="ending-screen">
       <div className="ending-plate">
@@ -13,7 +13,6 @@ export function EndingScreen({ title, affection, onBack }: Props) {
           {title}
         </h2>
         <div className="title-rule" />
-        <p className="ending-note">서린과의 거리 {affection}</p>
         <button type="button" className="ink-button" data-testid="back-to-title" onClick={onBack}>
           타이틀로
         </button>

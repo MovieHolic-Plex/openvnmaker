@@ -1,19 +1,92 @@
-import type { Character, Line, Scene, VnScript } from "@vnmaker/content";
+import type { Character, CharacterId, Choice, Expression, Line, Scene, SpriteSlot, VnScript } from "@vnmaker/content";
 
 export type SceneBeat = {
   readonly op: "scene";
   readonly bg: string;
   readonly bgm?: string;
   readonly chapter?: string;
+  readonly cg?: string;
 };
 
 export type SayBeat = {
   readonly op: "say";
   readonly who: string | null;
   readonly text: string;
+  readonly expression?: string;
+  readonly sfx?: string;
+  readonly shake?: boolean;
 };
 
-export type Beat = SceneBeat | SayBeat;
+export type ShowBeat = {
+  readonly op: "show";
+  readonly who: string;
+  readonly slot: SpriteSlot;
+  readonly expression: string;
+  readonly outfit?: string;
+};
+
+export type HideBeat = {
+  readonly op: "hide";
+  readonly who: string;
+};
+
+export interface MenuChoice {
+  readonly text: string;
+  readonly to: string;
+  readonly when?: string;
+  readonly set?: Record<string, string | number | boolean>;
+}
+
+export type MenuBeat = {
+  readonly op: "menu";
+  readonly choices: readonly MenuChoice[];
+};
+
+export type JumpBeat = {
+  readonly op: "jump";
+  readonly to: string;
+};
+
+export type SetBeat = {
+  readonly op: "set";
+  readonly vars: Record<string, string | number | boolean>;
+};
+
+export type PlayBeat = {
+  readonly op: "play";
+  readonly kind: "bgm" | "sfx";
+  readonly sound: string;
+  readonly loop?: boolean;
+};
+
+export type PauseBeat = {
+  readonly op: "pause";
+  readonly ms?: number;
+};
+
+export type EndingBeat = {
+  readonly op: "ending";
+  readonly title: string;
+};
+
+export type Beat = SceneBeat | SayBeat | ShowBeat | HideBeat | MenuBeat | JumpBeat | SetBeat | PlayBeat | PauseBeat | EndingBeat;
+
+/** content 스키마의 넓어진 계약을 IR 에서 미리 받는 컴파일 결과 타입. VnScript 에 대입된다. */
+export interface CompiledChoice extends Choice {
+  readonly cond?: string;
+  readonly set?: Record<string, string | number | boolean>;
+  readonly disable?: boolean;
+}
+
+export interface CompiledScene extends Scene {
+  readonly cg?: string;
+  readonly choices?: readonly CompiledChoice[];
+}
+
+export interface CompiledScript extends VnScript {
+  readonly flags?: Record<string, string | number | boolean>;
+  readonly scenes: readonly CompiledScene[];
+}
 
 export interface StoryNode {
   readonly id: string;
@@ -35,7 +108,39 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function parseBeat(value: unknown): Beat {
+function asNonEmpty(value: unknown, message: string): string {
+  if (typeof value !== "string" || value.trim() === "") throw new Error(message);
+  return value.trim();
+}
+
+function asFlagVars(value: unknown, message: string): Record<string, string | number | boolean> {
+  const raw = asRecord(value);
+  const vars: Record<string, string | number | boolean> = {};
+  for (const [key, entry] of Object.entries(raw)) {
+    if (typeof entry !== "string" && typeof entry !== "number" && typeof entry !== "boolean") {
+      throw new Error(message);
+    }
+    vars[key] = entry;
+  }
+  return vars;
+}
+
+function parseMenuChoice(value: unknown): MenuChoice {
+  const raw = asRecord(value);
+  const text = asNonEmpty(raw["text"], "menu.text 가 없다").replace(/\s+/g, " ");
+  if (typeof raw["to"] !== "string") throw new Error("menu.to 가 없다");
+  const to = assertSafeNodeId(raw["to"]);
+  const when = raw["when"];
+  const set = raw["set"];
+  return {
+    text,
+    to,
+    ...(typeof when === "string" && when.trim() !== "" ? { when: when.trim() } : {}),
+    ...(set === undefined ? {} : { set: asFlagVars(set, "menu.set 이 잘못됐다") }),
+  };
+}
+
+export function parseBeat(value: unknown): Beat {
   const beat = asRecord(value);
   const op = beat["op"];
   if (op === "scene") {
@@ -44,10 +149,12 @@ function parseBeat(value: unknown): Beat {
     const parsed: SceneBeat = { op: "scene", bg: bg.trim() };
     const bgm = beat["bgm"];
     const chapter = beat["chapter"];
+    const cg = beat["cg"];
     return {
       ...parsed,
       ...(typeof bgm === "string" && bgm !== "" ? { bgm } : {}),
       ...(typeof chapter === "string" && chapter !== "" ? { chapter } : {}),
+      ...(typeof cg === "string" && cg !== "" ? { cg } : {}),
     };
   }
   if (op === "say") {
@@ -55,7 +162,67 @@ function parseBeat(value: unknown): Beat {
     if (typeof text !== "string" || text.trim() === "") throw new Error("say.text 가 없다");
     const who = beat["who"];
     if (who !== null && who !== undefined && typeof who !== "string") throw new Error("say.who 가 잘못됐다");
-    return { op: "say", who: typeof who === "string" && who !== "" ? who : null, text: text.trim().replace(/\s+/g, " ") };
+    const expression = beat["expression"];
+    const sfx = beat["sfx"];
+    return {
+      op: "say",
+      who: typeof who === "string" && who !== "" ? who : null,
+      text: text.trim().replace(/\s+/g, " "),
+      ...(typeof expression === "string" && expression !== "" ? { expression } : {}),
+      ...(typeof sfx === "string" && sfx !== "" ? { sfx } : {}),
+      ...(beat["shake"] === true ? { shake: true as const } : {}),
+    };
+  }
+  if (op === "show") {
+    const who = asNonEmpty(beat["who"], "show.who 가 없다");
+    const slot = beat["slot"];
+    if (slot !== "left" && slot !== "center" && slot !== "right") throw new Error("show.slot 이 잘못됐다");
+    const expression = asNonEmpty(beat["expression"], "show.expression 이 없다");
+    const outfit = beat["outfit"];
+    return {
+      op: "show",
+      who,
+      slot,
+      expression,
+      ...(typeof outfit === "string" && outfit !== "" ? { outfit } : {}),
+    };
+  }
+  if (op === "hide") {
+    return { op: "hide", who: asNonEmpty(beat["who"], "hide.who 가 없다") };
+  }
+  if (op === "menu") {
+    if (!Array.isArray(beat["choices"]) || beat["choices"].length === 0) throw new Error("menu.choices 가 없다");
+    return { op: "menu", choices: beat["choices"].map(parseMenuChoice) };
+  }
+  if (op === "jump") {
+    if (typeof beat["to"] !== "string") throw new Error("jump.to 가 없다");
+    return { op: "jump", to: assertSafeNodeId(beat["to"]) };
+  }
+  if (op === "set") {
+    if (beat["vars"] === undefined) throw new Error("set.vars 가 없다");
+    return { op: "set", vars: asFlagVars(beat["vars"], "set.vars 가 잘못됐다") };
+  }
+  if (op === "play") {
+    const kind = beat["kind"];
+    if (kind !== "bgm" && kind !== "sfx") throw new Error("play.kind 가 잘못됐다");
+    const sound = asNonEmpty(beat["sound"], "play.sound 가 없다");
+    const loop = beat["loop"];
+    return {
+      op: "play",
+      kind,
+      sound,
+      ...(typeof loop === "boolean" ? { loop } : {}),
+    };
+  }
+  if (op === "pause") {
+    const ms = beat["ms"];
+    return {
+      op: "pause",
+      ...(ms === undefined ? {} : typeof ms === "number" ? { ms } : (() => { throw new Error("pause.ms 가 잘못됐다"); })()),
+    };
+  }
+  if (op === "ending") {
+    return { op: "ending", title: asNonEmpty(beat["title"], "ending.title 이 없다") };
   }
   throw new Error("알 수 없는 beat.op");
 }
@@ -88,9 +255,7 @@ export function helloNode(text: string): StoryNode {
 }
 
 function speakerOf(who: string | null): Line["speaker"] {
-  if (who === null || who === "") return null;
-  if (who === "me" || who === "seorin" || who === "dohyun" || who === "mirae") return who;
-  return null;
+  return who as Line["speaker"];
 }
 
 export function compileNode(node: StoryNode, characters: readonly Character[]): VnScript {
@@ -106,7 +271,14 @@ export function compileNode(node: StoryNode, characters: readonly Character[]): 
       chapter = beat.chapter;
       continue;
     }
-    lines.push({ speaker: speakerOf(beat.who), text: beat.text });
+    if (beat.op !== "say") continue;
+    lines.push({
+      speaker: speakerOf(beat.who),
+      text: beat.text,
+      ...(beat.expression === undefined ? {} : { expression: beat.expression as Expression }),
+      ...(beat.sfx === undefined ? {} : { sfx: beat.sfx }),
+      ...(beat.shake === true ? { shake: true as const } : {}),
+    });
   }
 
   if (lines.length === 0) throw new Error("say 비트가 없다");
@@ -127,6 +299,138 @@ export function compileNode(node: StoryNode, characters: readonly Character[]): 
     start: node.id,
     characters,
     scenes: [scene],
+  };
+}
+
+function compileGraphNode(
+  node: StoryNode,
+  edgeTo: string | undefined,
+  flags: Record<string, string | number | boolean>,
+): CompiledScene {
+  let background = "title";
+  let bgm: string | undefined;
+  let chapter: string | undefined;
+  let cg: string | undefined;
+  let ending: string | undefined;
+  let jumpTo: string | undefined;
+  let pendingSfx: string | undefined;
+  const lines: Line[] = [];
+  const choices: CompiledChoice[] = [];
+  const sprites = new Map<string, { slot: SpriteSlot; character: string; expression?: string }>();
+
+  for (const beat of node.beats) {
+    switch (beat.op) {
+      case "scene":
+        background = beat.bg;
+        bgm = beat.bgm;
+        chapter = beat.chapter;
+        cg = beat.cg;
+        break;
+      case "say": {
+        const sfx = beat.sfx ?? pendingSfx;
+        pendingSfx = undefined;
+        lines.push({
+          speaker: beat.who as Line["speaker"],
+          text: beat.text,
+          ...(beat.expression === undefined ? {} : { expression: beat.expression as Expression }),
+          ...(sfx === undefined ? {} : { sfx }),
+          ...(beat.shake === true ? { shake: true as const } : {}),
+        });
+        break;
+      }
+      case "show": {
+        for (const [slot, dir] of sprites) {
+          if (dir.character === beat.who) sprites.delete(slot);
+        }
+        sprites.set(beat.slot, {
+          slot: beat.slot,
+          character: beat.who,
+          ...(beat.expression === undefined ? {} : { expression: beat.expression }),
+        });
+        break;
+      }
+      case "hide": {
+        for (const [slot, dir] of sprites) {
+          if (dir.character === beat.who) sprites.delete(slot);
+        }
+        break;
+      }
+      case "menu": {
+        for (const choice of beat.choices) {
+          choices.push({
+            text: choice.text,
+            next: choice.to,
+            ...(choice.when === undefined ? {} : { cond: choice.when }),
+            ...(choice.set === undefined ? {} : { set: { ...choice.set } }),
+          });
+        }
+        break;
+      }
+      case "jump":
+        if (jumpTo === undefined) jumpTo = beat.to;
+        break;
+      case "set":
+        Object.assign(flags, beat.vars);
+        break;
+      case "play":
+        if (beat.kind === "bgm") bgm = beat.sound;
+        else pendingSfx = beat.sound;
+        break;
+      case "pause":
+        break;
+      case "ending":
+        ending = beat.title;
+        break;
+    }
+  }
+
+  const spriteList = [...sprites.values()].map((dir) => ({
+    slot: dir.slot,
+    character: dir.character as CharacterId,
+    ...(dir.expression === undefined ? {} : { expression: dir.expression as Expression }),
+  }));
+  const next = jumpTo ?? edgeTo;
+
+  return {
+    id: node.id,
+    background,
+    lines,
+    ...(bgm === undefined ? {} : { bgm }),
+    ...(chapter === undefined ? {} : { chapter }),
+    ...(cg === undefined ? {} : { cg }),
+    ...(spriteList.length === 0 ? {} : { sprites: spriteList }),
+    ...(choices.length === 0 ? {} : { choices }),
+    ...(choices.length > 0 || next === undefined ? {} : { next }),
+    ...(ending === undefined ? {} : { ending }),
+  };
+}
+
+export function compileGraph(
+  nodes: readonly StoryNode[],
+  edges: readonly StoryEdge[],
+  characters: readonly Character[] = [],
+): CompiledScript {
+  if (nodes.length === 0) throw new Error("노드가 없다");
+  const seen = new Set<string>();
+  for (const node of nodes) {
+    if (seen.has(node.id)) throw new Error(`노드 id 가 겹친다: ${node.id}`);
+    seen.add(node.id);
+  }
+  const edgeNext = new Map<string, string>();
+  for (const edge of edges) {
+    if (!edgeNext.has(edge.from)) edgeNext.set(edge.from, edge.to);
+  }
+  const flags: Record<string, string | number | boolean> = {};
+  const scenes = nodes.map((node) => compileGraphNode(node, edgeNext.get(node.id), flags));
+  const first = nodes[0];
+  if (first === undefined) throw new Error("노드가 없다");
+  return {
+    title: first.label ?? first.id,
+    subtitle: "그래프 컴파일",
+    start: first.id,
+    characters,
+    scenes,
+    ...(Object.keys(flags).length === 0 ? {} : { flags }),
   };
 }
 
