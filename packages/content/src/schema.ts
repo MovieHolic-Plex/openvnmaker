@@ -2,29 +2,34 @@
  * vnmaker 시나리오 스키마 — 이 파일이 전체 파이프라인의 계약이다.
  * 시나리오 작성 노드, 플레이어 엔진, e2e 테스트가 모두 이 타입을 기준으로 동작한다.
  * 스키마를 바꾸면 세 곳이 같이 깨진다. 필드 추가는 optional 로만 한다.
+ *
+ * 열린 캐스트: CharacterId / Expression 은 닫힌 union 이 아니라 slug 문자열이다.
+ * 주인공도 별도 매직 토큰이 아니라 characters 의 평범한 한 항목(관례상 id "me")이다.
+ * 실제 slug 규칙(^[a-z0-9-]+$)은 content 체커(findManifestViolations)가 강제한다.
  */
 
-/** 등장인물 슬롯. 화면에 동시에 최대 두 명. */
-export type SpriteSlot = "left" | "center" | "right";
+/** 등장인물 id. 어떤 slug 든 올 수 있다. 브랜드로 일반 텍스트와 구분한다. */
+export type CharacterId = string & { readonly __characterId?: "CharacterId" };
 
 /** 표정. 스프라이트 파일명 규칙: sprite/<characterId>-<expression>.png */
-export type Expression = "neutral" | "smile" | "sad" | "surprised";
+export type Expression = string;
 
-export type CharacterId = "seorin" | "dohyun" | "mirae";
+/** 등장인물 슬롯. left/center/right + offstage 를 기본으로, 필요하면 확장 가능하다. */
+export type SpriteSlot = "left" | "center" | "right" | "offstage" | (string & {});
 
 /** 화면 전환 효과. */
 export type Transition = "none" | "fade" | "dissolve" | "flash" | "fadeToBlack";
 
-/** 배우 배치 지시. sprite 가 null 이면 슬롯을 비운다. */
+/** 배우 배치 지시. character 가 null 이면 슬롯을 비운다. */
 export interface SpriteDirection {
   readonly slot: SpriteSlot;
   readonly character: CharacterId | null;
   readonly expression?: Expression;
 }
 
-/** 대사 한 줄. speaker 가 null 이면 내레이션. */
+/** 대사 한 줄. speaker 가 null 이면 내레이션. 주인공도 일반 CharacterId 다. */
 export interface Line {
-  readonly speaker: CharacterId | "me" | null;
+  readonly speaker: CharacterId | null;
   readonly text: string;
   /** 이 줄에서 표정만 바꿀 때 사용. */
   readonly expression?: Expression;
@@ -32,6 +37,8 @@ export interface Line {
   readonly sfx?: string;
   /** 이 줄에서 화면을 흔든다. */
   readonly shake?: boolean;
+  /** 이 줄에서 CG 를 숨긴다. */
+  readonly cgHide?: boolean;
 }
 
 export interface Choice {
@@ -40,6 +47,12 @@ export interface Choice {
   readonly next: string;
   /** 이 선택으로 올라가는 호감도 플래그. */
   readonly affection?: number;
+  /** 이 선택지가 보일 조건 플래그식. */
+  readonly cond?: string;
+  /** 이 선택을 고르면 세팅할 플래그들. */
+  readonly set?: Record<string, string | number | boolean>;
+  /** true 면 선택 불가 상태로 표시한다. */
+  readonly disable?: boolean;
 }
 
 export interface Scene {
@@ -48,6 +61,8 @@ export interface Scene {
   readonly chapter?: string;
   readonly background: string;
   readonly bgm?: string;
+  /** 이 씬에서 전체화면으로 표시할 CG id. */
+  readonly cg?: string;
   readonly transition?: Transition;
   readonly sprites?: readonly SpriteDirection[];
   readonly lines: readonly Line[];
@@ -63,6 +78,8 @@ export interface Character {
   readonly name: string;
   readonly color: string;
   readonly bio: string;
+  /** 갈아입힐 수 있는 의상 id 목록. */
+  readonly outfits?: string[];
 }
 
 export interface VnScript {
@@ -71,4 +88,6 @@ export interface VnScript {
   readonly start: string;
   readonly characters: readonly Character[];
   readonly scenes: readonly Scene[];
+  /** 전역 플래그 초기값. */
+  readonly flags?: Record<string, string | number | boolean>;
 }

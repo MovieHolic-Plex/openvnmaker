@@ -12,7 +12,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "stats": "tsx src/stats.ts",
-    "test": "node --test --import tsx test/script.test.ts test/assets.test.ts"
+    "test": "node --test --import tsx test/script.test.ts test/assets.test.ts test/open-cast.test.ts"
   },
   "devDependencies": {
     "typescript": "5.9.3",

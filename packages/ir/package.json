@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test --import tsx test/compile.test.ts test/tools.test.ts"
+    "test": "node --test --import tsx test/compile.test.ts test/tools.test.ts test/graph.test.ts"
   },
   "dependencies": {
     "@vnmaker/content": "workspace:*"

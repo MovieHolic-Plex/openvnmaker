@@ -17,7 +17,7 @@ export function spritesAt(scene: Scene, lineIndex: number): SpriteDirection[] {
   for (const dir of scene.sprites ?? []) base.set(dir.slot, dir);
   const speaking = scene.lines[lineIndex]?.speaker ?? null;
   const override = scene.lines[lineIndex]?.expression;
-  if (override && speaking && speaking !== "me") {
+  if (override && speaking) {
     for (const [slot, dir] of base) {
       if (dir.character === speaking) base.set(slot, { ...dir, expression: override });
     }
@@ -27,12 +27,10 @@ export function spritesAt(scene: Scene, lineIndex: number): SpriteDirection[] {
 
 export function speakerName(script: VnScript, speaker: Line["speaker"]): string | null {
   if (speaker === null) return null;
-  if (speaker === "me") return "정우진";
   return script.characters.find((c) => c.id === speaker)?.name ?? speaker;
 }
 
 export function speakerColor(script: VnScript, speaker: Line["speaker"]): string {
-  if (speaker === "me") return "#6b7f8f";
   if (speaker === null) return "#5a544c";
   return script.characters.find((c) => c.id === speaker)?.color ?? "#5a544c";
 }
