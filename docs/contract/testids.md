@@ -8,9 +8,9 @@ e2e/비주얼 QA 노드와 플레이어 구현 노드의 공용 계약. 이름�
 | `start-button` | 「처음부터 시작」 | 클릭 시 게임 시작 |
 | `continue-button` | 「이어서 하기」 | 저장 없으면 disabled |
 | `connect-button` | 「Google 연결」 | 미연결일 때만 |
-| `hello-button` | 「한 줄 받기」 | 로그인 필요. PLAY 에 모델 대사 1줄 |
-| `agent-input` | 타이틀 지시 입력 | 그래프를 고치는 한 줄 |
-| `agent-button` | 「지시하기」 | 로그인 필요. 도구형 에이전트 |
+| `hello-button` | 「한 줄 받기」(P2에서 타이틀에서 제거) | P4 스튜디오 진입으로 이사. 구 스펙 삭제됨 |
+| `agent-input` | 스튜디오 지시 입력(P4 이사 예정) | P2 타이틀에는 없음 |
+| `agent-button` | 「지시하기」(P4 이사 예정) | P2 타이틀에는 없음 |
 | `agent-diff` | 도구 diff 배너 | PLAY 위에. 턴이 디스크를 고쳤을 때만 |
 | `auth-status` | 연결 상태 문구 | |
 | `hello-error` | 한 줄 받기 실패 | 있을 때만 |
