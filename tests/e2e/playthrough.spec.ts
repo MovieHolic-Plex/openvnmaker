@@ -97,8 +97,12 @@ test("저장하고 불러오면 같은 위치로 돌아온다", async ({ page })
   for (let i = 0; i < 6; i += 1) await page.getByTestId("advance-button").click();
   const before = await vnState(page);
   await page.getByTestId("save-button").click();
+  await expect(page.getByTestId("slot-picker")).toBeVisible();
+  await page.getByTestId("slot-save-0").click();
   for (let i = 0; i < 4; i += 1) await page.getByTestId("advance-button").click();
   await page.getByTestId("load-button").click();
+  await expect(page.getByTestId("slot-picker")).toBeVisible();
+  await page.getByTestId("slot-load-0").click();
   const after = await vnState(page);
   expect(after.sceneId).toBe(before.sceneId);
   expect(after.lineIndex).toBe(before.lineIndex);
