@@ -14,7 +14,7 @@ packages/content    시나리오 스키마 · 에셋 매니페스트 · script.j
 tools/imagegen      grok CLI 병렬 이미지 생성기 + 순수 JS PNG 알파 키어
 tools/audio         무의존 DSP 로 OST·효과음 합성, lamejs 로 MP3 인코딩
 tests/e2e           Playwright 플레이스루 · 엣지 · 비주얼 QA
-docs/contract       시나리오·UI 계약 (스토리 바이블, data-testid 표)
+docs/contract       시나리오·UI 계약 (스토리 바이블, data-testid 표, momus 게이트 런북)
 ```
 
 ## 실행
