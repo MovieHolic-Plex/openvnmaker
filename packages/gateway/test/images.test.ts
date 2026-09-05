@@ -116,7 +116,7 @@ test("허용하지 않는 aspectRatio 는 400", async () => {
 test("image/config 는 기본 모델과 공유 쿼터 경고를 준다", async () => {
   const app = createApp({ store: createMemoryStore(null) });
   const body = (await (await app.request("/api/image/config")).json()) as Record<string, unknown>;
-  assert.equal(typeof body["model"], "string");
+  assert.equal(body["model"], "gemini-3.1-flash-image");
   assert.equal(body["quotaShared"], true);
   assert.equal(body["unofficial"], true);
 });

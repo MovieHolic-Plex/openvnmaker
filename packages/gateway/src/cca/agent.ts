@@ -1,7 +1,7 @@
 /**
  * 에이전트 턴용 CCA. 텍스트 생성과 같은 호스트를 쓰고 tools 만 얹는다.
  */
-import { AGENT_MAX_OUTPUT_TOKENS, CCA_HOSTS, GENERATE_TIMEOUT_MS, TEXT_MODEL, ccaHeaders } from "../config.js";
+import { AGENT_MAX_OUTPUT_TOKENS, CCA_HOSTS, GENERATE_TIMEOUT_MS, TEXT_MODEL, TEXT_THINKING_CONFIG, ccaHeaders } from "../config.js";
 import { UpstreamError } from "../http.js";
 import { parseSseChunks } from "./images.js";
 import type { AgentModelInput, AgentModelOutput } from "../agent/run.js";
@@ -99,6 +99,7 @@ export function buildAgentRequest(params: {
         maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
         temperature: 0.4,
         candidateCount: 1,
+        thinkingConfig: { ...TEXT_THINKING_CONFIG },
       },
       tools: [{ functionDeclarations: AGENT_DECLARATIONS }],
       toolConfig: { functionCallingConfig: { mode: "VALIDATED" } },

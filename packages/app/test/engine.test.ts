@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { VnScript } from "@vnmaker/content";
 import { reduce } from "../src/engine/reducer.js";
 import { initialState } from "../src/engine/types.js";
-import { spritesAt } from "../src/engine/selectors.js";
+import { backgroundAt, cgAt, spritesAt } from "../src/engine/selectors.js";
 
 const fixture: VnScript = {
   title: "테스트",
@@ -28,6 +28,53 @@ const fixture: VnScript = {
     { id: "c", background: "title", lines: [{ speaker: null, text: "c" }], next: "missing-scene" },
   ],
 };
+
+test("line CG cues inherit, replace, and explicitly clear the artwork at the correct position", () => {
+  const scene = { ...fixture.scenes[0]!, cgUrl: "/assets/art/scene.png", lines: [
+    { speaker: null, text: "시작" },
+    { speaker: null, text: "전환", cgUrl: "/assets/art/event.png" },
+    { speaker: null, text: "유지" },
+    { speaker: null, text: "배경으로", cgUrl: null },
+    { speaker: null, text: "배경 유지" },
+  ] };
+  assert.equal(cgAt(scene, 0), "/assets/art/scene.png");
+  assert.equal(cgAt(scene, 1), "/assets/art/event.png");
+  assert.equal(cgAt(scene, 2), "/assets/art/event.png");
+  assert.equal(cgAt(scene, 3), undefined);
+  assert.equal(cgAt(scene, 4), undefined);
+});
+
+test("line background cues seek cumulatively, survive inserted dialogue and reset at scene boundaries", () => {
+  const scene = { ...fixture.scenes[0]!, backgroundUrl: "/assets/art/gallery.png", lines: [
+    { speaker: null, text: "전시장" },
+    { speaker: null, text: "식당으로 이동", backgroundUrl: "/assets/art/cafe.png" },
+    { speaker: null, text: "식사" },
+    { speaker: null, text: "강변으로 이동", backgroundUrl: "/assets/art/river.png" },
+    { speaker: null, text: "강변에서 대화" },
+  ] };
+  assert.equal(backgroundAt(scene, -1), "/assets/art/gallery.png");
+  assert.equal(backgroundAt(scene, 0), "/assets/art/gallery.png");
+  assert.equal(backgroundAt(scene, 2), "/assets/art/cafe.png");
+  assert.equal(backgroundAt(scene, 4), "/assets/art/river.png");
+  assert.equal(backgroundAt(scene, 1), "/assets/art/cafe.png", "Seeking backward must not retain a later location.");
+  const inserted = { ...scene, lines: [{ speaker: null, text: "앞에 삽입한 대사" }, ...scene.lines] };
+  assert.equal(backgroundAt(inserted, 1), "/assets/art/gallery.png");
+  assert.equal(backgroundAt(inserted, 2), "/assets/art/cafe.png");
+  assert.equal(backgroundAt(fixture.scenes[1]!, 0), undefined, "A new scene without a URL uses its own manifest background.");
+});
+
+test("background changes remain underneath CG and keep actor expression cues intact", () => {
+  const scene: VnScript["scenes"][number] = { ...fixture.scenes[0]!, backgroundUrl: "/assets/art/start.png", lines: [
+    { speaker: "seorin", text: "손을 잡는다", expression: "smile", cgUrl: "/assets/art/hands.png" },
+    { speaker: null, text: "장소가 바뀐다", backgroundUrl: "/assets/art/river.png" },
+    { speaker: null, text: "CG가 끝난다", cgUrl: null },
+  ] };
+  assert.equal(cgAt(scene, 1), "/assets/art/hands.png");
+  assert.equal(backgroundAt(scene, 1), "/assets/art/river.png");
+  assert.equal(cgAt(scene, 2), undefined);
+  assert.equal(backgroundAt(scene, 2), "/assets/art/river.png");
+  assert.equal(spritesAt(scene, 2)[0]?.expression, "smile");
+});
 
 test("start 는 첫 씬 첫 줄에서 시작한다", () => {
   const s = reduce(fixture, initialState(fixture), { type: "start" });

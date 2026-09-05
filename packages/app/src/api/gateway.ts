@@ -55,12 +55,12 @@ export async function startLogin(): Promise<AuthStatus> {
   return fetchAuthStatus();
 }
 
-export async function generateLine(): Promise<GenerateResponse> {
+export async function generateLine(prompt?: string, signal?: AbortSignal): Promise<GenerateResponse> {
   const res = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-    signal: AbortSignal.timeout(120_000),
+    body: JSON.stringify(prompt === undefined ? {} : { prompt }),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(600_000)]) : AbortSignal.timeout(600_000),
   });
   const body = await readJson(res);
   if (!res.ok) throw new Error(String(body["error"] ?? `generate ${res.status}`));
@@ -103,7 +103,7 @@ export async function runAgent(message: string, nodeId?: string): Promise<AgentR
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, ...(nodeId === undefined ? {} : { nodeId }) }),
-    signal: AbortSignal.timeout(180_000),
+    signal: AbortSignal.timeout(600_000),
   });
   const body = await readJson(res);
   if (!res.ok) throw new Error(String(body["error"] ?? `agent ${res.status}`));
@@ -122,4 +122,28 @@ export async function runAgent(message: string, nodeId?: string): Promise<AgentR
     playFrom: typeof body["playFrom"] === "string" ? body["playFrom"] : null,
     node: body["node"] ?? null,
   };
+}
+
+export interface GenerateImageResult {
+  readonly url: string;
+  readonly name: string;
+}
+
+export async function generateImage(prompt: string, aspectRatio = "16:9", signal?: AbortSignal): Promise<GenerateImageResult> {
+  const res = await fetch("/api/image/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, aspectRatio }),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(600_000)]) : AbortSignal.timeout(600_000),
+  });
+  const body = await readJson(res);
+  if (res.status === 401) throw new Error("로그인이 필요하다");
+  if (!res.ok) throw new Error(String(body["error"] ?? `image ${res.status}`));
+  const images = Array.isArray(body["images"]) ? body["images"] : [];
+  const first = images[0];
+  if (first === null || typeof first !== "object") throw new Error("이미지가 없다");
+  const row = first as Record<string, unknown>;
+  const url = typeof row["url"] === "string" ? row["url"] : "";
+  if (url === "") throw new Error("이미지가 없다");
+  return { url, name: typeof row["name"] === "string" ? row["name"] : "" };
 }

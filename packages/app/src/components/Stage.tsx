@@ -1,69 +1,52 @@
-import { useState } from "react";
-import type { SpriteDirection } from "@vnmaker/content";
+import { validBackgroundUrl, type Character, type SpriteDirection } from "@vnmaker/content";
+import "./art-stage.css";
+import { ArtImage } from "./ArtImage.js";
 
-interface StageProps {
+interface Props {
   readonly background: string;
+  readonly backgroundUrl?: string | undefined;
+  readonly cgUrl?: string | undefined;
+  readonly hideSprites?: boolean | undefined;
+  readonly framing?: "wide" | "close" | "cinematic" | undefined;
+  readonly characters?: readonly Character[] | undefined;
   readonly sprites: readonly SpriteDirection[];
   readonly speaking: string | null;
   readonly chapter: string | null;
   readonly sceneEpoch: number;
   readonly transition: string;
-  readonly cg: string | null;
-  readonly cgHidden: boolean;
-}
-
-/** 한 슬롯 안에서 src 가 바뀌면 구 이미지를 깔고 새 이미지를 페이드인한다. */
-function XfadeImg({ src, testId }: { readonly src: string; readonly testId: string }) {
-  const [stack, setStack] = useState<[string | null, string]>([null, src]);
-  if (stack[1] !== src) setStack([stack[1], src]);
-  const [prev, cur] = stack;
-  return (
-    <>
-      {prev !== null && prev !== cur && (
-        <img key={prev} className="sprite-image is-fading-out" src={prev} alt="" aria-hidden="true" />
-      )}
-      <img
-        key={cur}
-        className="sprite-image is-entering"
-        data-testid={testId}
-        src={cur}
-        alt=""
-        onAnimationEnd={() => setStack((s) => (s[1] === cur ? [null, cur] : s))}
-      />
-    </>
-  );
 }
 
 const slotOrder = ["left", "center", "right"] as const;
 
-export function Stage({ background, sprites, speaking, chapter, sceneEpoch, transition, cg, cgHidden }: StageProps) {
+export function Stage({ background, backgroundUrl, cgUrl, hideSprites, framing = "wide", characters, sprites, speaking, chapter, sceneEpoch, transition }: Props) {
+  const eventArt = validBackgroundUrl(cgUrl) ? cgUrl : null;
   return (
-    <div className="stage-layers">
-      <div key={`${background}-${sceneEpoch}`} className={`bg-layer transition-${transition}`}>
-        <img className="bg-image" data-testid="bg-image" src={`/assets/bg/${background}.png`} alt="" />
-        <div className="bg-wash" />
-      </div>
-      {cg !== null && !cgHidden && (
-        <div className="cg-layer">
-          <img className="cg-image" data-testid="cg-image" src={`/assets/cg/${cg}.png`} alt="" />
-        </div>
-      )}
-      <div className="dialogue-scrim" aria-hidden="true" />
-      {slotOrder.map((slot) => {
+    <div className={`stage-layers transition-${transition} framing-${eventArt ? "cinematic" : framing} ${eventArt ? "has-event-cg" : ""}`} key={sceneEpoch}>
+      <img className="bg-image" data-testid="bg-image" src={eventArt ?? (validBackgroundUrl(backgroundUrl) ? backgroundUrl : `/assets/bg/${background}.png`)} alt="" />
+      <div className="bg-wash" />
+      {!hideSprites && !eventArt && slotOrder.map((slot) => {
         const dir = sprites.find((s) => s.slot === slot);
         if (!dir || dir.character === null) return null;
         const expression = dir.expression ?? "neutral";
-        // 주인공(me)도 일반 id 로 본다. 무대 위에 없는 id 이므로 전원이 dim 된다.
-        const active = speaking !== null && speaking === dir.character;
+        const actor = characters?.find(character => character.id === dir.character);
+        const customImage = actor?.expressionImages?.[expression];
+        const active = speaking === dir.character;
+        const dim = speaking !== null && !active;
         return (
-          <div key={slot} className={`sprite sprite--${slot} ${active ? "is-active" : "is-dim"}`}>
-            <div className="sprite-card" />
-            <XfadeImg src={`/assets/sprite/${dir.character}-${expression}.png`} testId={`sprite-${slot}`} />
+          <div key={slot} className={`sprite sprite--${slot} ${dim ? "is-dim" : "is-active"}`}>
+            <ArtImage
+              className="sprite-image"
+              testId={`sprite-${slot}`}
+              chromaKey={customImage ? actor?.chromaKey : undefined}
+              src={validBackgroundUrl(customImage) ? customImage : `/assets/sprite/${dir.character}-${expression}.png`}
+              alt=""
+            />
           </div>
         );
       })}
+      {(framing === "cinematic" || eventArt) && <div className="cinematic-bars" aria-hidden="true" />}
       {chapter !== null && (
-        <div className="chapter-label" data-testid="chapter-label" key={chapter}>
+        <div className="chapter-label" data-testid="chapter-label">
           <span>{chapter}</span>
         </div>
       )}

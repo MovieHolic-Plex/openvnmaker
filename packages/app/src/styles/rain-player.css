@@ -1,0 +1,31 @@
+.rain-title { position: fixed; inset: 0; overflow: hidden; color: #eef2f4; font-family: "Segoe UI", "Malgun Gothic", sans-serif; }
+.rain-title .title-bg { filter: none; opacity: 1; object-position: 64% 50%; }
+.rain-title-wash { position: absolute; inset: 0; background: linear-gradient(90deg,#0e1b2cf0,#102337aa 39%,#12223513 76%),linear-gradient(0deg,#0e1b2ca8,transparent 45%); }
+.rain-title-header { position: absolute; top: 35px; left: 4.5%; right: 4.5%; display: flex; justify-content: space-between; align-items: center; color: #d4e3e9; font-size: 12px; letter-spacing: 1px; }
+.rain-title-header b { font-size: 8px; font-weight: 500; color: #a2b7c5; border: 1px solid #d3e3ef2a; border-radius: 3px; padding: 4px 5px; margin-left: 10px; }
+.rain-title-header a { color: #c3d5df; font-size: 11px; text-decoration: none; border: 1px solid #c3d5df30; background: #10233250; border-radius: 5px; padding: 9px 13px; letter-spacing: 0; }
+.rain-title-copy { position: absolute; left: 8%; top: 50%; transform: translateY(-45%); max-width: 670px; }
+.rain-title-eyebrow { color: #9dc8d6; letter-spacing: 4px; font-size: 10px; margin: 0 0 22px; }
+.rain-title-copy h1 { font-family: "Noto Serif KR", "Batang", serif; font-size: clamp(34px,4.7vw,72px); line-height: 1.3; letter-spacing: -2px; font-weight: 500; color: #edf3f5; margin: 0 0 19px; text-shadow: 0 4px 40px #06172788; }
+.rain-title-subtitle { color: #a8c2cf; font-size: 13px; letter-spacing: .5px; line-height: 1.9; }
+.rain-title-rule { height: 1px; background: linear-gradient(90deg,#a9c6d568,transparent); width: 290px; margin: 28px 0; }
+.rain-title-description { font-size: 13px; line-height: 2.15; letter-spacing: .1px; color: #abbfcd; }
+.rain-title-copy nav { display: flex; flex-direction: column; gap: 10px; width: 250px; margin-top: 35px; }
+.rain-title-copy button { display: flex; align-items: center; justify-content: space-between; cursor: pointer; font: 13px/1.5 "Segoe UI", "Malgun Gothic",sans-serif; border-radius: 6px; padding: 14px 18px; }
+.rain-start { background: #c0e0df; color: #19303e; border: 1px solid #d1eae6; box-shadow: 0 5px 25px #051a3550; }
+.rain-start:hover { background: #d8eee9; }
+.rain-continue { background: #182e3e60; color: #c3d9e4; border: 1px solid #c3d9e437; }
+.rain-continue:disabled { opacity: .4; cursor: default; }
+.rain-title-meta { color: #91aab9; font-size: 10px; letter-spacing: .4px; margin-top: 19px; }
+.rain-title-footer { display: flex; justify-content: space-between; position: absolute; left: 4.5%; right: 4.5%; bottom: 29px; color: #8aa4b9; font-size: 10px; letter-spacing: .6px; }
+.vn-root .dialogue-box { background: linear-gradient(110deg,#102030ee,#151f33e8); border-color: #a6bcc53b; border-radius: 10px; box-shadow: 0 12px 60px #0006; }
+.vn-root .dialogue-text { color: #e9edf2; font-family: "Segoe UI", "Malgun Gothic",sans-serif; line-height: 1.9; }
+.vn-root .toolbar { color: #a6bbcf; }
+.vn-root .toolbar button { font-family: "Segoe UI", "Malgun Gothic",sans-serif; }
+.vn-root .sprite--center { height: 104%; bottom: -18%; }
+.vn-root .sprite--left, .vn-root .sprite--right { height: 98%; bottom: -17%; }
+.vn-root .sprite.is-active img { animation: none; }
+.vn-root .choice-button { background: #162939ef; color: #e6edf7; border: 1px solid #a7c4db50; border-radius: 7px; font-family: "Segoe UI", "Malgun Gothic",sans-serif; }
+.vn-root .choice-button:hover { background: #304258; border-color: #c5d8e580; }
+@media(max-width:700px) { .rain-title-copy { left: 8%; right: 7%; top: 48%; } .rain-title-copy h1 { font-size: 42px; letter-spacing: -1.5px; } .rain-title-copy nav { width: 230px; margin-top: 28px; } .rain-title-eyebrow { font-size: 8px; letter-spacing: 2.5px; } .rain-title-description { font-size: 11px; } .rain-title-subtitle { font-size: 11px; } .rain-title-header { top: 24px; font-size: 10px; } .rain-title-footer { bottom: 24px; font-size: 8px; } .rain-title-footer span:last-child { display: none; } .rain-title-wash { background: linear-gradient(90deg,#0e1b2ce8,#10233799),linear-gradient(0deg,#0e1b2ca8,transparent); } }
+@media(max-height:600px) and (min-width:701px) { .rain-title-copy { top: 48%; } .rain-title-copy h1 { font-size: 42px; margin-bottom: 9px; } .rain-title-rule { margin-block: 17px; } .rain-title-description { font-size: 11px; } .rain-title-copy nav { margin-top: 18px; flex-direction: row; width: 370px; } .rain-title-copy button { flex: 1; } }

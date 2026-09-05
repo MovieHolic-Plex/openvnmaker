@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * 스프라이트 PNG 의 흰 배경을 알파로 바꾼다.
+ * 스프라이트 PNG 의 배경을 알파로 바꾼다.
  *
  * 왜 직접 쓰는가: 이 머신의 유일한 ffmpeg(playwright 번들)에는 PNG 디코더가 없어서
  * colorkey 필터를 쓸 수 없다. node:zlib 만으로 8bit RGB/RGBA 비인터레이스 PNG 를
  * 읽고 쓰는 건 충분히 짧다.
  *
- * 키잉 방식: 화면 테두리에서 시작해 "거의 흰색" 픽셀을 4방향 플러드필로 따라간다.
- * 바깥과 연결된 흰색만 지우므로 셔츠 하이라이트 같은 내부 흰색은 살아남는다.
- * 경계에서는 흰색과의 거리로 알파를 램프해 수채화 번짐을 보존한다.
+ * 흰 배경: 테두리의 "거의 순백"에서만 시드하고, 연한 살색·크림은 절대 안 지운다.
+ * 예전 soft=46 은 이마/콧대 하이라이트를 얼굴 구멍으로 만들었다.
+ * 초록 배경: G 가 R/B 보다 뚜렷이 큰 픽셀만 지운다.
  *
- * 사용법: node tools/imagegen/png-alpha.mjs <file.png> [...] [--tol 10] [--soft 46]
+ * 사용법: node tools/imagegen/png-alpha.mjs <file.png> [...] [--mode white|green] [--tol 6] [--soft 18]
  */
 import { deflateSync, inflateSync } from "node:zlib";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -130,36 +130,62 @@ export function encodePng({ width, height, data }) {
 }
 
 /** 흰색과의 거리. 0 이면 순백. */
-function whiteDistance(data, index) {
+export function whiteDistance(data, index) {
   const r = data[index];
   const g = data[index + 1];
   const b = data[index + 2];
   return Math.max(255 - r, 255 - g, 255 - b);
 }
 
+/** 애니메 살색·크림 셔츠. 여기로는 플러드가 못 들어간다. */
+export function isProtectedFill(data, index) {
+  const r = data[index];
+  const g = data[index + 1];
+  const b = data[index + 2];
+  if (r >= 252 && g >= 252 && b >= 250) return false;
+  if (r < 168 || g < 118) return false;
+  if (r + 4 < g) return false;
+  if (b > g + 22) return false;
+  const warmth = r - b;
+  const cream = r >= 220 && g >= 200 && b >= 160 && warmth >= 8 && warmth <= 70;
+  const skin = warmth >= 12 && r >= 180 && g >= 130 && r - g <= 55;
+  return cream || skin;
+}
+
 /**
  * 테두리와 연결된 흰 영역만 투명하게 만든다.
- * tol 이하면 완전 투명, soft 까지는 선형 램프, 그 위는 그대로 둔다.
+ * 시드는 거의 순백(tol)만. 팽창은 soft 까지. 살색은 막는다.
+ * 머리칼이 윗변에 붙어 있어도 위에서 시드하지 않는다.
  */
-export function keyBorderWhite(img, tol = 10, soft = 46) {
+export function keyBorderWhite(img, tol = 6, soft = 18, options = {}) {
   const { width, height, data } = img;
+  const skipTop = options.skipTop !== false;
   const visited = new Uint8Array(width * height);
   const stack = [];
   const push = (x, y) => {
     if (x < 0 || y < 0 || x >= width || y >= height) return;
     const p = y * width + x;
     if (visited[p]) return;
-    if (whiteDistance(data, p * 4) > soft) return;
+    const idx = p * 4;
+    if (isProtectedFill(data, idx)) return;
+    if (whiteDistance(data, idx) > soft) return;
     visited[p] = 1;
     stack.push(p);
   };
+  const seed = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const idx = (y * width + x) * 4;
+    if (isProtectedFill(data, idx)) return;
+    if (whiteDistance(data, idx) > tol) return;
+    push(x, y);
+  };
   for (let x = 0; x < width; x += 1) {
-    push(x, 0);
-    push(x, height - 1);
+    if (!skipTop) seed(x, 0);
+    seed(x, height - 1);
   }
   for (let y = 0; y < height; y += 1) {
-    push(0, y);
-    push(width - 1, y);
+    seed(0, y);
+    seed(width - 1, y);
   }
   let cleared = 0;
   while (stack.length > 0) {
@@ -167,7 +193,7 @@ export function keyBorderWhite(img, tol = 10, soft = 46) {
     const x = p % width;
     const y = (p - x) / width;
     const d = whiteDistance(data, p * 4);
-    const alpha = d <= tol ? 0 : Math.round((255 * (d - tol)) / (soft - tol));
+    const alpha = d <= tol ? 0 : Math.round((255 * (d - tol)) / Math.max(1, soft - tol));
     if (alpha < data[p * 4 + 3]) {
       data[p * 4 + 3] = alpha;
       cleared += 1;
@@ -180,31 +206,83 @@ export function keyBorderWhite(img, tol = 10, soft = 46) {
   return cleared;
 }
 
+/** 키잉 뒤에 남는 1px 흰 테두리를 밀어낸다. 살색은 건드리지 않는다. */
+export function defringeWhite(img, tol = 24) {
+  const { width, height, data } = img;
+  const next = Buffer.from(data);
+  let cleared = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const idx = (y * width + x) * 4;
+      if (data[idx + 3] === 0) continue;
+      if (isProtectedFill(data, idx)) continue;
+      if (whiteDistance(data, idx) > tol) continue;
+      let edge = x === 0 || y === 0 || x === width - 1 || y === height - 1;
+      if (!edge) {
+        const n = [
+          ((y * width + x - 1) * 4) + 3,
+          ((y * width + x + 1) * 4) + 3,
+          (((y - 1) * width + x) * 4) + 3,
+          (((y + 1) * width + x) * 4) + 3,
+        ];
+        edge = n.some((a) => data[a] < 16);
+      }
+      if (!edge) continue;
+      next[idx + 3] = 0;
+      cleared += 1;
+    }
+  }
+  next.copy(data);
+  return cleared;
+}
+
+/** 크로마키 초록. 배경이 #00FF00 계열일 때 쓴다. */
+export function keyChromaGreen(img, strength = 40) {
+  const { width, height, data } = img;
+  let cleared = 0;
+  for (let i = 0; i < width * height; i += 1) {
+    const idx = i * 4;
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    const score = g - Math.max(r, b);
+    if (score < strength) continue;
+    const alpha = score >= strength + 30 ? 0 : Math.round(255 * (1 - (score - strength) / 30));
+    if (alpha < data[idx + 3]) {
+      data[idx + 3] = alpha;
+      cleared += 1;
+    }
+  }
+  return cleared;
+}
+
 function arg(name, fallback) {
   const i = process.argv.indexOf(name);
-  return i === -1 ? fallback : Number(process.argv[i + 1]);
+  return i === -1 ? fallback : process.argv[i + 1];
 }
 
 const isMain = process.argv[1] !== undefined && import.meta.url.endsWith(process.argv[1].replaceAll("\\", "/").split("/").pop());
 
 if (isMain) {
-  const tol = arg("--tol", 10);
-  const soft = arg("--soft", 46);
+  const mode = arg("--mode", "white");
+  const tol = Number(arg("--tol", "6"));
+  const soft = Number(arg("--soft", "18"));
   const files = process.argv.slice(2).filter((a) => a.endsWith(".png"));
   if (files.length === 0) {
-    console.error("사용법: node tools/imagegen/png-alpha.mjs <file.png> [...] [--tol 10] [--soft 46]");
+    console.error("사용법: node tools/imagegen/png-alpha.mjs <file.png> [...] [--mode white|green] [--tol 6] [--soft 18]");
     process.exit(2);
   }
   let failed = 0;
   for (const file of files) {
     try {
       const img = decodePng(readFileSync(file));
-      const cleared = keyBorderWhite(img, tol, soft);
+      const cleared = mode === "green" ? keyChromaGreen(img) : keyBorderWhite(img, tol, soft);
+      if (mode !== "green") defringeWhite(img);
       writeFileSync(file, encodePng(img));
       const pct = ((cleared / (img.width * img.height)) * 100).toFixed(1);
-      console.log(`[alpha] ${file} ${img.width}x${img.height} 투명 ${pct}%`);
+      console.log(`[alpha] ${file} ${img.width}x${img.height} mode=${mode} 투명 ${pct}%`);
       if (cleared === 0) {
-        console.error(`[warn] ${file} 에서 지운 픽셀이 없다 — 배경이 흰색이 아닐 수 있다`);
+        console.error(`[warn] ${file} 에서 지운 픽셀이 없다 — 배경이 ${mode} 가 아닐 수 있다`);
         failed += 1;
       }
     } catch (err) {

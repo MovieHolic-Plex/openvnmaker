@@ -6,6 +6,16 @@ import { createApp } from "../src/app.js";
 import { createMemoryStore } from "../src/auth/credentials.js";
 import { GENERATE_MAX_OUTPUT_TOKENS, TEXT_MODEL } from "../src/config.js";
 
+test("텍스트 기본은 gemini-3.8-flash-high 이고 thinking 은 HIGH, 한도는 40000", () => {
+  assert.equal(TEXT_MODEL, "gemini-3.8-flash-high");
+  assert.equal(GENERATE_MAX_OUTPUT_TOKENS, 40000);
+  const body = buildGenerateRequest({ prompt: "한 줄", projectId: "aicode-consumers" }) as Record<string, any>;
+  assert.equal(body["model"], "gemini-3.8-flash-high");
+  assert.equal(body["request"].generationConfig.maxOutputTokens, 40000);
+  assert.equal(body["request"].generationConfig.thinkingConfig.includeThoughts, false);
+  assert.equal(body["request"].generationConfig.thinkingConfig.thinkingLevel, "HIGH");
+});
+
 test("봉투는 project, requestType:agent, TEXT modalities 없음", () => {
   const body = buildGenerateRequest({ prompt: "한 줄", projectId: "aicode-consumers", model: "m" }) as Record<
     string,
@@ -92,14 +102,14 @@ test("빈 prompt 여도 로그인만 없으면 401 이다 (기본 프롬프트�
   assert.equal(res.status, 401);
 });
 
-test("prompt 가 2000자를 넘으면 400", async () => {
+test("prompt 가 한도를 넘으면 400", async () => {
   const app = createApp({
     store: createMemoryStore({ refresh: "r", access: "a", expires: Date.now() + 600_000, projectId: "p" }),
   });
   const res = await app.request("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt: "가".repeat(2001) }),
+    body: JSON.stringify({ prompt: "가".repeat(16_001) }),
   });
   assert.equal(res.status, 400);
 });

@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test --import tsx test/engine.test.ts test/hello.test.ts test/slots.test.ts"
+    "test": "node --test --import tsx test/engine.test.ts test/hello.test.ts test/studio.test.ts test/production.test.ts test/assets.test.ts"
   },
   "dependencies": {
     "react": "19.2.8",

@@ -33,6 +33,7 @@ export interface SaveData {
   readonly lineIndex: number;
   readonly affection: number;
   readonly savedAt: number;
+  readonly script?: VnScript;
 }
 
 export function initialState(script: VnScript): VnState {

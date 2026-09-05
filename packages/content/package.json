@@ -7,7 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./script": "./data/script.json"
+    "./script": "./data/rain-blank.json"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

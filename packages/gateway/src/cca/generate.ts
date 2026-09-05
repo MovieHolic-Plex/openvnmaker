@@ -2,7 +2,7 @@
  * agy 텍스트 생성. 이미지와 같은 v1internal:streamGenerateContent 를 쓰고
  * responseModalities 는 넣지 않는다(기본 TEXT). project 는 필수다.
  */
-import { CCA_HOSTS, GENERATE_MAX_OUTPUT_TOKENS, GENERATE_TIMEOUT_MS, TEXT_MODEL, ccaHeaders } from "../config.js";
+import { CCA_HOSTS, GENERATE_MAX_OUTPUT_TOKENS, GENERATE_TIMEOUT_MS, TEXT_MODEL, TEXT_THINKING_CONFIG, ccaHeaders } from "../config.js";
 import { UpstreamError } from "../http.js";
 import { parseSseChunks } from "./images.js";
 
@@ -44,6 +44,7 @@ export function buildGenerateRequest(params: GenerateParams): Record<string, unk
         maxOutputTokens: GENERATE_MAX_OUTPUT_TOKENS,
         temperature: 0.9,
         candidateCount: 1,
+        thinkingConfig: { ...TEXT_THINKING_CONFIG },
       },
     },
     requestType: "agent",

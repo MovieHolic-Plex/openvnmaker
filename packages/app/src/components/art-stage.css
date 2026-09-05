@@ -1,0 +1,6 @@
+.stage-layers.framing-close .bg-image { transform: scale(1.13); }
+.stage-layers.has-event-cg .bg-wash { background: linear-gradient(180deg, rgba(7, 9, 15, .04) 35%, rgba(7, 9, 15, .22)); }
+.cinematic-bars { position: absolute; inset: 0; pointer-events: none; z-index: 5; border-top: clamp(10px, 3vh, 30px) solid #080a11; border-bottom: clamp(10px, 3vh, 30px) solid #080a11; }
+.studio .cinematic-bars { border-width: 14px 0; }
+.sprite canvas.sprite-image { display: block; max-width: 100%; max-height: 100%; width: auto; height: 100%; object-fit: contain; }
+.sprite.is-dim canvas { filter: brightness(.65) saturate(.8); }

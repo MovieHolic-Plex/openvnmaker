@@ -1,6 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Node IncomingMessage 를 Hono fetch 로 넘긴다.
@@ -56,5 +60,14 @@ export default defineConfig({
   plugins: [react(), mountGateway()],
   server: { host: "127.0.0.1", port: 5173, strictPort: true },
   preview: { host: "127.0.0.1", port: 4173, strictPort: true },
-  build: { target: "es2022", assetsInlineLimit: 0 },
+  build: {
+    target: "es2022",
+    assetsInlineLimit: 0,
+    rollupOptions: {
+      input: {
+        main: resolve(here, "index.html"),
+        studio: resolve(here, "studio.html"),
+      },
+    },
+  },
 });

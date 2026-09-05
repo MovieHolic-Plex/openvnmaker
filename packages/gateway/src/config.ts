@@ -43,25 +43,25 @@ export const REQUEST_TIMEOUT_MS = 30_000;
 /**
  * 이미지 생성 경로도 agy 다(사용자 결정 2026-08-31). 텍스트와 같은 계정+프로젝트 카운터를
  * 쓰므로 삽화를 뽑으면 코딩 할당량이 같이 줄고, Antigravity 데스크톱 앱과도 같은 통이다.
- * 기본 모델은 실측 카탈로그에 실제로 있는 id 다 — 참조 구현의 gemini-3-pro-image 는
- * 이 계정 카탈로그에 없다. 카탈로그가 바뀌면 VNMAKER_IMAGE_MODEL 로 덮어써라.
+ * 기본 모델은 실측 카탈로그에 있는 전용 이미지 id 다. gemini-3.8-flash-* 는
+ * supportsImages 가 켜져 있어도 입력 비전이고, IMAGE 모달리티로는 바이트가 안 온다
+ * (2026-09-04: aspectRatio 있으면 400, 없으면 텍스트만). 카탈로그에 3.8-flash-image 는 없다.
  */
 export const IMAGE_MODEL = process.env.VNMAKER_IMAGE_MODEL ?? "gemini-3.1-flash-image";
 /** 이미지는 텍스트보다 훨씬 오래 걸린다. 30s 로는 못 받는다. */
 export const IMAGE_TIMEOUT_MS = Number(process.env.VNMAKER_IMAGE_TIMEOUT_MS ?? 180_000);
 
 /**
- * W1 텍스트 기본 모델. 카탈로그에 있는 id 만 쓴다.
- * `gemini-3.7-flash-low` 는 thinking 이 maxOutputTokens 를 거의 다 먹어서
- * 대사 한 글자만 남긴다(실측 thoughtsTokenCount 251 / candidatesTokenCount 1).
- * thinking 플래그가 없는 `gemini-2.5-flash` 가 한 줄용이다. 덮어쓰려면 VNMAKER_TEXT_MODEL.
+ * 텍스트/에이전트 기본 모델. agy 카탈로그의 3.8 flash 노력 라우팅 id.
+ * high = thinking HIGH. 장편 초안을 한 방에 뽑기 위해 출력 한도는 40k.
+ * 덮어쓰려면 VNMAKER_TEXT_MODEL.
  */
-export const TEXT_MODEL = process.env.VNMAKER_TEXT_MODEL ?? "gemini-2.5-flash";
-export const GENERATE_TIMEOUT_MS = Number(process.env.VNMAKER_GENERATE_TIMEOUT_MS ?? 90_000);
-/** 한 줄만 받는다. 이 캡을 올리면 소설을 통째로 뽑아 쿼터를 태운다. */
-export const GENERATE_MAX_OUTPUT_TOKENS = 512;
-/** 에이전트 도구 인자는 비트 배열이라 한 줄보다 길다. */
-export const AGENT_MAX_OUTPUT_TOKENS = 2048;
+export const TEXT_MODEL = process.env.VNMAKER_TEXT_MODEL ?? "gemini-3.8-flash-high";
+export const GENERATE_TIMEOUT_MS = Number(process.env.VNMAKER_GENERATE_TIMEOUT_MS ?? 600_000);
+export const GENERATE_PROMPT_MAX = Number(process.env.VNMAKER_GENERATE_PROMPT_MAX ?? 16_000);
+export const GENERATE_MAX_OUTPUT_TOKENS = Number(process.env.VNMAKER_GENERATE_MAX_OUTPUT_TOKENS ?? 40_000);
+export const AGENT_MAX_OUTPUT_TOKENS = Number(process.env.VNMAKER_AGENT_MAX_OUTPUT_TOKENS ?? 40_000);
+export const TEXT_THINKING_CONFIG = { includeThoughts: false, thinkingLevel: "HIGH" } as const;
 export const AGENT_MAX_TOOL_CALLS = 12;
 export const HELLO_PROMPT =
   "한국 대학 캠퍼스 여름 오후를 배경으로 한 비주얼 노벨 내레이션을 한 줄만 써라. " +

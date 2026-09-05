@@ -137,8 +137,20 @@ test("본문 JSON 도구를 읽는다", () => {
 
 test("에이전트 봉투에 tools 와 VALIDATED 가 있다", () => {
   const body = buildAgentRequest({ prompt: "p", projectId: "x", history: [] }) as {
-    request: { tools: { functionDeclarations: unknown[] }[]; toolConfig: { functionCallingConfig: { mode: string } } };
+    model: string;
+    request: {
+      tools: { functionDeclarations: unknown[] }[];
+      toolConfig: { functionCallingConfig: { mode: string } };
+      generationConfig: {
+        maxOutputTokens: number;
+        thinkingConfig: { includeThoughts: boolean; thinkingLevel: string };
+      };
+    };
   };
+  assert.equal(body.model, "gemini-3.8-flash-high");
+  assert.equal(body.request.generationConfig.maxOutputTokens, 40000);
+  assert.equal(body.request.generationConfig.thinkingConfig.includeThoughts, false);
+  assert.equal(body.request.generationConfig.thinkingConfig.thinkingLevel, "HIGH");
   assert.equal(body.request.toolConfig.functionCallingConfig.mode, "VALIDATED");
   assert.equal(body.request.tools[0]?.functionDeclarations.length, 5);
 });

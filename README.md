@@ -1,101 +1,61 @@
-# vnmaker
+# VN Maker — 비가 남긴 빈칸
 
-AI 네이티브 비주얼 노벨 저작 스튜디오. 로컬 Hono 게이트웨이가 모델 접근을 감싸고,
-Vite + React 플레이어가 시나리오를 재생한다. 함께 들어 있는 작품은 한국 대학 캠퍼스를
-배경으로 한 수채화 중편 「여름의 잔상」이다.
+직접 집필한 장편 비주얼 노벨과 로컬 편집기입니다. 기본 작품은 **〈비가 남긴 빈칸〉** 하나입니다. 원고와 이미지가 프로젝트에 포함되어 있으며 플레이·편집에 계정 연결이나 내부 AI 호출이 필요하지 않습니다.
 
-## 구성
+## 완성된 작품
 
-```
-packages/app        Vite + React VN 플레이어 (엔진은 React 밖의 순수 리듀서)
-packages/gateway    Hono 게이트웨이 — Antigravity OAuth, 모델 카탈로그 + 할당량 프록시
-packages/ir         스토리 IR — 노드 JSON, upsert_beats/connect, PLAY 컴파일
-packages/content    시나리오 스키마 · 에셋 매니페스트 · script.json · 콘텐츠 체커
-tools/imagegen      grok CLI 병렬 이미지 생성기 + 순수 JS PNG 알파 키어
-tools/audio         무의존 DSP 로 OST·효과음 합성, lamejs 로 MP3 인코딩
-tests/e2e           Playwright 플레이스루 · 엣지 · 비주얼 QA
-docs/contract       시나리오·UI 계약 (스토리 바이블, data-testid 표)
-```
+- 20개 장면, 809개 대사·서술 행, 공백 제외 39,251자
+- 3개 선택 장면, 8개 경로, 2개 엔딩. 한 경로에서 17개 장면을 거칩니다.
+- 경로별 33,345–33,421자: **320자/분 기준 약 104.2–104.4분**. 빠른 400자/분 기준은 약 83.4–83.6분이며 실제 시간은 읽기 속도에 따라 달라집니다.
+- 직접 생성한 이미지 26개: 배경 12장, 이벤트 CG 2장, 배우 3명의 표정 12장
+- 대사별 표정 전환 78회, CG 등장·종료와 후일담 장소 전환을 대사에 연결
+- 기존 합성 BGM 5곡과 효과음 10종 포함
+
+작품 원본은 `packages/content/data/rain-blank.json`, 이미지 원본은 `packages/app/public/assets/art/`에 있습니다. 생성 원화의 프롬프트와 제작 기록은 `docs/qa/studio-longform-2026-09-05/`에 보관합니다.
 
 ## 실행
 
-```bash
+```sh
 pnpm install
-pnpm dev              # 플레이어 + 게이트웨이 마운트  http://127.0.0.1:5173
-pnpm dev:gateway      # 독립 게이트웨이 http://127.0.0.1:51120 (qa 스크립트용)
+pnpm --filter @vnmaker/app dev --host 127.0.0.1 --port 5184 --strictPort
 ```
 
-게이트웨이는 **127.0.0.1 전용**이다. OAuth 토큰을 프록시하므로 `0.0.0.0` 에 바인딩하거나
-터널로 열지 않는다. 원격 작업은 SSH 포트포워딩으로 한다.
+- 편집기: http://127.0.0.1:5184/studio.html
+- 플레이어: http://127.0.0.1:5184/
 
-```bash
-ssh -L 51120:127.0.0.1:51120 -L 5173:127.0.0.1:5173 <host>
+일반 `pnpm dev`의 기본 포트는 5173입니다. 이번 검증은 다른 로컬 앱과의 충돌을 피하기 위해 5184를 사용합니다.
+
+## 편집
+
+프로젝트 홈에서 분량과 연결 상태를 확인하고, 장면 편집에서 원고·화자·표정·배경·음악·선택지를 수정합니다. 대사별 배경과 CG 전환을 지정할 수 있습니다. **집중 모드**는 미리보기를 넓히고, **Ctrl+K**는 809행의 원고까지 검색해 해당 줄을 엽니다.
+
+**원고·분량**은 시작부터 각 엔딩까지의 실제 원고를 계산합니다. 240/320/400자 읽기 속도를 비교할 수 있습니다. **스토리 맵**에서는 연결을 확인하고, **아트 디렉션**에서는 작품에 등록된 배경·CG·표정을 찾아 배치합니다.
+
+편집 내용은 브라우저에 자동 저장합니다. JSON 내보내기/가져오기를 지원하며, 실행 취소/다시 실행은 현재 세션의 최근 60회 변경을 보관합니다. **여기서 플레이**는 선택한 대사부터 재생하고 일반 플레이 저장과 별도로 저장합니다.
+
+새 작품 배포판을 처음 열 때 이전 기본 프로젝트·제작 체크포인트·플레이 저장을 한 번 정리합니다. 이후 편집 내용은 새로고침해도 유지합니다. 브라우저 저장은 원본 JSON 파일을 직접 덮어쓰지 않습니다.
+
+## 빌드와 검증
+
+```sh
+pnpm typecheck
+pnpm test
+pnpm build
+# 실행 중인 5184 서버에서 Windows PowerShell:
+$env:VNMAKER_APP_PORT='5184'
+node node_modules/@playwright/test/cli.js test
 ```
 
-## 인증
+배포 파일은 `packages/app/dist/`입니다. 정적 HTTP 서버로 제공하면 작품과 편집기를 실행할 수 있습니다. 이미지와 오디오도 함께 포함됩니다. JSON만 별도 복사하면 이미지 파일은 포함되지 않으므로 작품을 옮길 때는 전체 빌드 폴더를 옮기세요.
 
-```bash
-curl -X POST http://127.0.0.1:51120/api/auth/login   # 브라우저 동의
-curl http://127.0.0.1:51120/api/auth/status
-curl http://127.0.0.1:51120/api/models               # 만료 시 자동 갱신
-curl -X POST http://127.0.0.1:51120/api/generate     # W1 한 줄. prompt 생략 시 기본 프롬프트
-curl http://127.0.0.1:51120/api/project/nodes/hello   # W1–2 IR 노드 (한 줄 받기가 디스크에 남김)
-curl -X POST http://127.0.0.1:51120/api/agent/run \
-  -H 'Content-Type: application/json' \
-  -d '{"message":"이 대사만 더 차갑게","nodeId":"hello"}'
-```
+[시각·기능 검증 기록](docs/qa/studio-longform-2026-09-05/README.md) · [분기별 원고 검수](docs/qa/studio-longform-2026-09-05/route-audit.md)
 
-타이틀의 **Google 연결** / **한 줄 받기** / **지시하기** 가 같은 게이트웨이다. `pnpm dev` 만 띄우면 Vite 가 `/api` 를 붙인다. **한 줄 받기** 는 `~/.vnmaker/projects/default/story/nodes/hello.json` 을 만들고, **지시하기** 는 닫힌 도구(`upsert_beats` · `connect` · `play_from`)만으로 그 파일을 고친다. 모델에게 자유 파일 쓰기를 주지 않는다.
+## 구성
 
-자격증명은 `~/.vnmaker/auth.json` 의 `google-antigravity` 키에 저장된다.
-**비공식 어댑터다.** 구글 공식 연동이 아니고, tier 는 항상 `free-tier` 로 응답한다.
-할당량 카운터는 계정+프로젝트 단위 서버 값이라서 Antigravity 데스크톱 앱과 같은 통을 쓴다.
+- `packages/app`: React 편집기, 플레이어, 순수 리듀서 기반 엔진
+- `packages/content`: 원고 스키마, 파서, 장면·연결 검사
+- `packages/ir`: 노드 기반 이야기 IR 및 컴파일러
+- `packages/gateway`: 기존 로컬 모델 연동 모듈. 현재 플레이·편집 화면은 호출하지 않습니다.
+- `tools/assemble-rain-novel.mjs`: 직접 집필한 두 원고를 이미지·표정·전환 연출과 조립
 
-Windows 에서는 `chmod 0600` 이 무시되므로 `%USERPROFILE%\.vnmaker` 폴더 ACL 을 직접 좁혀야 한다.
-
-## 이미지 생성
-
-삽화도 같은 agy 경로로 뽑는다. 게이트웨이가 봉투(`responseModalities:["IMAGE"]`, `project` 필수)를
-감추고 결과를 `~/.vnmaker/images` 에 파일로 떨어뜨린다. 응답에 base64 를 싣지 않는다.
-
-```bash
-curl http://127.0.0.1:51120/api/image/config          # 기본 모델 · 허용 비율
-curl -X POST http://127.0.0.1:51120/api/image/generate \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"수채화 캠퍼스 배경, 인물 없음","aspectRatio":"16:9","name":"bg-campus"}'
-curl -o bg.jpg http://127.0.0.1:51120/api/image/file/bg-campus.jpg
-
-pnpm qa:image                                         # 실계정 1회 호출 실측 (증거 evidence/image/)
-pnpm qa:generate                                      # W1 텍스트 한 줄 실측 (증거 evidence/generate/)
-pnpm qa:hello                                         # 타이틀에서 한 줄 받기 + IR 파일 (Vite 가 떠 있어야 함)
-```
-
-기본 모델은 `gemini-3.1-flash-image` 다. 이 계정 카탈로그에 실제로 있는 id 를 골랐고,
-바뀌면 `VNMAKER_IMAGE_MODEL` 로 덮어쓴다. **이 카운터는 코딩 할당량과 같은 통이다** —
-삽화를 뽑으면 텍스트 몫이 같이 줄고 Antigravity 데스크톱 앱과도 공유된다. CI 에 물리지 마라.
-
-## 검증
-
-```bash
-pnpm typecheck        # 전 패키지 tsc
-pnpm test             # content 체커 + 게이트웨이 + 엔진 단위 테스트
-pnpm build            # gateway tsc + app vite build
-pnpm e2e              # Playwright (dev 서버 자동 기동)
-```
-
-## 에셋 재생성
-
-```bash
-node tools/imagegen/run.mjs --concurrency 5      # grok CLI 로 배경·스프라이트
-node tools/imagegen/run.mjs --only bg-title --force
-node tools/audio-gen.mjs                        # OST 5곡 + 효과음 10종
-node tools/audio-check.mjs                      # MP3 프레임을 파싱해 길이 검증
-```
-
-이 머신의 유일한 ffmpeg(playwright 번들)에는 PNG 디코더도 오디오 인코더도 없다.
-그래서 알파 키잉과 MP3 인코딩을 각각 `tools/imagegen/png-alpha.mjs` 와 `lamejs` 로 처리한다.
-
-## 콘텐츠 정책
-
-등장 인물은 전원 성인 대학생이다. 아동·미성년·교복은 텍스트와 이미지 어디에도 등장하지 않는다.
-`packages/content/test/script.test.ts` 가 금지 토큰을 기계적으로 막는다.
+배우 원화는 녹색 배경의 생성 원본을 보관하며, 앱은 공유 WebGL 합성기로 표시할 때 배경을 제거합니다. 각 썸네일마다 별도 WebGL 컨텍스트를 만들지 않습니다. 이미지 파일 자체에 수동 비트맵 후처리를 적용하지 않았습니다.

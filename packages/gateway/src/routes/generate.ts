@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { GatewayDeps } from "../app.js";
 import { ensureFreshAccess } from "../auth/tokens.js";
 import { generateText } from "../cca/generate.js";
-import { HELLO_PROMPT, TEXT_MODEL } from "../config.js";
+import { GENERATE_PROMPT_MAX, HELLO_PROMPT, TEXT_MODEL } from "../config.js";
 
 interface GenerateBody {
   readonly prompt?: unknown;
@@ -28,7 +28,7 @@ export function generateRoutes({ store }: GatewayDeps): Hono {
     }
 
     const prompt = typeof body.prompt === "string" && body.prompt.trim() !== "" ? body.prompt.trim() : HELLO_PROMPT;
-    if (prompt.length > 2000) return c.json({ error: "prompt 가 너무 길다" }, 400);
+    if (prompt.length > GENERATE_PROMPT_MAX) return c.json({ error: "prompt 가 너무 길다" }, 400);
 
     let access: string;
     let projectId: string;

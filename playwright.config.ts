@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = 5173;
+const PORT = Number(process.env.VNMAKER_APP_PORT ?? 5173);
 
 export default defineConfig({
   testDir: "./tests/e2e",

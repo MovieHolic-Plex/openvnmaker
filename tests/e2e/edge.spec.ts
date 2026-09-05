@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { vnState } from "./helpers.js";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("vnmaker.edition", "rain-blank-2026-09-05-r1"));
+  await page.route("**/api/**", route => new URL(route.request().url()).pathname.startsWith("/api/") ? route.abort() : route.continue());
+});
+
 test("저장 데이터가 깨져 있어도 타이틀에서 부팅한다", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (err) => errors.push(String(err)));
