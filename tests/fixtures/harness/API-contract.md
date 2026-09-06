@@ -57,7 +57,17 @@ No helper connects to a real provider or reads account credentials.
   events, rollback observation and delete-request cleanup. Gate before a transaction;
   never hold a native IDB transaction open by awaiting external work or keepalive polling.
 - `exerciseProcess` uses an isolated IPC child, explicit prepare/commit tokens and a
-  real SQLite commit before acknowledging. `exerciseInfrastructure` also exercises
+  real SQLite commit before acknowledging. Its 10s work deadline does not cancel the
+  pre-armed terminal `close` observation. On work failure it terminates a running
+  child, then awaits `close` (including stdio closure) with a fresh 5s cleanup bound
+  before rethrowing the original work failure or allowing Sandbox removal. Successful
+  work still requires exit code zero. If terminal cleanup itself exceeds its bound,
+  `AggregateError` reports `FIXTURE_PROCESS_CLEANUP_TIMEOUT` and retains the original
+  work failure in `errors`; this is a cleanup failure, not a removal-success receipt.
+  No sleep, removal retry or persistent-live-process-leak assumption is involved.
+  `process.test.ts` uses IPC-controlled real-child aborts and independent reaping to
+  cover stop/preparation failure, zero/nonzero exit and the infrastructure caller.
+  `exerciseInfrastructure` also exercises
   loopback HTTP and fresh Chromium IDB contexts. Receipts record process exit, closed
   browser/server, deleted databases and removed runtime directories.
 
