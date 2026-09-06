@@ -11,8 +11,11 @@
     "dev": "pnpm --filter @vnmaker/app dev",
     "dev:gateway": "pnpm --filter @vnmaker/gateway dev",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test && node tools/audio-check.mjs && node --test tools/momus-gate-doctor.test.mjs tools/audio/reproducibility.test.mjs",
+    "typecheck": "pnpm -r typecheck && pnpm typecheck:harness-fixtures",
+    "typecheck:harness-fixtures": "tsc --noEmit -p tests/fixtures/harness/tsconfig.json",
+    "test:harness-fixtures": "node --test --import tsx tests/fixtures/harness/*.test.ts tools/qa/harness-fixtures.test.ts",
+    "qa:harness-fixtures": "tsx tools/qa/harness-fixtures.ts",
+    "test": "pnpm -r test && node tools/audio-check.mjs && node --test tools/momus-gate-doctor.test.mjs tools/audio/reproducibility.test.mjs && pnpm test:harness-fixtures",
     "e2e": "playwright test",
     "e2e:crash": "playwright test tests/e2e/editor-crash.spec.ts",
     "e2e:portable": "playwright test tests/e2e/authoring.spec.ts tests/e2e/state-authoring.spec.ts tests/e2e/arithmetic.spec.ts tests/e2e/export-bundle.spec.ts tests/e2e/editor-session.spec.ts tests/e2e/autosave-status.spec.ts tests/e2e/project-recovery.spec.ts tests/e2e/audio-settings.spec.ts tests/e2e/music-fade.spec.ts tests/e2e/manuscript-search.spec.ts tests/e2e/runtime-credits.spec.ts tests/e2e/player-keyboard.spec.ts tests/e2e/settings-modal.spec.ts tests/e2e/history-modal.spec.ts tests/e2e/choice-keyboard.spec.ts tests/e2e/editor-resize.spec.ts tests/e2e/mobile-stage.spec.ts",
@@ -28,6 +31,9 @@
   "devDependencies": {
     "@playwright/test": "1.62.1",
     "@types/node": "26.4.0",
+    "@vnmaker/content": "workspace:*",
+    "@vnmaker/harness": "workspace:*",
+    "tsx": "4.23.13",
     "lamejs": "1.2.1",
     "typescript": "5.9.3"
   }
