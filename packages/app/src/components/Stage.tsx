@@ -1,6 +1,7 @@
 import { characterImage, validBackgroundUrl, type Character, type SpriteDirection } from "@vnmaker/content";
 import "./art-stage.css";
 import { ArtImage } from "./ArtImage.js";
+import { resolveRuntimeAsset } from "../storage/runtimeBase.js";
 
 interface Props {
   readonly background: string;
@@ -22,7 +23,7 @@ export function Stage({ background, backgroundUrl, cgUrl, hideSprites, framing =
   const eventArt = validBackgroundUrl(cgUrl) ? cgUrl : null;
   return (
     <div className={`stage-layers transition-${transition} framing-${eventArt ? "cinematic" : framing} ${eventArt ? "has-event-cg" : ""}`} key={sceneEpoch}>
-      <img className="bg-image" data-testid="bg-image" src={eventArt ?? (validBackgroundUrl(backgroundUrl) ? backgroundUrl : `/assets/bg/${background}.png`)} alt="" />
+      <img className="bg-image" data-testid="bg-image" src={resolveRuntimeAsset(eventArt ?? (validBackgroundUrl(backgroundUrl) ? backgroundUrl : `/assets/bg/${background}.png`))} alt="" />
       <div className="bg-wash" />
       {!hideSprites && !eventArt && slotOrder.map((slot) => {
         const dir = sprites.find((s) => s.slot === slot);
