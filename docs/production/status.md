@@ -4,7 +4,9 @@ The target is an open-source authoring tool that can produce independently distr
 
 ## Narrative identity groundwork — 2026-09-06
 
-Optional scene-scoped line and choice IDs are validated and preserved through normal editing. New projects and missing/copied entries receive IDs; legacy manuscripts remain readable. The authoring/ZIP restoration browser flow preserved the line identity, and identity-only additions no longer trigger native cue/logic warnings. See [identity semantics and migration work still required](narrative-identities.md). Save restoration and native execution anchors are not yet ID-based.
+Optional scene-scoped line and choice IDs are validated and preserved through normal editing. New projects and missing/copied entries receive IDs; legacy manuscripts remain readable. Native release comparison now matches by ID when both lists are fully identified, independently for lines and choices; partial or legacy lists keep the content/position fallback. Duplicate-caption reordering is distinguished from surviving-entry changes, and added/removed IDs are reported even at unchanged counts. See [identity semantics and migration work still required](narrative-identities.md). Save restoration and native execution anchors are not yet ID-based.
+
+The resumed verification added exact boundary coverage: 57 comparator tests pass and all eight targeted in-memory mutants fail. A new real native baseline/revised build, direct browser report download/hash check, two authoring regressions, strict comparator-test diagnostics and final workspace checks passed. The linked report records local evidence and the unavailable pixel-level screenshot inspection; this is not a save-migration or production-readiness claim.
 
 ## Web save snapshot visibility — 2026-09-06
 
@@ -42,7 +44,7 @@ The complete current portable browser suite passed: 29 tests in 3.3 minutes on t
 
 Music fade changes now produce a dedicated playback-review finding with old/new durations instead of only an informational library-metadata entry. Omission and an explicit current default of 1.2 seconds compare equally; this normalization describes current manuscript semantics, not historical engine implementations.
 
-Menu comparison previously skipped surviving choice logic whenever count/order had changed. It now reports these changes independently. Unique surviving captions match corresponding choices across reorders, so a pure reorder does not invent a changed result; duplicate/ambiguous captions fall back to positional comparison. This remains heuristic because choices have no permanent IDs.
+At this checkpoint, menu comparison stopped skipping surviving choice logic when count/order changed. Unique surviving captions matched corresponding choices across reorders, while duplicate/ambiguous captions fell back to positions. This remains the fallback for incompletely identified lists; the later [identity-aware comparison](narrative-identities.md) uses permanent IDs when both lists have complete unique identities.
 
 Seven comparator tests and full workspace checks passed. A real Ren'Py baseline and revised build exercised music fade 1.2→2.4 seconds, reordered choices and a changed numeric outcome, alongside scene/line changes. Both the preflight API and hashed report inside the final native ZIP contained `music-fade`, `choice-order` and `choice-logic`. The 390px report screenshot was inspected. Evidence: `evidence/native-review-coverage-{e2e,typecheck,tests,build}.log`, `evidence/native-compatibility/{jobs,preflight,build-report}.json`; baseline `b8ed7419-2156-466d-8e60-bf736b9f2672`, revised job `99b602f3-3faf-4977-aec6-8500d5c29306`, report SHA-256 `0c9dba8c2f8d6b63ecb4f2117fb095613f92c64c77b98a45600637814c425184`.
 
