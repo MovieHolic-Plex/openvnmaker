@@ -1,0 +1,15 @@
+# Persistent narrative identity groundwork
+
+Lines and choices now accept an optional `id`. Identity is scoped by scene and entry kind: `(scene.id, line.id)` and `(scene.id, choice.id)` are separate namespaces. IDs are 1–96 ASCII letters, digits, underscores or hyphens, starting with a letter or digit. The parser rejects invalid or duplicate IDs within the corresponding scene list, while manuscripts without IDs remain accepted.
+
+New blank projects receive IDs immediately. The normal editor edit path assigns IDs to missing entries and preserves existing IDs. Reusing an entry twice within the same list preserves the first instance and assigns a new ID to the copied instance. Allocation reserves existing IDs before generating new ones and fails after bounded unsuccessful attempts. The transformation does not mutate its input and returns the original script when no changes are needed.
+
+Unmodified imported or bundled legacy manuscripts are not rewritten on load. Their next ordinary edit assigns missing IDs as part of that undoable change. Undoing that first assignment also removes those IDs; redoing restores them, while a new edit from the pre-assignment state allocates new IDs. JSON replacement or external tools that omit IDs cannot preserve their earlier identities automatically. Moving an entry to another scene changes its scoped identity even if its ID string is retained.
+
+Native release comparison ignores identity-only additions when comparing cue/choice logic, preventing first-time assignment from being presented as an audiovisual change. It still uses its existing content/position heuristics and does not restore saves by these IDs. Native generated execution statements have not been migrated to stable identity anchors.
+
+Validation covers idempotence, preservation across text edits and reordering, fresh copied-entry identity, invalid/duplicate rejection and JSON round-trip. A browser authoring flow verifies the same line ID through artwork/actor edits, project switching, ZIP export and restoration in a new browser context. Typed choice/condition authoring also passed. Evidence is retained under `evidence/narrative-ids-*`.
+
+The additional browser test verifies that adding a line, undoing, redoing and reloading preserves both the original and newly allocated IDs. Its first run used a nonexistent test ID for Redo and timed out; the corrected accessible-button locator passed in 4.3 seconds. In total four targeted browser tests passed across the final runs, plus workspace typecheck/unit tests and build. Logs: `narrative-ids-browser.log`, `narrative-ids-undo-verified.log`, `narrative-ids-typecheck-final.log`, `narrative-ids-tests-final.log`, `narrative-ids-build-final.log` under `evidence/`.
+
+This is infrastructure for release migration, not a migration feature or compatibility guarantee. Old saves with no identities cannot be assigned trustworthy historical identities by matching text alone. Explicit migration policy, removed-entry handling, stable native execution anchors and actual old-save update tests remain required.
