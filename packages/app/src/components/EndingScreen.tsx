@@ -1,4 +1,5 @@
 import { validBackgroundUrl } from "@vnmaker/content";
+import { resolveRuntimeAsset } from "../storage/runtimeBase.js";
 
 interface Props {
   readonly title: string;
@@ -14,7 +15,7 @@ interface Props {
 export function EndingScreen({ title, affection, background = "title", backgroundUrl, cgUrl, showAffection = true, onBack, onCredits }: Props) {
   return (
     <section className="ending-screen" data-testid="ending-screen">
-      <img className="ending-bg" src={validBackgroundUrl(cgUrl) ? cgUrl : validBackgroundUrl(backgroundUrl) ? backgroundUrl : `/assets/bg/${background}.png`} alt="" />
+      <img className="ending-bg" src={resolveRuntimeAsset(validBackgroundUrl(cgUrl) ? cgUrl : validBackgroundUrl(backgroundUrl) ? backgroundUrl : `/assets/bg/${background}.png`)} alt="" />
       <div className="ending-wash" />
       <div className="ending-plate">
         <p className="ending-eyebrow">ENDING</p>
