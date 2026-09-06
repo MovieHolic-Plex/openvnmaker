@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { choiceClientKey, choiceEffectsCompatible, insertClientKeys, uniqueDefinedIdentities } from "./boundary-refinements.js";
 import { assertNever, choiceIdSchema, gapSchema, hashSchema, identifierSchema, lineIdSchema, sceneIdSchema, textSchema } from "./primitives.js";
 import { choiceSetSchema, lineSetSchema, newChoiceSchema, newLineSchema, projectMetadataSchema, sceneMetadataSchema } from "./content-contracts.js";
 
@@ -17,19 +18,21 @@ function fieldPatch<S extends z.ZodRawShape>(schema: z.ZodObject<S>) {
     }).readonly();
 }
 export const linePatchSchema = fieldPatch(lineSetSchema);
-export const choicePatchSchema = fieldPatch(choiceSetSchema);
+export const choicePatchSchema = fieldPatch(choiceSetSchema).refine(patch => choiceEffectsCompatible(patch.set));
 export const projectPatchSchema = fieldPatch(projectMetadataSchema);
 export const scenePatchSchema = fieldPatch(sceneMetadataSchema);
 export const newLineEntrySchema = z.strictObject({ clientKey: identifierSchema, value: newLineSchema }).readonly();
 export const newChoiceEntrySchema = z.strictObject({ clientKey: identifierSchema, value: newChoiceSchema }).readonly();
 export const lineOperationSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ kind: z.literal("insert"), gap: gapSchema, lines: z.array(newLineEntrySchema).min(1).max(100).readonly() }),
+  z.strictObject({ kind: z.literal("insert"), gap: gapSchema, lines: z.array(newLineEntrySchema).min(1).max(100)
+    .refine(lines => uniqueDefinedIdentities(lines.map(line => line.clientKey))).readonly() }),
   z.strictObject({ kind: z.literal("update"), lineId: lineIdSchema, expectedEntityHash: hashSchema, patch: linePatchSchema }),
   z.strictObject({ kind: z.literal("delete"), lineId: lineIdSchema, expectedEntityHash: hashSchema }),
   z.strictObject({ kind: z.literal("move"), lineId: lineIdSchema, expectedEntityHash: hashSchema, gap: gapSchema }),
 ]).readonly();
 export const choiceOperationSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ kind: z.literal("insert"), gap: gapSchema, choices: z.array(newChoiceEntrySchema).min(1).max(8).readonly() }),
+  z.strictObject({ kind: z.literal("insert"), gap: gapSchema, choices: z.array(newChoiceEntrySchema).min(1).max(8)
+    .refine(choices => uniqueDefinedIdentities(choices.map(choice => choice.clientKey))).readonly() }),
   z.strictObject({ kind: z.literal("update"), choiceId: choiceIdSchema, expectedEntityHash: hashSchema, patch: choicePatchSchema }),
   z.strictObject({ kind: z.literal("delete"), choiceId: choiceIdSchema, expectedEntityHash: hashSchema }),
   z.strictObject({ kind: z.literal("move"), choiceId: choiceIdSchema, expectedEntityHash: hashSchema, gap: gapSchema }),
@@ -40,7 +43,8 @@ export const choiceEntrySchema = z.discriminatedUnion("kind", [
 ]).readonly();
 export const sceneExitSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("next"), sceneId: sceneIdSchema }),
-  z.strictObject({ kind: z.literal("choices"), choices: z.array(choiceEntrySchema).min(1).max(8).readonly() }),
+  z.strictObject({ kind: z.literal("choices"), choices: z.array(choiceEntrySchema).min(1).max(8)
+    .refine(choices => uniqueDefinedIdentities(choices.map(choiceClientKey))).readonly() }),
   z.strictObject({ kind: z.literal("ending"), title: textSchema }),
   z.strictObject({ kind: z.literal("planned"), sceneId: sceneIdSchema }),
 ]).readonly();
@@ -54,8 +58,10 @@ function mutationCount(operation: LineOperation | ChoiceOperation): number {
   }
 }
 export const lineOperationsSchema = z.array(lineOperationSchema).min(1).max(100).refine(operations =>
-  operations.reduce((count, operation) => count + mutationCount(operation), 0) <= 100).readonly();
+  operations.reduce((count, operation) => count + mutationCount(operation), 0) <= 100)
+  .refine(operations => uniqueDefinedIdentities(operations.flatMap(insertClientKeys))).readonly();
 export const choiceOperationsSchema = z.array(choiceOperationSchema).min(1).max(100).refine(operations =>
-  operations.reduce((count, operation) => count + mutationCount(operation), 0) <= 100).readonly();
+  operations.reduce((count, operation) => count + mutationCount(operation), 0) <= 100)
+  .refine(operations => uniqueDefinedIdentities(operations.flatMap(insertClientKeys))).readonly();
 export type SceneExit = z.infer<typeof sceneExitSchema>;
 export type ChoiceEntry = z.infer<typeof choiceEntrySchema>;

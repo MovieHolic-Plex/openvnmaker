@@ -84,8 +84,9 @@ test("preserves null and typed cues when a line is updated", () => {
 test("rejects expanded batches when nested inserts exceed one hundred changes", () => {
   // Given
   const operation = { kind: "insert", gap: { leftId: null, rightId: null }, lines: Array.from({ length: 51 }, (_, index) => ({ clientKey: String(index), value: { speaker: null, text: "x" } })) };
+  const second = { ...operation, lines: operation.lines.map(entry => ({ ...entry, clientKey: `second-${entry.clientKey}` })) };
   // When / Then
-  assert.equal(toolArgumentsSchemas.patch_lines.safeParse({ sceneId: "s", operations: [operation, operation] }).success, false);
+  assert.equal(toolArgumentsSchemas.patch_lines.safeParse({ sceneId: "s", operations: [operation, second] }).success, false);
 });
 
 test("rejects state declarations when the same ID appears in two groups", () => {

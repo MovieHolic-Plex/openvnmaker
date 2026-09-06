@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BACKGROUNDS, BGM, SFX, validAudioUrl, validBackgroundUrl } from "@vnmaker/content";
+import { choiceEffectsCompatible, uniqueDefinedIdentities } from "./boundary-refinements.js";
 import { characterIdSchema, choiceIdSchema, identifierSchema, lineIdSchema, sceneIdSchema, textSchema } from "./primitives.js";
 
 export const flagIdSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/i)
@@ -40,8 +41,6 @@ export const choiceSetSchema = z.strictObject({
   set: storyFlagsSchema.optional(), add: z.record(flagIdSchema, z.number()).readonly().optional(),
   disable: z.boolean().optional(), affection: z.number().optional(),
 });
-const choiceEffectsCompatible = (choice: z.infer<typeof choiceSetSchema>) =>
-  Object.keys(choice.add ?? {}).every(key => !Object.hasOwn(choice.set ?? {}, key));
 export const newChoiceSchema = choiceSetSchema.refine(choiceEffectsCompatible).readonly();
 export const choiceSchema = choiceSetSchema.extend({ id: choiceIdSchema.optional(), cond: z.literal("").optional() })
   .refine(choiceEffectsCompatible).readonly();
@@ -53,8 +52,11 @@ export const sceneMetadataSchema = z.strictObject({
   sprites: spritesSchema.optional(),
 });
 export const sceneSchema = sceneMetadataSchema.extend({
-  id: sceneIdSchema, lines: z.array(lineSchema).min(1).max(2000).readonly(),
-  choices: z.array(choiceSchema).max(8).readonly().optional(), next: sceneIdSchema.optional(), ending: textSchema.optional(),
+  id: sceneIdSchema, lines: z.array(lineSchema).min(1).max(2000)
+    .refine(lines => uniqueDefinedIdentities(lines.map(line => line.id))).readonly(),
+  choices: z.array(choiceSchema).max(8)
+    .refine(choices => uniqueDefinedIdentities(choices.map(choice => choice.id))).readonly().optional(),
+  next: sceneIdSchema.optional(), ending: textSchema.optional(),
 }).readonly();
 export const characterSchema = z.strictObject({
   id: characterIdSchema, name: identifierSchema, color: z.string().regex(/^#[a-f0-9]{6}$/i), bio: textSchema,

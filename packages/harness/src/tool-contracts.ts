@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { candidateIdSchema, characterIdSchema, hashSchema, HarnessError, identifierSchema, lineIdSchema, positiveIntegerSchema, revisionSchema, sceneIdSchema, textSchema, uuidSchema } from "./primitives.js";
+import { assertNever, candidateIdSchema, characterIdSchema, hashSchema, HarnessError, identifierSchema, lineIdSchema, positiveIntegerSchema, revisionSchema, sceneIdSchema, textSchema, uuidSchema } from "./primitives.js";
+import { choiceClientKey, uniqueDefinedIdentities } from "./boundary-refinements.js";
 import { characterSchema, flagIdSchema, flagValueSchema, sceneMetadataSchema } from "./content-contracts.js";
 import { artRoleSchema, artTargetMatchesRole, artTargetSchema, canonSectionSchema } from "./production-contracts.js";
 import { choiceOperationsSchema, lineOperationsSchema, newLineEntrySchema, projectPatchSchema, sceneExitSchema, scenePatchSchema } from "./operation-contracts.js";
@@ -21,7 +22,15 @@ export const toolArgumentsSchemas = {
   propose_canon: z.strictObject({ sectionId: identifierSchema, expectedSectionHash: hashSchema, replacement: canonSectionSchema, reason: textSchema }),
   patch_project: z.strictObject({ expectedMetadataHash: hashSchema, patch: projectPatchSchema }),
   patch_state: stateArguments,
-  create_scene: z.strictObject({ sceneId: sceneIdSchema, planBeatId: identifierSchema, metadata: sceneMetadataSchema.readonly(), lines: z.array(newLineEntrySchema).min(1).max(100).readonly(), exit: sceneExitSchema }),
+  create_scene: z.strictObject({ sceneId: sceneIdSchema, planBeatId: identifierSchema, metadata: sceneMetadataSchema.readonly(), lines: z.array(newLineEntrySchema).min(1).max(100).readonly(), exit: sceneExitSchema })
+    .refine(scene => {
+      const lineKeys = scene.lines.map(line => line.clientKey);
+      switch (scene.exit.kind) {
+        case "choices": return uniqueDefinedIdentities([...lineKeys, ...scene.exit.choices.map(choiceClientKey)]);
+        case "next": case "ending": case "planned": return uniqueDefinedIdentities(lineKeys);
+        default: return assertNever(scene.exit);
+      }
+    }),
   delete_scene: z.strictObject({ sceneId: sceneIdSchema, expectedSceneHash: hashSchema }),
   patch_lines: z.strictObject({ sceneId: sceneIdSchema, operations: lineOperationsSchema }),
   patch_choices: z.strictObject({ sceneId: sceneIdSchema, operations: choiceOperationsSchema }),
