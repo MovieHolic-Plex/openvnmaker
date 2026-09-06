@@ -183,23 +183,23 @@ for (const base of ["/", "/games/medium/", "/studio-player.html?preview=1"]) {
     { variant: "background", art: { backgroundUrl }, selected: backgroundUrl },
     { variant: "fallback", art: {}, selected: "/assets/bg/title.png" },
   ]) {
-    test(`ending-root-and-subpath selects ${variant} when played at ${base}`, async () => {
+    test(`ending-root-and-subpath selects ${variant} when played at ${base}`, async ({ page }) => {
       // Given: distinct CG/background/fallback choices in the real built player.
       const source = parseScript({ ...manuscript, characters: [], scenes: [{ id: "first", background: "title", ...art,
         lines: [{ speaker: null, text: firstText }], ending: "Fixture end" }] });
       const expected = studio ? selected : base + selected.slice(1);
       const label = `ending-${studio ? "studio" : base === "/" ? "root" : "subpath"}-${variant}`;
-      const browser = await chromium.launch(); const context = await browser.newContext(); const page = await context.newPage();
+      // The runner owns tracing and resource teardown, including setup failures.
+      page.context().once("close", () => cleanup.push(`${label}: runner-owned context closed`));
       const network: string[] = [], media: string[] = [], errors: string[] = [], actions: string[] = [];
       page.on("request", request => { network.push(request.url()); if (["image", "media"].includes(request.resourceType())) media.push(request.url()); });
       page.on("pageerror", error => errors.push(error.message));
       page.on("console", message => { if (message.text().startsWith("runtime-qa:")) actions.push(message.text()); });
-      await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
-      await instrument(page);
-      files.set("/project.json", encode(JSON.stringify(source)));
-      if (studio) await page.addInitScript(script => sessionStorage.setItem("vnmaker.previewScript", JSON.stringify(script)), source);
       let actual: string | null = null;
       try {
+        await instrument(page);
+        files.set("/project.json", encode(JSON.stringify(source)));
+        if (studio) await page.addInitScript(script => sessionStorage.setItem("vnmaker.previewScript", JSON.stringify(script)), source);
         const ready = page.waitForEvent("console", { predicate: message => message.text() === "runtime-qa:advance-ready", timeout: 15_000 });
         actions.push(`navigate ${origin}${base}`); await page.goto(origin + base);
         if (!studio) { actions.push("click [data-testid=start-button]"); await page.getByTestId("start-button").click(); }
@@ -225,8 +225,6 @@ for (const base of ["/", "/games/medium/", "/studio-player.html?preview=1"]) {
         files.set("/project.json", encode(JSON.stringify(manuscript)));
         await writeFile(resolve(evidence, `${label}-network.json`), JSON.stringify(network, null, 2));
         await writeFile(resolve(evidence, `${label}-actions.json`), JSON.stringify({ actions, errors, expected, actual }, null, 2));
-        await context.tracing.stop({ path: resolve(evidence, `${label}-trace.zip`) });
-        await context.close(); await browser.close(); cleanup.push(`${label}: context and Chromium closed`);
       }
     });
   }
