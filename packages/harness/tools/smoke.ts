@@ -43,6 +43,18 @@ assert.throws(() => parseSnapshotJson(createRunCommandSchema, JSON.stringify({ .
   error => error instanceof HarnessError && error.code === "INVALID_INPUT");
 console.log("PASS B1 preview and imported JSON identities, including scoped reuse");
 
+// Given: valid cast entries differ in both ID and name; scenes retain scoped line-ID reuse.
+const firstCharacter = { id: "ada", name: "Ada", color: "#112233", bio: "First character" };
+const secondCharacter = { id: "bea", name: "Bea", color: "#445566", bio: "Second character" };
+const castPreview = { ...preview, cast: [firstCharacter, secondCharacter] };
+assert.deepEqual(parsePreviewSnapshot(castPreview), castPreview);
+// When / Then: the public parser rejects the same payload after only one ID changes.
+assert.throws(() => parsePreviewSnapshot({ ...castPreview,
+  cast: [firstCharacter, { ...secondCharacter, id: firstCharacter.id }] }),
+  error => error instanceof HarnessError && error.code === "INVALID_INPUT"
+    && error.details.some(issue => issue.path.length === 1 && issue.path[0] === "cast"));
+console.log("PASS B1 preview cast identity rejection and distinct-ID preservation");
+
 // Given / When / Then: patch compatibility is local; retained candidate fields are unknown.
 const update = { ...envelope, tool: "patch_choices", arguments: { sceneId: "start", operations: [
   { kind: "update", choiceId: "choice", expectedEntityHash: hash, patch: { set: { set: { score: 1 }, add: { score: 2 } }, unset: [] } },

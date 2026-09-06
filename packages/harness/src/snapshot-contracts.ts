@@ -18,7 +18,8 @@ export const previewSnapshotSchema = z.strictObject({
   candidateId: candidateIdSchema, candidateRevision: revisionSchema, sourceHead: projectHeadSchema, snapshotHash: hashSchema,
   entry: previewEntrySchema, materializedScenes: z.array(sceneSchema).min(1).max(300)
     .refine(scenes => uniqueDefinedIdentities(scenes.map(scene => scene.id))).readonly(),
-  cast: z.array(characterSchema).max(200).readonly(), initialFlags: storyFlagsSchema,
+  cast: z.array(characterSchema).max(200)
+    .refine(cast => uniqueDefinedIdentities(cast.map(character => character.id))).readonly(), initialFlags: storyFlagsSchema,
   assetBindings: z.array(approvedArtBindingSchema).readonly(), boundaries: z.array(previewBoundarySchema).readonly(),
   includedUnitHashes: z.array(hashSchema).readonly(),
 }).readonly();
