@@ -2,11 +2,12 @@ import {LibraryArchiveButton} from "./LibraryArchiveButton.js";
 import {createPortal} from "react-dom";
 import {useEffect,useRef,useState} from "react";
 import {parseScript,type VnScript} from "@vnmaker/content";
-import {listProjects,newProject,saveProject,type SavedProject} from "./projects.js";
+import {listProjects,newProject,type SavedProject} from "./projects.js";
+import {projectRepository,type ProjectRepository} from "./projectRepository.js";
 import {Icon} from "./Icon.js";
 import {restoreProjectBundle} from "./restoreBundle.js";
 import {folderPickerSupported,openProjectFolder,pickProjectFolder,saveProjectFolder,type FolderProgress} from "./projectFolder.js";
-export function ProjectLibrary({script,activeId,onSwitch}:{script:VnScript;activeId:string;onSwitch:(id:string,script:VnScript)=>void}){
+export function ProjectLibrary({script,activeId,repository,onSwitch}:{script:VnScript;activeId:string;repository:ProjectRepository|null;onSwitch:(repository:ProjectRepository)=>void}){
   const[open,setOpen]=useState(false),[rows,setRows]=useState<SavedProject[]>([]),[busy,setBusy]=useState(false),[title,setTitle]=useState(""),[error,setError]=useState("");
   const [damagedCount,setDamagedCount]=useState(0);
   const dialog=useRef<HTMLDialogElement>(null),latest=useRef(script);latest.current=script;
@@ -22,8 +23,8 @@ export function ProjectLibrary({script,activeId,onSwitch}:{script:VnScript;activ
     finally{setBusy(false);}
   }
   useEffect(()=>{if(open)dialog.current?.showModal();else dialog.current?.close();},[open]);
-  async function show(){setOpen(true);setBusy(true);setError("");try{await saveProject(activeId,script);const listing=await listProjects();setRows(listing.projects);setDamagedCount(listing.damagedCount);}catch(error){setError(String(error));}finally{setBusy(false);}}
-  async function switchProject(id:string,next:VnScript){const before=script;setBusy(true);setError("");try{const validated=parseScript(next);await saveProject(activeId,before);await saveProject(id,validated);if(latest.current!==before)throw new Error("대기 중 원고가 변경되어 작품 전환을 중단했습니다.");onSwitch(id,validated);setOpen(false);setTitle("");}catch(error){setError(String(error));}finally{setBusy(false);}}
+  async function show(){setOpen(true);setBusy(true);setError("");try{await repository?.flushCurrent();const listing=await listProjects();setRows(listing.projects);setDamagedCount(listing.damagedCount);}catch(error){setError(String(error));}finally{setBusy(false);}}
+  async function switchProject(id:string,next:VnScript){const before=script;setBusy(true);setError("");try{const validated=parseScript(next);await repository?.flushCurrent();const target=rows.some(row=>row.id===id)?await projectRepository.open(id):await projectRepository.create(id,validated);if(latest.current!==before)throw new Error("대기 중 원고가 변경되어 작품 전환을 중단했습니다.");onSwitch(target);setOpen(false);setTitle("");}catch(error){setError(String(error));}finally{setBusy(false);}}
   function duplicateProject(source:VnScript){const {nativeSaveId,...copy}=source;void switchProject(crypto.randomUUID(),{...copy,title:`${source.title} · 복사`});}
   async function restore(file:File){const before=script;setBusy(true);setError("");try{const next=await restoreProjectBundle(file);if(latest.current!==before)throw new Error("복원 중 원고가 변경되어 전환을 중단했습니다.");await switchProject(crypto.randomUUID(),next);}catch(error){setError(String(error));}finally{setBusy(false);}}
   return <><button className="studio-button" type="button" data-testid="project-library" onClick={()=>void show()}><Icon name="file"/>내 작품</button>

@@ -26,6 +26,9 @@ importers:
       '@vnmaker/content':
         specifier: workspace:*
         version: link:../content
+      '@vnmaker/harness':
+        specifier: workspace:*
+        version: link:../harness
       '@vnmaker/ir':
         specifier: workspace:*
         version: link:../ir
