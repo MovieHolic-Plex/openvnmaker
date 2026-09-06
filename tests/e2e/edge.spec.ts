@@ -12,6 +12,8 @@ test("저장 데이터가 깨져 있어도 타이틀에서 부팅한다", async 
 
   await page.addInitScript(() => {
     window.localStorage.setItem("vnmaker:save", '{"bogus":');
+    window.localStorage.setItem("vnmaker:auto", '{"sceneId":null,"lineIndex":"wrong"}');
+    window.localStorage.setItem("vnmaker:slots", '[null,{"sceneId":"s01","lineIndex":-1},"broken"]');
     window.localStorage.setItem("vnmaker:settings", "not json at all");
   });
   await page.goto("/");
@@ -31,7 +33,9 @@ test("설정 값이 범위를 벗어나 있으면 안전한 값으로 잘린다"
   await expect(page.getByTestId("settings-panel")).toBeVisible();
   const bgm = await page.getByTestId("bgm-volume").inputValue();
   const speed = await page.getByTestId("text-speed").inputValue();
+  const sfx = await page.getByTestId("sfx-volume").inputValue();
   expect(Number(bgm)).toBeLessThanOrEqual(1);
+  expect(Number(sfx)).toBeGreaterThanOrEqual(0);
   expect(Number(speed)).toBeGreaterThanOrEqual(5);
 });
 

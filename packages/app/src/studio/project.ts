@@ -23,8 +23,9 @@ export interface HistoryState {
   readonly group?: string | undefined;
   readonly at?: number;
 }
-export type HistoryAction = { type: "edit"; script: VnScript; group?: string; at: number } | { type: "undo" | "redo" };
+export type HistoryAction = { type: "edit"; script: VnScript; group?: string; at: number } | { type: "undo" | "redo" } | {type:"reset";script:VnScript};
 export function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
+  if(action.type==="reset")return {past:[],present:action.script,future:[]};
   if (action.type === "undo") {
     const previous = state.past.at(-1);
     return previous ? { past: state.past.slice(0, -1), present: previous, future: [state.present, ...state.future] } : state;

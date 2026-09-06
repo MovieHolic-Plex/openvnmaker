@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { BACKGROUNDS, BGM, SFX } from "./manifest.js";
+import { validCharacterKey } from "./characters.js";
 import type { VnScript } from "./schema.js";
 
 /** 금지 토큰. 콘텐츠 정책: 성인 대학생만 등장하고 교복은 나오지 않는다. */
@@ -63,17 +64,17 @@ export function findManifestViolations(script: VnScript): string[] {
     if (!(scene.background in BACKGROUNDS)) problems.push(`${scene.id}: 배경 ${scene.background}`);
     if (scene.bgm !== undefined && !(scene.bgm in BGM)) problems.push(`${scene.id}: bgm ${scene.bgm}`);
     for (const dir of scene.sprites ?? []) {
-      if (dir.character !== null && !SLUG.test(dir.character)) problems.push(`${scene.id}: 인물 ${dir.character}`);
-      if (dir.expression !== undefined && !SLUG.test(dir.expression)) {
+      if (dir.character !== null && !validCharacterKey(dir.character)) problems.push(`${scene.id}: 인물 ${dir.character}`);
+      if (dir.expression !== undefined && !validCharacterKey(dir.expression)) {
         problems.push(`${scene.id}: 표정 ${dir.expression}`);
       }
     }
     for (const line of scene.lines) {
       if (line.sfx !== undefined && !(line.sfx in SFX)) problems.push(`${scene.id}: sfx ${line.sfx}`);
-      if (line.expression !== undefined && !SLUG.test(line.expression)) {
+      if (line.expression !== undefined && !validCharacterKey(line.expression)) {
         problems.push(`${scene.id}: 표정 ${line.expression}`);
       }
-      if (line.speaker !== null && !SLUG.test(line.speaker)) {
+      if (line.speaker !== null && !validCharacterKey(line.speaker)) {
         problems.push(`${scene.id}: 화자 ${line.speaker}`);
       }
     }

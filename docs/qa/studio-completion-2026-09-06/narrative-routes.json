@@ -1,0 +1,242 @@
+[
+  {
+    "path": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06a",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s12a",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s17a"
+    ],
+    "flags": {
+      "heard_seorin": true,
+      "heard_dohyun": false,
+      "joined_mirae": true,
+      "joined_seorin": false
+    },
+    "lines": 697,
+    "characters": 34244,
+    "minutes": 107.0125
+  },
+  {
+    "path": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06a",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s12a",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s17b"
+    ],
+    "flags": {
+      "heard_seorin": true,
+      "heard_dohyun": false,
+      "joined_mirae": true,
+      "joined_seorin": false
+    },
+    "lines": 697,
+    "characters": 34208,
+    "minutes": 106.9
+  },
+  {
+    "path": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06a",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s12b",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s17a"
+    ],
+    "flags": {
+      "heard_seorin": true,
+      "heard_dohyun": false,
+      "joined_mirae": false,
+      "joined_seorin": true
+    },
+    "lines": 697,
+    "characters": 34091,
+    "minutes": 106.534375
+  },
+  {
+    "path": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06a",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s12b",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s17b"
+    ],
+    "flags": {
+      "heard_seorin": true,
+      "heard_dohyun": false,
+      "joined_mirae": false,
+      "joined_seorin": true
+    },
+    "lines": 697,
+    "characters": 34052,
+    "minutes": 106.4125
+  },
+  {
+    "path": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06b",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s12a",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s17a"
+    ],
+    "flags": {
+      "heard_seorin": false,
+      "heard_dohyun": true,
+      "joined_mirae": true,
+      "joined_seorin": false
+    },
+    "lines": 696,
+    "characters": 34265,
+    "minutes": 107.078125
+  },
+  {
+    "path": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06b",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s12a",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s17b"
+    ],
+    "flags": {
+      "heard_seorin": false,
+      "heard_dohyun": true,
+      "joined_mirae": true,
+      "joined_seorin": false
+    },
+    "lines": 696,
+    "characters": 34209,
+    "minutes": 106.903125
+  },
+  {
+    "path": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06b",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s12b",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s17a"
+    ],
+    "flags": {
+      "heard_seorin": false,
+      "heard_dohyun": true,
+      "joined_mirae": false,
+      "joined_seorin": true
+    },
+    "lines": 696,
+    "characters": 34112,
+    "minutes": 106.6
+  },
+  {
+    "path": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06b",
+      "s07",
+      "s08",
+      "s09",
+      "s10",
+      "s11",
+      "s12b",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s17b"
+    ],
+    "flags": {
+      "heard_seorin": false,
+      "heard_dohyun": true,
+      "joined_mirae": false,
+      "joined_seorin": true
+    },
+    "lines": 696,
+    "characters": 34053,
+    "minutes": 106.415625
+  }
+]

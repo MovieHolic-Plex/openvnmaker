@@ -1,7 +1,8 @@
+import {audioPath} from "@vnmaker/content";
 export function bgmSrc(id: string): string {
-  return `/assets/audio/bgm/${id}.mp3`;
+  return audioPath(id,"bgm");
 }
 
 export function sfxSrc(id: string): string {
-  return `/assets/audio/sfx/${id}.mp3`;
+  return audioPath(id,"sfx");
 }

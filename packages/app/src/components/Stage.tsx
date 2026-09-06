@@ -1,4 +1,4 @@
-import { validBackgroundUrl, type Character, type SpriteDirection } from "@vnmaker/content";
+import { characterImage, validBackgroundUrl, type Character, type SpriteDirection } from "@vnmaker/content";
 import "./art-stage.css";
 import { ArtImage } from "./ArtImage.js";
 
@@ -29,7 +29,8 @@ export function Stage({ background, backgroundUrl, cgUrl, hideSprites, framing =
         if (!dir || dir.character === null) return null;
         const expression = dir.expression ?? "neutral";
         const actor = characters?.find(character => character.id === dir.character);
-        const customImage = actor?.expressionImages?.[expression];
+        const customImage = dir.poseUrl ?? characterImage(actor ?? {id:dir.character,name:"",bio:"",color:"#ffffff"},expression);
+        if(!customImage || !validBackgroundUrl(customImage))return null;
         const active = speaking === dir.character;
         const dim = speaking !== null && !active;
         return (
@@ -37,8 +38,8 @@ export function Stage({ background, backgroundUrl, cgUrl, hideSprites, framing =
             <ArtImage
               className="sprite-image"
               testId={`sprite-${slot}`}
-              chromaKey={customImage ? actor?.chromaKey : undefined}
-              src={validBackgroundUrl(customImage) ? customImage : `/assets/sprite/${dir.character}-${expression}.png`}
+              chromaKey={actor?.chromaKey}
+              src={customImage}
               alt=""
             />
           </div>

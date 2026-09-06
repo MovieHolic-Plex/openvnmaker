@@ -1,4 +1,4 @@
-import { BACKGROUNDS, EXPRESSIONS, parseScript, validBackgroundUrl, type Artwork, type Scene, type VnScript } from "@vnmaker/content";
+import { BACKGROUNDS, EXPRESSIONS, characterImage, characterExpressions, parseScript, validBackgroundUrl, type Artwork, type Scene, type VnScript } from "@vnmaker/content";
 
 export const DEFAULT_ART_DIRECTION = "서정적인 현대 한국의 미술대학. 정교한 애니메이션 배경 미술, 손으로 그린 질감, 깊은 원근과 풍부한 소품. 젖은 청보라 밤과 따뜻한 앰버 실내광의 대비. 인물의 의상과 머리 모양은 장면마다 일관되게 유지. 화면 하단에는 대사를 위한 여백. 글자·로고·워터마크 없음.";
 export const ART_RECOVERY_KEY = "vnmaker.studio.art-recovery.v1";
@@ -38,13 +38,13 @@ export function libraryAssets(script: VnScript): Artwork[] {
   const base: Artwork[] = [
     ...CURATED_ART,
     ...Object.entries(BACKGROUNDS).map(([id, name]) => ({ id: `builtin-bg-${id}`, name, kind: "background" as const, url: `/assets/bg/${id}.png` })),
-    ...script.characters.flatMap(character => EXPRESSIONS.map(expression => ({ id: `builtin-${character.id}-${expression}`, name: `${character.name} · ${expression}`, kind: "character" as const, characterId: character.id, expression, url: `/assets/sprite/${character.id}-${expression}.png` }))),
+    ...script.characters.flatMap(character => characterExpressions(character).flatMap(expression => {const url=characterImage(character,expression);return url?[{ id: `builtin-${character.id}-${expression}`, name: `${character.name} · ${expression}`, kind: "character" as const, characterId: character.id, expression, url }]:[];})),
   ];
   return [...(script.assets ?? []), ...base.filter(asset => !script.assets?.some(saved => saved.id === asset.id))];
 }
 
 export function assetUsage(script: VnScript, asset: Artwork): number {
-  if (asset.kind === "character") return script.characters.filter(character => Object.values(character.expressionImages ?? {}).includes(asset.url)).length;
+  if (asset.kind === "character") return script.characters.filter(character => Object.values(character.expressionImages ?? {}).includes(asset.url)).length + script.scenes.filter(scene=>scene.sprites?.some(sprite=>sprite.poseUrl===asset.url)||scene.lines.some(line=>line.sprites?.some(sprite=>sprite.poseUrl===asset.url))).length;
   return script.scenes.filter(scene => scene.backgroundUrl === asset.url || scene.cgUrl === asset.url || scene.lines.some(line=>line.cgUrl === asset.url || line.backgroundUrl === asset.url) || (!scene.backgroundUrl && asset.url === `/assets/bg/${scene.background}.png`)).length;
 }
 
@@ -57,6 +57,11 @@ export function applyArtwork(script: VnScript, sceneId: string, asset: Artwork):
   let next = registerArtwork(script, asset);
   if (asset.kind === "character") {
     if (!asset.characterId) throw new Error("먼저 캐릭터를 선택하세요.");
+    if(!asset.expression){
+      const scene=script.scenes.find(scene=>scene.id===sceneId);
+      if(!scene?.sprites?.some(sprite=>sprite.character===asset.characterId))throw new Error("현재 장면에 이 배우를 배치한 뒤 포즈를 적용하세요.");
+      return {...next,scenes:next.scenes.map(scene=>scene.id===sceneId?{...scene,sprites:(scene.sprites??[]).map(sprite=>sprite.character===asset.characterId?{...sprite,poseUrl:asset.url}:sprite)}:scene)};
+    }
     next = { ...next, characters: next.characters.map(character => character.id === asset.characterId ? { ...character, expressionImages: { ...character.expressionImages, [asset.expression ?? "neutral"]: asset.url } } : character) };
   } else {
     if (!script.scenes.some(scene => scene.id === sceneId)) throw new Error("이미지를 적용할 장면을 찾을 수 없습니다.");

@@ -5,6 +5,8 @@ import { fetchAuthStatus, generateImage } from "../api/gateway.js";
 import { Icon } from "./Icon.js";
 import { applyArtwork, artPrompt, assetUsage, createGeneratedArtwork, DEFAULT_ART_DIRECTION, libraryAssets, pendingArtScenes, recoveredArtwork, registerArtwork, rememberArtwork, sceneArtBrief, type RecoveredArtwork } from "./assets.js";
 import "./assets.css";
+import { ArtImportButton } from "./ArtImportButton.js";
+import { MediaProvenanceEditor } from "./MediaProvenanceEditor.js";
 
 interface Props {
   readonly generationEnabled?: boolean;
@@ -70,7 +72,7 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
   function apply(asset: Artwork) {
     try {
       onChange(applyArtwork(scriptRef.current, scene.id, asset));
-      setMessage(asset.kind === "character" ? "캐릭터의 표정 이미지에 적용했습니다." : `‘${scene.chapter || scene.id}’에 ${kindLabels[asset.kind]}를 적용했습니다.`);
+      setMessage(asset.kind === "character" ? (asset.expression ? "캐릭터의 표정 이미지에 적용했습니다." : "현재 장면의 배우 포즈에 적용했습니다.") : `‘${scene.chapter || scene.id}’에 ${kindLabels[asset.kind]}를 적용했습니다.`);
       setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   }
@@ -118,14 +120,16 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
   return <section className="art-library" data-testid="art-library">
     <div className="art-library-main">
       <header className="art-library-heading"><div><span className="art-eyebrow">VISUAL DEVELOPMENT</span><h1>이야기의 온도를 그리다</h1><p>배경, 결정적인 순간, 인물의 표정까지. 작품의 모든 이미지를 한곳에서.</p></div><span className="art-count">{assets.length}<small>ARTWORKS</small></span></header>
-      <div className="art-curation-banner"><img src={cover?.url ?? "/assets/art/nocturne-atrium.png"} alt={cover?.name ?? "비 내린 유리 아트리움"} /><div><span>PROJECT ART COLLECTION</span><h2>{script.title}</h2><p>배경 {artworkCounts.background}장 · 이벤트 CG {artworkCounts.cg}장<br />캐릭터 표정 {artworkCounts.character}종이 준비되어 있습니다.</p></div></div>
+      <div className="art-curation-banner"><img src={cover?.url ?? "/assets/art/nocturne-atrium.png"} alt={cover?.name ?? "비 내린 유리 아트리움"} /><div><span>PROJECT ART COLLECTION</span><h2>{script.title}</h2><p>배경 {artworkCounts.background}장 · 이벤트 CG {artworkCounts.cg}장<br />캐릭터 원화 {artworkCounts.character}종이 준비되어 있습니다.</p></div></div>
       <div className="art-library-tools"><div className="art-filters" role="group" aria-label="이미지 종류">{(["all", "background", "cg", "character"] as const).map(value => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === "all" ? "전체" : kindLabels[value]}<span>{assets.filter(asset => value === "all" || asset.kind === value).length}</span></button>)}</div><label className="art-search"><Icon name="search" /><input aria-label="아트 검색" placeholder="이미지 검색" value={search} onChange={event => setSearch(event.target.value)} /></label></div>
       <div className="art-grid">{visible.map(asset => <button className={`art-card ${selected?.id === asset.id ? "is-selected" : ""} art-card--${asset.kind}`} key={asset.id} type="button" onClick={() => setSelectedId(asset.id)} aria-pressed={selected?.id === asset.id} data-testid={`art-card-${asset.id}`}><div className="art-card-image"><ArtImage src={asset.url} alt={asset.name} chromaKey={asset.kind === "character" ? script.characters.find(character => character.id === asset.characterId)?.chromaKey : undefined} /><span className="art-kind">{kindLabels[asset.kind]}</span>{assetUsage(script, asset) > 0 && <span className="art-used"><Icon name="check" size={11} />사용 중</span>}</div><strong>{asset.name}</strong><small>{script.assets?.some(saved => saved.id === asset.id) ? "작품에 등록된 이미지" : "컬렉션 에셋"}</small></button>)}</div>
       {visible.length === 0 && <div className="art-empty"><Icon name="image" size={28} /><p>일치하는 이미지가 없습니다.</p><button type="button" onClick={() => { setSearch(""); setFilter("all"); }}>모든 이미지 보기</button></div>}
     </div>
     {selected && <div className="art-mobile-selection"><ArtImage className={`art-mobile-preview art-mobile-preview--${selected.kind}`} src={selected.url} alt={selected.name} chromaKey={selectedCharacter?.chromaKey} testId="art-mobile-preview" /><div><strong>{selected.name}</strong><small>{message || selectedContext}</small></div><button type="button" data-testid="art-quick-apply" onClick={() => apply(selected)}>적용<Icon name="check" size={13} /></button></div>}
     <aside className="art-workbench">
-      {selected && <section className="art-selection"><div className="art-section-title"><Icon name="image" /><h2>선택한 이미지</h2><span>{kindLabels[selected.kind]}</span></div><ArtImage className={`art-selected-preview art-selected-preview--${selected.kind}`} src={selected.url} alt={selected.name} chromaKey={selectedCharacter?.chromaKey} testId="art-selected-preview" /><strong>{selected.name}</strong><p>{selectedContext}{selected.kind === "character" ? "에 적용됩니다." : ""}</p><button className="art-primary" type="button" data-testid="art-apply" onClick={() => apply(selected)}><Icon name="check" />{selected.kind === "character" ? "이 표정에 적용" : "현재 장면에 적용"}</button></section>}
+      {selected && <MediaProvenanceEditor key={selected.id} value={selected.provenance} onChange={provenance => onChange(registerArtwork(script, { ...selected, provenance }))} />}
+      <ArtImportButton script={script} onImport={rows=>{let next=script;for(const asset of rows)next=registerArtwork(next,asset);onChange(next);setSelectedId(rows[0]!.id);setFilter("all");setSearch("");setMessage(`${rows.length}개 원화를 가져왔습니다. 장면에 적용할 이미지를 선택하세요.`);}}/>
+      {selected && <section className="art-selection"><div className="art-section-title"><Icon name="image" /><h2>선택한 이미지</h2><span>{kindLabels[selected.kind]}</span></div><ArtImage className={`art-selected-preview art-selected-preview--${selected.kind}`} src={selected.url} alt={selected.name} chromaKey={selectedCharacter?.chromaKey} testId="art-selected-preview" /><strong>{selected.name}</strong><p>{selectedContext}{selected.kind === "character" ? "에 적용됩니다." : ""}</p><button className="art-primary" type="button" data-testid="art-apply" onClick={() => apply(selected)}><Icon name="check" />{selected.kind === "character" ? (selected.expression ? "이 표정에 적용" : "현재 장면에 포즈 적용") : "현재 장면에 적용"}</button></section>}
       <section className="art-direction"><div className="art-section-title"><Icon name="settings" /><h2>작품 아트 디렉션</h2></div><textarea aria-label="작품 아트 디렉션" value={script.artDirection ?? DEFAULT_ART_DIRECTION} placeholder="화풍, 색감, 조명과 캐릭터 외형을 적어 주세요." onChange={event => onChange({ ...script, artDirection: event.target.value })} maxLength={3000} rows={4} /><p>현재 작품의 색감, 화풍과 인물 외형을 정리한 제작 기준입니다.</p></section>
       {generationEnabled && <section className="art-generation"><div className="art-section-title"><Icon name="spark" /><h2>이미지 스튜디오</h2><span className={authenticated ? "is-connected" : ""}>{authenticated ? "연결됨" : "로그인 필요"}</span></div>
         <label>만들 이미지<select aria-label="생성 이미지 종류" value={kind} disabled={busy} onChange={event => setKind(event.target.value as Artwork["kind"])}><option value="background">장면 배경</option><option value="cg">이벤트 CG</option><option value="character">캐릭터 원화</option></select></label>

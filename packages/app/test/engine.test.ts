@@ -159,3 +159,13 @@ test("말하는 인물의 표정은 줄 단위로 덮어쓴다", () => {
   assert.equal(spritesAt(scene, 0)[0]?.expression, "neutral");
   assert.equal(spritesAt(scene, 1)[0]?.expression, "smile");
 });
+
+test("history snapshots source chapters for normal advances, skips and selected choices",()=>{
+  const script={...fixture,scenes:fixture.scenes.map((scene,index)=>({...scene,chapter:`장 ${index+1}`}))};
+  let state=reduce(script,initialState(script),{type:"start"});state=reduce(script,state,{type:"advance"});state=reduce(script,state,{type:"skipScene"});state=reduce(script,state,{type:"choose",index:0});
+  assert.deepEqual(state.history.map(row=>[row.sceneId,row.chapter]),[["a","장 1"],["a","장 1"],["a","장 1"]]);
+  state=reduce(script,state,{type:"advance"});assert.equal(state.history.at(-1)?.chapter,"장 2");
+  const revised={...script,scenes:script.scenes.map(scene=>({...scene,chapter:"바뀐 제목"}))};
+  const restored=reduce(revised,initialState(revised),{type:"restore",sceneId:"b",lineIndex:0,affection:0,history:state.history});
+  assert.equal(restored.history[0]?.chapter,"장 1");
+});

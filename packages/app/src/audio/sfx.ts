@@ -7,7 +7,8 @@ export function playSfx(id: string, volume: number): void {
   let base = cache.get(id);
   if (!base) {
     base = new Audio(sfxSrc(id));
-    base.preload = "auto";
+    base.preload = "none";
+    if(cache.size>=32)cache.delete(cache.keys().next().value!);
     cache.set(id, base);
   }
   const shot = base.cloneNode(true) as HTMLAudioElement;

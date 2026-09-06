@@ -1,0 +1,10 @@
+.team-credits-editor { margin: 28px 0; padding: 24px; border: 1px solid #b9cce326; border-radius: 14px; background: #ffffff04; }
+.team-credits-editor header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.team-credits-editor header p { font-size: 10px; letter-spacing: .16em; color: #9badc7; margin: 0 0 8px; }
+.team-credits-editor h2 { margin: 0; font-size: 21px; }
+.team-credits-editor > p { color: #a8b8cf; font-size: 12px; line-height: 1.7; }
+.team-credits-editor article { margin-top: 16px; padding: 18px; border: 1px solid #b9cce320; border-radius: 10px; display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1.3fr); gap: 14px; }
+.team-credits-editor label { display: grid; gap: 8px; font-size: 12px; color: #b3c2d9; }
+.team-credits-editor input, .team-credits-editor textarea { width: 100%; min-width: 0; border: 1px solid #b9cce32b; border-radius: 7px; padding: 10px; color: #e4edfa; background: #111923; font: inherit; }
+.team-credit-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+@media(max-width: 600px) { .team-credits-editor { padding: 16px; } .team-credits-editor article { grid-template-columns: minmax(0, 1fr); padding: 12px; } }

@@ -2,6 +2,7 @@
  * 트랙 정의. 각 함수는 Float32Array(모노, 44100Hz) 를 돌려준다.
  * 진행은 실제 코드 진행을 쓰고, 멜로디는 음 배열로 직접 적었다.
  */
+import { random } from "./random.mjs";
 import {
   SR,
   bandpass,
@@ -264,8 +265,8 @@ export const SFX = {
     }
     const drops = buffer(dur);
     for (let k = 0; k < 90; k += 1) {
-      const at = Math.random() * (dur - 0.3);
-      const d = shaped(0.12, (t) => Math.sin(2 * Math.PI * (1800 + Math.random() * 900) * t) * Math.exp(-70 * t));
+      const at = random() * (dur - 0.3);
+      const d = shaped(0.12, (t) => Math.sin(2 * Math.PI * (1800 + random() * 900) * t) * Math.exp(-70 * t));
       mixInto(drops, Math.round(at * SR), d, 0.12);
     }
     for (let i = 0; i < bed.length; i += 1) bed[i] += drops[i];

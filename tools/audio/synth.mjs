@@ -4,6 +4,7 @@
  */
 
 export const SR = 44100;
+import { random } from "./random.mjs";
 
 export function buffer(seconds) {
   return new Float32Array(Math.round(seconds * SR));
@@ -64,7 +65,7 @@ export function pluck(freq, dur, velocity = 1, damping = 0.494) {
   const out = buffer(dur);
   const n = Math.max(2, Math.round(SR / freq));
   const line = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) line[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < n; i += 1) line[i] = random() * 2 - 1;
   let idx = 0;
   for (let i = 0; i < out.length; i += 1) {
     const next = (idx + 1) % n;
@@ -138,7 +139,7 @@ export function bass(freq, dur, velocity = 1) {
 
 export function noise(dur) {
   const out = buffer(dur);
-  for (let i = 0; i < out.length; i += 1) out[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < out.length; i += 1) out[i] = random() * 2 - 1;
   return out;
 }
 

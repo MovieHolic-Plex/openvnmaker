@@ -25,16 +25,26 @@ export interface SpriteDirection {
   readonly slot: SpriteSlot;
   readonly character: CharacterId | null;
   readonly expression?: Expression;
+  /** A different pose; null returns this actor to the expression artwork. */
+  readonly poseUrl?: string | null;
 }
+
+export type StoryFlags = Readonly<Record<string, string | number | boolean>>;
+export interface FlagComparison { readonly flag: string; readonly op: "eq" | "ne" | "gt" | "gte" | "lt" | "lte"; readonly value: string | number | boolean }
+export interface LineCondition { readonly all?: readonly string[]; readonly none?: readonly string[]; readonly compare?: readonly FlagComparison[] }
 
 /** 대사 한 줄. speaker 가 null 이면 내레이션. 주인공도 일반 CharacterId 다. */
 export interface Line {
+  /** Stable identity within this scene; legacy manuscripts may omit it. */
+  readonly id?: string;
   readonly speaker: CharacterId | null;
   readonly text: string;
   /** 이 줄에서 표정만 바꿀 때 사용. */
   readonly expression?: Expression;
   /** 이 줄과 함께 재생할 효과음 id. */
   readonly sfx?: string;
+  /** Voice recording for this line; playback stops when advancing. */
+  readonly voice?: string;
   /** 이 줄에서 화면을 흔든다. */
   readonly shake?: boolean;
   /** 이 줄에서 CG 를 숨긴다. */
@@ -43,9 +53,16 @@ export interface Line {
   readonly cgUrl?: string | null;
   /** Switch the underlying scene background at this line; omission keeps the latest cue. */
   readonly backgroundUrl?: string;
+  readonly when?: LineCondition;
+  /** Patch the listed actor slots without changing other actors. */
+  readonly sprites?: readonly SpriteDirection[];
+  readonly framing?: "wide" | "close" | "cinematic";
+  readonly bgm?: string | null;
 }
 
 export interface Choice {
+  /** Stable identity within this scene, separate from line IDs. */
+  readonly id?: string;
   readonly text: string;
   /** 이동할 scene id. */
   readonly next: string;
@@ -53,8 +70,12 @@ export interface Choice {
   readonly affection?: number;
   /** 이 선택지가 보일 조건 플래그식. */
   readonly cond?: string;
+  /** All requirements must pass for this choice to be shown. */
+  readonly when?: LineCondition;
   /** 이 선택을 고르면 세팅할 플래그들. */
   readonly set?: Record<string, string | number | boolean>;
+  /** Signed numeric changes applied to existing numeric flags. Keys cannot also appear in set. */
+  readonly add?: Record<string, number>;
   /** true 면 선택 불가 상태로 표시한다. */
   readonly disable?: boolean;
 }
@@ -97,20 +118,37 @@ export interface Character {
 }
 
 export interface VnScript {
+  /** Stable native release/save namespace; keep it when updating the same game. */
+  readonly nativeSaveId?: string;
   readonly title: string;
   readonly subtitle: string;
+  /** Ordered public team credits. Empty draft fields are allowed while authoring. */
+  readonly credits?: readonly { readonly role: string; readonly names: string }[];
   readonly start: string;
   readonly characters: readonly Character[];
   readonly scenes: readonly Scene[];
   /** 전역 플래그 초기값. */
   readonly flags?: Record<string, string | number | boolean>;
   readonly artDirection?: string;
+  /** Project-wide music start/change/stop fade duration; seconds, 0..10. */
+  readonly musicFadeSeconds?: number;
   readonly assets?: readonly Artwork[];
+  readonly audioAssets?: readonly AudioAsset[];
   readonly assetLibraryMode?: "project" | "all";
+}
+
+export interface AudioAsset {
+  readonly provenance?: MediaProvenance;
+  readonly id: string;
+  readonly name: string;
+  readonly kind: "bgm" | "sfx" | "voice";
+  readonly url: string;
+  readonly duration: number;
 }
 
 /** Reusable artwork owned by the project. URLs are served locally. */
 export interface Artwork {
+  readonly provenance?: MediaProvenance;
   readonly id: string;
   readonly name: string;
   readonly kind: "background" | "cg" | "character";
@@ -120,4 +158,12 @@ export interface Artwork {
   readonly characterId?: CharacterId;
   readonly expression?: Expression;
   readonly createdAt?: string;
+}
+
+/** Author-supplied records; presence does not establish redistribution rights. */
+export interface MediaProvenance {
+  readonly creator?: string;
+  readonly source?: string;
+  readonly license?: string;
+  readonly credit?: string;
 }

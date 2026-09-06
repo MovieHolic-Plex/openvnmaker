@@ -3,18 +3,18 @@ import { test } from "node:test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { script, parseScript, auditScript } from "../src/index.js";
+import { script, parseScript, auditScript, lineAllowed, type StoryFlags } from "../src/index.js";
 import { findBrokenSceneRefs, findManifestViolations } from "../src/check.js";
 const count = (text: string) => Array.from(text.replace(/\s/gu, "")).length;
 const byId = new Map(script.scenes.map(scene => [scene.id,scene]));
-function paths(id: string, seen: string[] = []): { ids:string[]; chars:number; ending:string }[] {
+function paths(id: string, seen: string[] = [], flags:StoryFlags=script.flags??{}): { ids:string[]; chars:number; ending:string }[] {
   assert.ok(!seen.includes(id), "순환 경로 " + id);
   const scene = byId.get(id); assert.ok(scene, "없는 장면 " + id);
-  const own = scene.lines.reduce((total,line) => total + count(line.text),0);
+  const own = scene.lines.filter(line=>lineAllowed(line,flags)).reduce((total,line) => total + count(line.text),0);
   if (scene.ending) return [{ ids:[...seen,id], chars:own, ending:scene.ending }];
-  const targets = scene.choices?.map(choice => choice.next) ?? (scene.next ? [scene.next] : []);
+  const targets = scene.choices?.map(choice => ({id:choice.next,flags:{...flags,...choice.set}})) ?? (scene.next ? [{id:scene.next,flags}] : []);
   assert.ok(targets.length, "연결 누락 " + id);
-  return targets.flatMap(target => paths(target,[...seen,id]).map(path => ({...path,chars:path.chars+own})));
+  return targets.flatMap(target => paths(target.id,[...seen,id],target.flags).map(path => ({...path,chars:path.chars+own})));
 }
 test("새 기본 작품만 제공하며 모든 장면과 분기를 검증한다", () => {
   assert.equal(script.title,"비가 남긴 빈칸"); assert.equal(script.scenes.length,20);
@@ -35,7 +35,7 @@ test("새 원화가 모든 장면에 배치되고 외부서버 없이 파일로 
   for(const character of script.characters) for(const expression of ["neutral","smile","sad","surprised"] as const){const url=character.expressionImages?.[expression]; assert.ok(url?.startsWith("/assets/art/"),character.id+expression);urls.add(url!);}
   for(const asset of script.assets??[]) urls.add(asset.url);
   for(const url of urls){assert.ok(url.startsWith("/assets/art/"),url);assert.ok(existsSync(resolve(root,"."+url)),url);}
-  assert.equal(urls.size,26); assert.equal(script.assetLibraryMode,"project");
+  assert.equal(urls.size,35); assert.equal(script.assetLibraryMode,"project");
   const expressions = new Set(script.scenes.flatMap(scene=>scene.lines.filter(line=>line.expression).map(line=>`${line.speaker}-${line.expression}`)));
   assert.equal(expressions.size,12,"모든 배우 표정이 실제 대사에서 사용된다");
 });

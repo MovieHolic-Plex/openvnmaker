@@ -33,8 +33,9 @@ test("수동 대사 수정은 새로고침과 선택 위치 플레이·복귀 �
   await page.getByTestId("studio-line-text").fill(text);
   await expect(page.getByTestId("dialogue-text")).toHaveText(text);
   await page.reload();
-  await page.getByTestId("workspace-stage").click();
-  await page.getByTestId("studio-line-4").click();
+  await expect(page.getByTestId("workspace-stage")).toHaveClass(/is-active/);
+  await expect(page.getByTestId("studio-scene-s02")).toHaveClass(/is-selected/);
+  await expect(page.getByTestId("studio-line-4")).toHaveClass(/is-selected/);
   await expect(page.getByTestId("studio-line-text")).toHaveValue(text);
   await page.getByTestId("studio-play").click();
   await expect(page.getByTestId("stage")).toHaveAttribute("data-scene", sceneId);
@@ -42,8 +43,8 @@ test("수동 대사 수정은 새로고침과 선택 위치 플레이·복귀 �
   await page.reload();
   await expect(page.getByTestId("dialogue-text")).toHaveText(text);
   await page.getByTestId("studio-return").click();
-  await page.getByTestId("workspace-stage").click();
-  await page.getByTestId("studio-line-4").click();
+  await expect(page.getByTestId("workspace-stage")).toHaveClass(/is-active/);
+  await expect(page.getByTestId("studio-line-4")).toHaveClass(/is-selected/);
   await expect(page.getByTestId("studio-line-text")).toHaveValue(text);
 });
 
@@ -130,13 +131,25 @@ test("편집 미리보기 저장은 편집 원고를 담고 일반 플레이 저
   await page.getByTestId("studio-play").click();
   await expect(page.getByTestId("stage")).toHaveAttribute("data-scene", "s02");
   await page.getByTestId("save-button").click();
+  await expect(page.getByTestId("slot-picker")).toBeVisible();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("vnmaker:save:preview")!));
   expect(saved.sceneId).toBe("s02"); expect(saved.lineIndex).toBe(3);
   expect(saved.script.scenes.find((scene: { id: string }) => scene.id === "s02").lines[3].text).toBe(text);
+  expect(saved.flags).toEqual(novel.flags);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vnmaker:save")!))).toEqual(normalSave);
+  await page.getByTestId("slot-save-0").click();
+  await expect(page.getByTestId("slot-picker")).not.toBeVisible();
+  const slot = await page.evaluate(() => JSON.parse(localStorage.getItem("vnmaker:slots:preview")!)[0]);
+  expect(slot).toMatchObject({sceneId:"s02",lineIndex:3,flags:novel.flags});
+  await expect(page.locator(".dialogue-box .next-mark")).toBeVisible();
   await page.getByTestId("advance-button").click();
+  await expect.poll(() => page.evaluate(() => window.__vn?.lineIndex)).toBe(4);
   await page.getByTestId("load-button").click();
+  await expect(page.getByTestId("slot-picker")).toBeVisible();
+  await page.getByTestId("slot-load-0").click();
+  await expect(page.getByTestId("slot-picker")).not.toBeVisible();
   await expect(page.getByTestId("dialogue-text")).toHaveText(text);
+  await expect.poll(() => page.evaluate(() => window.__vn?.lineIndex)).toBe(3);
 });
 
 test("선택지 문구와 연결을 수동 수정하면 스토리 맵과 저장 원고가 함께 바뀐다", async ({ page }) => {

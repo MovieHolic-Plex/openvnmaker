@@ -8,7 +8,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const ASSETS = join(ROOT, "packages/app/public/assets/audio");
+if (process.argv.length > 3) throw new Error("Usage: node tools/audio-check.mjs [audio-directory]");
+const ASSETS = process.argv[2] ? resolve(process.argv[2]) : join(ROOT, "packages/app/public/assets/audio");
 
 const EXPECTED = {
   "bgm/main-theme.mp3": [45, 90],

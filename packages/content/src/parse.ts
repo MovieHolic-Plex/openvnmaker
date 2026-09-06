@@ -1,5 +1,8 @@
 import { BACKGROUNDS, BGM, CHARACTERS, EXPRESSIONS, SFX } from "./manifest.js";
 import type { Line, Scene, VnScript } from "./schema.js";
+import { validCharacterKey } from "./characters.js";
+import { choiceAllowed, choiceEffectError, applyChoiceFlags, lineAllowed } from "./conditions.js";
+import { validAudioUrl } from "./audio.js";
 
 function object(value: unknown, name: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${name}: 객체가 필요합니다.`);
@@ -11,23 +14,79 @@ function string(value: unknown, name: string, empty = false): asserts value is s
 function member(value: unknown, values: readonly string[], name: string) {
   if (typeof value !== "string" || !values.includes(value)) throw new Error(`${name}: 지원하지 않는 값입니다.`);
 }
+function characterKey(value: unknown, name: string) { if(!validCharacterKey(value))throw new Error(`${name}: 영문자로 시작하는 64자 이하의 영문·숫자·하이픈·밑줄 ID가 필요합니다.`); }
+
+function flagName(value: unknown) {
+  if (typeof value !== "string" || !/^[a-z][a-z0-9_-]{0,63}$/i.test(value) || ["constructor", "prototype", "__proto__"].includes(value)) throw new Error("선택 기억 이름이 올바르지 않습니다.");
+}
+function flags(value: unknown) {
+  const row = object(value, "선택 기억");
+  if (Object.keys(row).length > 100) throw new Error("선택 기억은 최대 100개입니다.");
+  for (const [key, value] of Object.entries(row)) {
+    flagName(key);
+    if (!(typeof value === "boolean" || typeof value === "string" && value.length <= 200 || typeof value === "number" && Number.isFinite(value))) throw new Error("선택 기억 값이 올바르지 않습니다.");
+  }
+}
+function condition(value: unknown) {
+  const row=object(value,"표시 조건");
+  if(Object.keys(row).some(key=>!["all","none","compare"].includes(key)))throw new Error("지원하지 않는 표시 조건입니다.");
+  for(const key of ["all","none"])if(row[key]!==undefined){
+    const names=row[key];if(!Array.isArray(names)||names.length>100)throw new Error("표시 조건은 최대 100개입니다.");
+    names.forEach(flagName);
+  }
+  if(row["compare"]!==undefined){
+    const rows=row["compare"];if(!Array.isArray(rows)||rows.length>100)throw new Error("비교 조건은 최대 100개입니다.");
+    for(const item of rows){
+      const rule=object(item,"비교 조건");flagName(rule["flag"]);member(rule["op"],["eq","ne","gt","gte","lt","lte"],"비교 연산");
+      flags({value:rule["value"]});
+      if(!["eq","ne"].includes(rule["op"] as string)&&typeof rule["value"]!=="number")throw new Error("크기 비교에는 숫자가 필요합니다.");
+    }
+  }
+}
+function sprites(value: unknown) {
+  if (!Array.isArray(value) || value.length > 3) throw new Error("배우 배치가 올바르지 않습니다.");
+  const slots = new Set();
+  for (const item of value) {
+    const sprite = object(item, "배우");
+    member(sprite["slot"], ["left", "center", "right"], "배우 위치");
+    if (slots.has(sprite["slot"])) throw new Error("같은 위치에 배우를 중복 배치할 수 없습니다.");
+    slots.add(sprite["slot"]);
+    if (sprite["character"] !== null) characterKey(sprite["character"], "배우");
+    if (sprite["expression"] !== undefined) characterKey(sprite["expression"], "배우 표정");
+    if (sprite["poseUrl"] !== undefined && sprite["poseUrl"] !== null && !validBackgroundUrl(sprite["poseUrl"])) throw new Error("배우 포즈 주소가 올바르지 않습니다.");
+  }
+}
 
 /** Imported artwork can only address known local asset roots, without traversal or query strings. */
 export function validBackgroundUrl(value: unknown): value is string {
   return typeof value === "string" && (/^\/api\/image\/file\/[a-zA-Z0-9][a-zA-Z0-9._-]*\.(png|jpe?g|webp)$/i.test(value) || /^\/assets\/(?:[a-zA-Z0-9][a-zA-Z0-9_-]*\/)*[a-zA-Z0-9][a-zA-Z0-9._-]*\.(png|jpe?g|webp)$/i.test(value));
 }
 
+function narrativeId(value:unknown,seen:Set<string>,kind:string):void {
+  if(value===undefined)return;
+  if(typeof value!=="string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$/.test(value))throw new Error(`${kind} ID는 영문·숫자·밑줄·하이픈으로 된 1~96자여야 합니다.`);
+  if(seen.has(value))throw new Error(`같은 장면 안에 ${kind} ID가 중복되었습니다.`);
+  seen.add(value);
+}
+
 export function parseLines(value: unknown): Line[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 2000) throw new Error("대사는 1~2,000줄이어야 합니다.");
+  const ids=new Set<string>();
   for (const item of value) {
     const row = object(item, "대사");
+    narrativeId(row["id"],ids,"대사");
     string(row["text"], "대사", true);
-    if (row["speaker"] !== null) member(row["speaker"], [...CHARACTERS, "me"], "화자");
-    if (row["expression"] !== undefined) member(row["expression"], EXPRESSIONS, "표정");
-    if (row["sfx"] !== undefined) member(row["sfx"], Object.keys(SFX), "효과음");
+    if (row["speaker"] !== null) characterKey(row["speaker"], "화자");
+    if (row["expression"] !== undefined) characterKey(row["expression"], "표정");
+    if (row["sfx"] !== undefined && !validAudioUrl(row["sfx"])) member(row["sfx"], Object.keys(SFX), "효과음");
+    if (row["voice"] !== undefined && !validAudioUrl(row["voice"])) throw new Error("보이스 파일 주소가 올바르지 않습니다.");
     if (row["shake"] !== undefined && typeof row["shake"] !== "boolean") throw new Error("흔들림 값이 올바르지 않습니다.");
     if (row["cgUrl"] !== undefined && row["cgUrl"] !== null && !validBackgroundUrl(row["cgUrl"])) throw new Error("대사 CG 주소가 올바르지 않습니다.");
     if (row["backgroundUrl"] !== undefined && !validBackgroundUrl(row["backgroundUrl"])) throw new Error("대사 배경 주소가 올바르지 않습니다.");
+    if (row["sprites"] !== undefined) sprites(row["sprites"]);
+    if (row["framing"] !== undefined) member(row["framing"], ["wide", "close", "cinematic"], "대사 카메라");
+    if (row["bgm"] !== undefined && row["bgm"] !== null && !validAudioUrl(row["bgm"])) member(row["bgm"], Object.keys(BGM), "대사 음악");
+    if (row["when"] !== undefined) condition(row["when"]);
   }
   return value as Line[];
 }
@@ -38,32 +97,28 @@ export function parseScene(value: unknown): Scene {
   member(row["background"], Object.keys(BACKGROUNDS), "배경");
   parseLines(row["lines"]);
   for (const key of ["chapter", "ending", "next"] as const) if (row[key] !== undefined) string(row[key], key, key !== "next");
-  if (row["bgm"] !== undefined) member(row["bgm"], Object.keys(BGM), "배경음악");
+  if (row["bgm"] !== undefined && !validAudioUrl(row["bgm"])) member(row["bgm"], Object.keys(BGM), "배경음악");
   if (row["backgroundUrl"] !== undefined && !validBackgroundUrl(row["backgroundUrl"])) throw new Error("생성 배경 주소가 올바르지 않습니다.");
   if (row["cgUrl"] !== undefined && !validBackgroundUrl(row["cgUrl"])) throw new Error("이벤트 CG 주소가 올바르지 않습니다.");
   if (row["hideSprites"] !== undefined && typeof row["hideSprites"] !== "boolean") throw new Error("배우 표시 설정이 올바르지 않습니다.");
   if (row["framing"] !== undefined) member(row["framing"], ["wide", "close", "cinematic"], "카메라 프레이밍");
   if (row["artBrief"] !== undefined) string(row["artBrief"], "장면 아트 브리프", true);
   if (row["transition"] !== undefined) member(row["transition"], ["none", "fade", "dissolve", "flash", "fadeToBlack"], "전환");
-  if (row["sprites"] !== undefined) {
-    if (!Array.isArray(row["sprites"]) || row["sprites"].length > 3) throw new Error("배우 배치가 올바르지 않습니다.");
-    const slots = new Set();
-    for (const item of row["sprites"]) {
-      const sprite = object(item, "배우");
-      member(sprite["slot"], ["left", "center", "right"], "배우 위치");
-      if (slots.has(sprite["slot"])) throw new Error("같은 위치에 배우를 중복 배치할 수 없습니다.");
-      slots.add(sprite["slot"]);
-      if (sprite["character"] !== null) member(sprite["character"], CHARACTERS, "배우");
-      if (sprite["expression"] !== undefined) member(sprite["expression"], EXPRESSIONS, "배우 표정");
-    }
-  }
+  if (row["sprites"] !== undefined) sprites(row["sprites"]);
   if (row["choices"] !== undefined) {
     if (!Array.isArray(row["choices"]) || row["choices"].length > 8) throw new Error("선택지는 최대 8개까지 지원합니다.");
+    const choiceIds=new Set<string>();
     for (const item of row["choices"]) {
       const choice = object(item, "선택지");
+      narrativeId(choice["id"],choiceIds,"선택지");
       string(choice["text"], "선택지 텍스트", true);
       string(choice["next"], "선택지 연결");
       if (choice["affection"] !== undefined && (typeof choice["affection"] !== "number" || !Number.isFinite(choice["affection"]))) throw new Error("호감도 값이 올바르지 않습니다.");
+      if (choice["set"] !== undefined) flags(choice["set"]);
+      if(choice["add"]!==undefined){flags(choice["add"]);for(const [key,delta] of Object.entries(choice["add"] as Record<string,unknown>)){if(typeof delta!=="number")throw new Error("선택지 증감 값은 숫자여야 합니다.");if(Object.hasOwn((choice["set"]??{}) as object,key))throw new Error("같은 변수에 고정값 설정과 증감을 동시에 지정할 수 없습니다.");}}
+      if (choice["when"] !== undefined) condition(choice["when"]);
+      if (choice["cond"] !== undefined && choice["cond"] !== "") throw new Error("선택지 cond 표현식은 지원하지 않습니다. 구조화된 when 조건을 사용하세요.");
+      if (choice["disable"] !== undefined && typeof choice["disable"] !== "boolean") throw new Error("선택지 잠금 값이 올바르지 않습니다.");
     }
   }
   return value as Scene;
@@ -71,14 +126,31 @@ export function parseScene(value: unknown): Scene {
 
 export function parseScript(value: unknown): VnScript {
   const row = object(value, "작품");
+  if(row["musicFadeSeconds"]!==undefined&&(typeof row["musicFadeSeconds"]!=="number"||!Number.isFinite(row["musicFadeSeconds"])||row["musicFadeSeconds"]<0||row["musicFadeSeconds"]>10))throw new Error("음악 페이드는 0~10초의 유한한 숫자여야 합니다.");
   string(row["title"], "작품 제목");
+  if (row["nativeSaveId"] !== undefined && (typeof row["nativeSaveId"] !== "string" || !/^[a-f0-9]{16}(?:[a-f0-9]{16})?$/.test(row["nativeSaveId"]))) throw new Error("네이티브 배포 ID는 16자리 또는 32자리 소문자 16진수여야 합니다.");
   string(row["subtitle"], "작품 설명", true);
+  if (row["credits"] !== undefined) {
+    if (!Array.isArray(row["credits"]) || row["credits"].length > 100) throw new Error("제작진 크레딧은 최대 100개입니다.");
+    for (const value of row["credits"]) {
+      const credit = object(value, "제작진 크레딧");
+      for (const [key, max] of [["role", 120], ["names", 4000]] as const) {
+        if (typeof credit[key] !== "string" || credit[key].length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(credit[key])) throw new Error(`제작진 ${key}: ${max}자 이하의 텍스트가 필요합니다.`);
+      }
+      if (Object.keys(credit).some(key => key !== "role" && key !== "names")) throw new Error("지원하지 않는 제작진 크레딧 항목입니다.");
+    }
+  }
   string(row["start"], "시작 씬");
-  if (!Array.isArray(row["characters"]) || row["characters"].length > 3) throw new Error("등장인물 목록이 올바르지 않습니다.");
+  if (row["flags"] !== undefined) flags(row["flags"]);
+  if(row["audioAssets"]!==undefined){
+    const assets=row["audioAssets"];if(!Array.isArray(assets)||assets.length>5000)throw new Error("음원 보관함은 최대 5,000개입니다.");
+    const ids=new Set();for(const value of assets){const asset=object(value,"음원");string(asset["id"],"음원 ID");if(ids.has(asset["id"]))throw new Error("음원 ID가 중복됩니다.");ids.add(asset["id"]);string(asset["name"],"음원 이름");member(asset["kind"],["bgm","sfx","voice"],"음원 종류");if(!validAudioUrl(asset["url"]))throw new Error("음원 주소가 올바르지 않습니다.");if(typeof asset["duration"]!=="number"||!Number.isFinite(asset["duration"])||asset["duration"]<=0||asset["duration"]>1800)throw new Error("음원은 파일당 30분 이하여야 합니다.");}
+  }
+  if (!Array.isArray(row["characters"]) || row["characters"].length > 200) throw new Error("등장인물은 최대 200명입니다.");
   const characters = new Set();
   for (const item of row["characters"]) {
     const character = object(item, "등장인물");
-    member(character["id"], CHARACTERS, "등장인물 ID");
+    characterKey(character["id"], "등장인물 ID");
     if (characters.has(character["id"])) throw new Error("등장인물 ID가 중복됩니다.");
     characters.add(character["id"]);
     string(character["name"], "등장인물 이름");
@@ -87,7 +159,7 @@ export function parseScript(value: unknown): VnScript {
     if (character["expressionImages"] !== undefined) {
       const images = object(character["expressionImages"], "캐릭터 이미지");
       for (const [expression, url] of Object.entries(images)) {
-        member(expression, EXPRESSIONS, "캐릭터 이미지 표정");
+        characterKey(expression, "캐릭터 이미지 표정");
         if (!validBackgroundUrl(url)) throw new Error("캐릭터 이미지 주소가 올바르지 않습니다.");
       }
     }
@@ -101,6 +173,7 @@ export function parseScript(value: unknown): VnScript {
     ids.add(scene.id);
     for (const line of scene.lines) if (line.speaker && line.speaker !== "me" && !characters.has(line.speaker)) throw new Error(`등록되지 않은 화자: ${line.speaker}`);
     for (const sprite of scene.sprites ?? []) if (sprite.character && !characters.has(sprite.character)) throw new Error(`등록되지 않은 배우: ${sprite.character}`);
+    for (const line of scene.lines) for (const sprite of line.sprites ?? []) if (sprite.character && !characters.has(sprite.character)) throw new Error(`등록되지 않은 배우: ${sprite.character}`);
   }
   if (!ids.has(row["start"])) throw new Error("시작 씬을 찾을 수 없습니다.");
   if (row["artDirection"] !== undefined) string(row["artDirection"], "아트 디렉션", true);
@@ -119,8 +192,16 @@ export function parseScript(value: unknown): VnScript {
       for (const key of ["prompt", "createdAt", "sceneId"] as const) if (asset[key] !== undefined) string(asset[key], `에셋 ${key}`, key === "prompt");
       if (asset["sceneId"] !== undefined && !ids.has(asset["sceneId"])) throw new Error("에셋의 대상 씬을 찾을 수 없습니다.");
       if (asset["characterId"] !== undefined && !characters.has(asset["characterId"])) throw new Error("에셋의 등장인물을 찾을 수 없습니다.");
-      if (asset["expression"] !== undefined) member(asset["expression"], EXPRESSIONS, "에셋 표정");
-      if (asset["kind"] === "character" && asset["characterId"] === undefined) throw new Error("캐릭터 에셋에는 등장인물이 필요합니다.");
+      if (asset["expression"] !== undefined) characterKey(asset["expression"], "에셋 표정");
+    }
+  }
+  for (const asset of [...(row["assets"] as Record<string, unknown>[] | undefined ?? []), ...(row["audioAssets"] as Record<string, unknown>[] | undefined ?? [])]) {
+    if (asset["provenance"] === undefined) continue;
+    const record = object(asset["provenance"], "소재 출처");
+    for (const key of Object.keys(record)) {
+      if (!["creator", "source", "license", "credit"].includes(key)) throw new Error("소재 출처 항목이 올바르지 않습니다.");
+      const field = record[key];
+      if (typeof field !== "string" || field.length > 4000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(field)) throw new Error("소재 출처는 항목당 4,000자 이내의 텍스트여야 합니다.");
     }
   }
   return value as VnScript;
@@ -162,5 +243,23 @@ export function auditScript(script: VnScript): StoryIssue[] {
     }
   }
   for (const scene of script.scenes) if (reachable.has(scene.id) && !canFinish.has(scene.id)) issues.push({ sceneId: scene.id, message: "이 씬에서 도달 가능한 엔딩이 없습니다.", severity: "warning" });
+  if(script.scenes.some(scene=>scene.choices?.some(choice=>choice.when||choice.disable||choice.add))){
+    const byId=new Map(script.scenes.map(scene=>[scene.id,scene]));
+    const seen=new Set<string>(),blocked=new Set<string>();
+    const queue=[{id:script.start,flags:script.flags??{}}];
+    while(queue.length&&seen.size<10000){
+      const state=queue.pop()!;
+      const key=state.id+JSON.stringify(Object.entries(state.flags).sort(([a],[b])=>a.localeCompare(b)));
+      if(seen.has(key))continue;seen.add(key);
+      const scene=byId.get(state.id);if(!scene)continue;
+      if(scene.choices?.length){
+        for(const choice of scene.choices){const error=choiceEffectError(choice,state.flags);const key=scene.id+error;if(error&&!choice.disable&&!choice.cond&&lineAllowed(choice,state.flags)&&!blocked.has(key)){blocked.add(key);issues.push({sceneId:scene.id,message:`선택 결과 오류: ${error}`,severity:"error"});}}
+        const available=scene.choices.filter(choice=>choiceAllowed(choice,state.flags));
+        if(!available.length&&!blocked.has(scene.id)){blocked.add(scene.id);issues.push({sceneId:scene.id,message:"도달 가능한 경로에서 선택지가 모두 닫힙니다. 조건이나 대체 선택지를 확인하세요.",severity:"error"});}
+        for(const choice of available)queue.push({id:choice.next,flags:applyChoiceFlags(state.flags,choice)});
+      }else if(!scene.ending&&scene.next)queue.push({...state,id:scene.next});
+    }
+    if(queue.length)issues.push({sceneId:script.start,message:"분기 상태가 10,000개를 넘어 조건 경로 검사가 일부만 수행되었습니다.",severity:"warning"});
+  }
   return issues;
 }

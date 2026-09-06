@@ -1,5 +1,5 @@
-import { auditScript, BACKGROUNDS, BGM, parseLines, parseScene, parseScript } from "@vnmaker/content";
-import type { Choice, Scene, VnScript } from "@vnmaker/content";
+import { applyChoiceFlags, auditScript, BACKGROUNDS, BGM, choiceAllowed, lineAllowed, parseLines, parseScene, parseScript } from "@vnmaker/content";
+import type { Choice, Scene, StoryFlags, VnScript } from "@vnmaker/content";
 
 export const PRODUCTION_KEY = "vnmaker.studio.production.v1";
 export const PRODUCTION_BACKUP_KEY = "vnmaker.studio.production.previous.v1";
@@ -75,6 +75,28 @@ export function estimateScriptDuration(script: VnScript, charsPerMinute = DEFAUL
   if (!Number.isFinite(charsPerMinute) || charsPerMinute <= 0) throw new Error("읽기 속도는 양수여야 합니다.");
   const weights = new Map(script.scenes.map(scene => [scene.id, sceneCharacters(scene)]));
   const result = pathRange(script.scenes, script.start, weights);
+  // Conditional rows are counted only along the choices that actually reveal
+  // them. Memoizing scene + flags avoids expanding every repeated merge path.
+  if (script.scenes.some(scene => scene.lines.some(line => line.when) || scene.choices?.some(choice=>choice.when||choice.disable||choice.add)) && !result.hasCycle) {
+    const memo = new Map<string, { min: number; max: number } | null>();
+    const byId = new Map(script.scenes.map(scene => [scene.id, scene]));
+    let states = 0, incomplete = result.incomplete;
+    const range = (id: string, flags: StoryFlags): { min: number; max: number } | null => {
+      const key = id + JSON.stringify(Object.entries(flags).sort(([a],[b])=>a.localeCompare(b)));
+      if (memo.has(key)) return memo.get(key)!;
+      if (++states > 10000) { incomplete = true; return null; }
+      const scene = byId.get(id);
+      if (!scene) { incomplete = true; return null; }
+      const own = scene.lines.filter(line => lineAllowed(line, flags)).reduce((sum,line)=>sum+countCharacters(line.text),0);
+      const tails = scene.choices?.length ? scene.choices.filter(choice=>choiceAllowed(choice,flags)).map(choice=>range(choice.next,applyChoiceFlags(flags,choice))) : scene.ending ? [{min:0,max:0}] : scene.next ? [range(scene.next,flags)] : [];
+      if (!tails.length || tails.some(tail=>tail===null)) incomplete = true;
+      const valid = tails.filter((tail): tail is {min:number;max:number}=>tail!==null);
+      const value = valid.length ? {min:own+Math.min(...valid.map(tail=>tail.min)),max:own+Math.max(...valid.map(tail=>tail.max))} : null;
+      memo.set(key,value); return value;
+    };
+    const conditional = range(script.start,script.flags ?? {});
+    return { minMinutes: incomplete || !conditional ? null : conditional.min/charsPerMinute, maxMinutes: incomplete || !conditional ? null : conditional.max/charsPerMinute, totalCharacters:[...weights.values()].reduce((a,b)=>a+b,0), hasCycle:false,incomplete,endingCount:result.endingCount,reachableScenes:result.reachable.size };
+  }
   return {
     minMinutes: result.min === null ? null : result.min / charsPerMinute,
     maxMinutes: result.max === null ? null : result.max / charsPerMinute,

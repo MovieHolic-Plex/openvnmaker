@@ -1,6 +1,15 @@
 .stage-layers.framing-close .bg-image { transform: scale(1.13); }
+.stage-layers.framing-wide .bg-image,
+.stage-layers.framing-cinematic:not(.has-event-cg) .bg-image { transform: none; }
 .stage-layers.has-event-cg .bg-wash { background: linear-gradient(180deg, rgba(7, 9, 15, .04) 35%, rgba(7, 9, 15, .22)); }
+.stage-layers.has-event-cg .bg-image { transform: none; object-fit: contain; }
 .cinematic-bars { position: absolute; inset: 0; pointer-events: none; z-index: 5; border-top: clamp(10px, 3vh, 30px) solid #080a11; border-bottom: clamp(10px, 3vh, 30px) solid #080a11; }
 .studio .cinematic-bars { border-width: 14px 0; }
 .sprite canvas.sprite-image { display: block; max-width: 100%; max-height: 100%; width: auto; height: 100%; object-fit: contain; }
 .sprite.is-dim canvas { filter: brightness(.65) saturate(.8); }
+/* Work shots show the actors' hands and props above the dialogue panel. Move
+   the whole cast together so a working actor does not change relative scale. */
+.studio-modern .preview-frame .stage-layers:has(.sprite-image:is([data-src$="-working.png"], [data-src$="-reading.png"])) .sprite {
+  height: 88%;
+  bottom: 12%;
+}

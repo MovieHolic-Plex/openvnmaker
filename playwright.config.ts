@@ -20,7 +20,7 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } } },
   ],
   webServer: {
-    command: "pnpm --filter @vnmaker/app dev",
+    command: `pnpm --filter @vnmaker/app dev --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: true,
     timeout: 120_000,

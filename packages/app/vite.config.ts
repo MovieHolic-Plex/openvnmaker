@@ -1,8 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig,loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { exportRuntimePlugin } from "./export-runtime-plugin.js";
+import {nativeBuildPlugin} from "./native-build-plugin.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -56,8 +58,8 @@ function mountGateway() {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), mountGateway()],
+export default defineConfig(({mode})=>({
+  plugins: [react(), nativeBuildPlugin(here,process.env.VNMAKER_RENPY_SDK??loadEnv(mode,here,"VNMAKER_").VNMAKER_RENPY_SDK),mountGateway(), exportRuntimePlugin(here)],
   server: { host: "127.0.0.1", port: 5173, strictPort: true },
   preview: { host: "127.0.0.1", port: 4173, strictPort: true },
   build: {
@@ -70,4 +72,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

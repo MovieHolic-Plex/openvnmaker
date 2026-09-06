@@ -1,0 +1,18 @@
+.player-credits { width: min(720px, calc(100vw - 32px)); max-height: 85dvh; padding: 0; border: 1px solid #becce43b; border-radius: 18px; color: #eef0f5; background: #151b27; box-shadow: 0 30px 100px #0009; overflow: hidden; }
+.player-credits::backdrop { background: #050912b8; backdrop-filter: blur(8px); }
+.player-credits[open] { display: flex; flex-direction: column; }
+.player-credits header { display: flex; align-items: start; justify-content: space-between; gap: 20px; padding: 24px; border-bottom: 1px solid #becce420; }
+.player-credits header p { margin: 0 0 8px; color: #bdc7dd; font-size: 11px; letter-spacing: .2em; }
+.player-credits h2 { font-size: clamp(20px, 4vw, 30px); margin: 0; overflow-wrap: anywhere; }
+.player-credits button { padding: 9px 15px; border: 1px solid #becce445; background: #ffffff0a; color: inherit; border-radius: 8px; flex-shrink: 0; cursor: pointer; }
+.player-credits-scroll { min-height: 0; max-height: 62dvh; padding: 24px; overflow: auto; overscroll-behavior: contain; }
+.player-credits h3 { margin: 0 0 18px; font-size: 13px; color: #aab9d3; }
+.player-credits h4 { margin: 0 0 12px; font-size: 17px; }
+.player-credits article { padding: 20px; margin-bottom: 14px; border: 1px solid #becce421; background: #ffffff04; border-radius: 12px; }
+.player-credits p, .player-credits dd { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; font-size: 14px; }
+.player-credits dl { margin: 14px 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; }
+.player-credits dt { font-size: 12px; color: #99abc7; padding-top: 3px; }
+.player-credits dd { margin: 0; }
+.player-credits section { margin-top: 32px; }
+.player-credits a { color: #b6d5ff; }
+@media(max-width: 500px) { .player-credits header, .player-credits-scroll { padding: 18px; } .player-credits article { padding: 15px; } }

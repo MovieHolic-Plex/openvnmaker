@@ -51,13 +51,15 @@ test("character art changes one expression without replacing other characters or
   assert.deepEqual(next.characters.find(character => character.id === "seorin")?.expressionImages, { ...base.characters.find(character => character.id === "seorin")?.expressionImages, neutral: neutral.url, smile: smile.url });
   assert.deepEqual(next.characters.find(character => character.id === "dohyun")?.expressionImages, base.characters.find(character => character.id === "dohyun")?.expressionImages);
   assert.throws(() => parseScript({ ...base, characters: [{ ...base.characters[0], expressionImages: { neutral: "https://example.com/track.png" } }] }), /캐릭터 이미지 주소/);
-  assert.throws(() => parseScript({ ...base, characters: [{ ...base.characters[0], expressionImages: { angry: neutral.url } }] }), /표정/);
+  assert.equal(parseScript({ ...base, characters: [{ ...base.characters[0], expressionImages: { angry: neutral.url } }] }).characters[0]?.expressionImages?.angry,neutral.url);
+  assert.throws(() => parseScript({ ...base, characters: [{ ...base.characters[0], expressionImages: { "../angry": neutral.url } }] }), /표정/);
 });
 
 test("art registry rejects duplicate IDs and invalid scene/character references", () => {
   assert.throws(() => parseScript({ ...base, assets: [cg, cg] }), /중복/);
   assert.throws(() => parseScript({ ...base, assets: [{ ...cg, sceneId: "missing" }] }), /대상 씬/);
-  assert.throws(() => parseScript({ ...base, assets: [{ ...cg, kind: "character" }] }), /등장인물/);
+  assert.equal(parseScript({ ...base, assets: [{ ...cg, kind: "character" }] }).assets?.[0]?.characterId,undefined);
+  assert.throws(() => parseScript({ ...base, assets: [{ ...cg, kind: "character",characterId:"missing" }] }), /등장인물/);
   assert.equal(registerArtwork(registerArtwork(base, cg), { ...cg, name: "수정" }).assets?.length, 1);
 });
 

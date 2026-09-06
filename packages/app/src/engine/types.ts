@@ -1,10 +1,13 @@
-import type { Scene, VnScript } from "@vnmaker/content";
+import type { Scene, StoryFlags, VnScript } from "@vnmaker/content";
 
 export type Phase = "title" | "scene" | "choice" | "ending";
 
 export interface HistoryEntry {
   readonly speaker: string | null;
   readonly text: string;
+  /** Source label captured when read; absent in older saves. */
+  readonly sceneId?: string;
+  readonly chapter?: string;
 }
 
 export interface VnState {
@@ -12,6 +15,7 @@ export interface VnState {
   readonly sceneId: string;
   readonly lineIndex: number;
   readonly affection: number;
+  readonly flags: StoryFlags;
   readonly history: readonly HistoryEntry[];
   readonly endingTitle: string | null;
   /** 존재하지 않는 씬을 가리켰을 때 예외 대신 여기에 남긴다. */
@@ -25,7 +29,7 @@ export type VnAction =
   | { readonly type: "advance" }
   | { readonly type: "choose"; readonly index: number }
   | { readonly type: "skipScene" }
-  | { readonly type: "restore"; readonly sceneId: string; readonly lineIndex: number; readonly affection: number }
+  | { readonly type: "restore"; readonly sceneId: string; readonly lineIndex: number; readonly affection: number; readonly flags?: StoryFlags; readonly phase?: Phase; readonly history?: readonly HistoryEntry[] }
   | { readonly type: "backToTitle" };
 
 export interface SaveData {
@@ -34,6 +38,9 @@ export interface SaveData {
   readonly affection: number;
   readonly savedAt: number;
   readonly script?: VnScript;
+  readonly flags?: StoryFlags;
+  readonly phase?: Phase;
+  readonly history?: readonly HistoryEntry[];
 }
 
 export function initialState(script: VnScript): VnState {
@@ -42,6 +49,7 @@ export function initialState(script: VnScript): VnState {
     sceneId: script.start,
     lineIndex: 0,
     affection: 0,
+    flags: { ...script.flags },
     history: [],
     endingTitle: null,
     error: null,

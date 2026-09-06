@@ -7,10 +7,11 @@ interface Props {
   readonly backgroundUrl?: string | undefined;
   readonly cgUrl?: string | undefined;
   readonly showAffection?: boolean;
+  readonly onCredits: () => void;
   readonly onBack: () => void;
 }
 
-export function EndingScreen({ title, affection, background = "title", backgroundUrl, cgUrl, showAffection = true, onBack }: Props) {
+export function EndingScreen({ title, affection, background = "title", backgroundUrl, cgUrl, showAffection = true, onBack, onCredits }: Props) {
   return (
     <section className="ending-screen" data-testid="ending-screen">
       <img className="ending-bg" src={validBackgroundUrl(cgUrl) ? cgUrl : validBackgroundUrl(backgroundUrl) ? backgroundUrl : `/assets/bg/${background}.png`} alt="" />
@@ -25,6 +26,7 @@ export function EndingScreen({ title, affection, background = "title", backgroun
         <button type="button" className="ink-button" data-testid="back-to-title" onClick={onBack}>
           타이틀로
         </button>
+        <button type="button" className="ink-button" data-testid="credits-button" onClick={onCredits}>크레딧</button>
       </div>
     </section>
   );

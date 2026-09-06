@@ -1,6 +1,22 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { script } from "../../packages/content/src/index.js";
+const cues = JSON.parse(readFileSync(new URL("../../docs/qa/studio-completion-2026-09-06/narrative-cues.json", import.meta.url), "utf8")) as {scene:string;index:number;cgUrl?:string|null;backgroundUrl?:string}[];
+
+const cueIndex = (scene: string, field: "cgUrl" | "backgroundUrl", value: string | null) => {
+  const cue = cues.find(cue => cue.scene === scene && field in cue && cue[field] === value);
+  if (!cue) throw new Error(`Missing authored cue: ${scene}/${field}/${value}`);
+  return cue.index;
+};
+async function screenshotReady(page: Page) {
+  await expect.poll(() => page.locator("img:visible").evaluateAll(images => images.filter(image => { const rect=image.getBoundingClientRect(); return rect.bottom>0 && rect.top<innerHeight && rect.right>0 && rect.left<innerWidth; }).every(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))).toBe(true);
+  await expect(page.locator('canvas[data-src]:visible:not([data-loaded="true"])')).toHaveCount(0);
+  await page.evaluate(() => document.fonts.ready);
+}
+test.beforeEach(async ({ page }) => {
+  await mkdir("evidence/rain-novel", { recursive: true });
+});
 
 test("old projects/checkpoints/saves are removed once; new edits survive reload; no internal AI requests", async ({ page }) => {
   const apiCalls: string[] = [];
@@ -23,7 +39,9 @@ test("old projects/checkpoints/saves are removed once; new edits survive reload;
   await page.getByTestId("workspace-stage").click();
   await page.getByTestId("studio-line-1").click();
   await page.getByTestId("studio-line-text").fill("새 작품의 저장을 검증하는 독립된 대사입니다.");
-  await page.reload(); await page.getByTestId("workspace-stage").click(); await page.getByTestId("studio-line-1").click();
+  await page.reload();
+  await expect(page.getByTestId("workspace-stage")).toHaveClass(/is-active/);
+  await expect(page.getByTestId("studio-line-1")).toHaveClass(/is-selected/);
   await expect(page.getByTestId("studio-line-text")).toHaveValue("새 작품의 저장을 검증하는 독립된 대사입니다.");
   await page.getByTestId("workspace-assets").click();
   await expect(page.getByTestId("art-library")).toBeVisible();
@@ -36,33 +54,46 @@ for (let route = 0; route < 8; route++) test(`complete published path ${route + 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: script.title, exact: true })).toBeVisible();
-  if (route === 0) await page.screenshot({ path: "evidence/rain-novel/title.png" });
+  if (route === 0) { await screenshotReady(page); await page.screenshot({ path: "evidence/rain-novel/title.png" }); }
   await page.getByTestId("start-button").click();
   const visited = new Set<string>();
+  let expectedFlags = { ...script.flags };
   for (let step = 0; step < 30; step++) {
     await expect.poll(async () => (await page.evaluate(() => window.__vn))?.phase).toMatch(/scene|choice|ending/);
     const state = await page.evaluate(() => window.__vn!);
     expect(state.error).toBeNull();
+    expect(state.flags).toEqual(expectedFlags);
     if (state.phase === "ending") break;
     visited.add(state.sceneId);
     const scene = script.scenes.find(scene => scene.id === state.sceneId)!;
-    const currentBackground = scene.lines.slice(0,state.lineIndex+1).reduce<string|undefined>((background,line)=>line.backgroundUrl ?? background,scene.backgroundUrl);
-    await expect(page.getByTestId("bg-image")).toHaveAttribute("src", scene.lines.slice(0,state.lineIndex+1).reduce<string|null|undefined>((cg,line)=>line.cgUrl === undefined ? cg : line.cgUrl,scene.cgUrl) ?? currentBackground!);
+    const permitted = (line: typeof scene.lines[number]) => (line.when?.all ?? []).every(flag => !!state.flags[flag]) && (line.when?.none ?? []).every(flag => !state.flags[flag]);
+    expect(permitted(scene.lines[state.lineIndex]!)).toBe(true);
+    const seenLines = scene.lines.slice(0,state.lineIndex+1).filter(permitted);
+    const currentBackground = seenLines.reduce<string|undefined>((background,line)=>line.backgroundUrl ?? background,scene.backgroundUrl);
+    await expect(page.getByTestId("bg-image")).toHaveAttribute("src", seenLines.reduce<string|null|undefined>((cg,line)=>line.cgUrl === undefined ? cg : line.cgUrl,scene.cgUrl) ?? currentBackground!);
     if (route === 0 && ["s03", "s10", "s17a"].includes(state.sceneId) || route === 7 && state.sceneId === "s12b") {
-      await page.getByTestId("bg-image").evaluate(image => new Promise<void>(resolve => { if ((image as HTMLImageElement).complete) resolve(); else image.addEventListener("load", () => resolve(), { once: true }); }));
       await page.getByTestId("advance-button").click();
+      await screenshotReady(page);
       await page.screenshot({ path: `evidence/rain-novel/scene-${state.sceneId}.png` });
     }
     if (state.phase === "choice") {
       const bit = state.sceneId === "s05" ? 0 : state.sceneId === "s11" ? 1 : 2;
-      await page.getByTestId(`choice-${(route >> bit) & 1}`).click();
+      const chosen = (route >> bit) & 1;
+      expectedFlags = { ...expectedFlags, ...scene.choices![chosen]!.set };
+      await page.getByTestId(`choice-${chosen}`).click();
     } else await page.getByTestId("skip-button").click();
   }
   await expect(page.getByTestId("ending-screen")).toBeVisible();
   expect(visited.size).toBe(17);
   const ending = script.scenes.find(scene => scene.id === ((route & 4) ? "s17b" : "s17a"))!.ending!;
   await expect(page.getByTestId("ending-title")).toHaveText(ending);
-  if (route === 0 || route === 7) await page.screenshot({ path: `evidence/rain-novel/ending-${route === 0 ? "a" : "b"}.png` });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vnmaker:auto") ?? "null")?.phase)).toBe("ending");
+  const history = await page.evaluate(() => JSON.parse(localStorage.getItem("vnmaker:auto")!).history.map((line: {text:string})=>line.text) as string[]);
+  for (const scene of script.scenes.filter(scene=>visited.has(scene.id))) for (const line of scene.lines.filter(line=>line.when)) {
+    const included = (line.when!.all ?? []).every(flag=>!!expectedFlags[flag]) && (line.when!.none ?? []).every(flag=>!expectedFlags[flag]);
+    expect(history.includes(line.text), `조건부 기록: ${scene.id}/${line.text}`).toBe(included);
+  }
+  if (route === 0 || route === 7) { await screenshotReady(page); await page.screenshot({ path: `evidence/rain-novel/ending-${route === 0 ? "a" : "b"}.png` }); }
 });
 
 test("project CG, camera, undo and preview consume the same artwork", async ({ page }) => {
@@ -80,6 +111,9 @@ test("project CG, camera, undo and preview consume the same artwork", async ({ p
   await expect(page.getByTestId("stage")).toHaveAttribute("data-scene", "s01");
   await expect(page.getByTestId("dialogue-text")).toHaveText(script.scenes[0]!.lines[2]!.text);
   await page.getByTestId("save-button").click();
+  await expect(page.getByTestId("slot-picker")).toBeVisible();
+  await page.getByTestId("slot-save-0").click();
+  await expect(page.getByTestId("slot-picker")).not.toBeVisible();
   await page.reload();
   await expect(page.getByTestId("stage")).toHaveAttribute("data-scene", "s01");
 });
@@ -96,14 +130,16 @@ test("CG cues follow their dialogue lines and keyed character art has transparen
   });
   expect(alpha.corner).toBe(0); expect(alpha.pixels.some(value => value > 240)).toBe(true);
   await page.getByTestId("studio-scene-s10").click();
-  await page.getByTestId("studio-line-25").click();
+  const enter = cueIndex("s10", "cgUrl", "/assets/art/blue-pigment-cg.png");
+  const leave = cueIndex("s10", "cgUrl", null);
+  await page.getByTestId(`studio-line-${enter - 1}`).click();
   await expect(page.getByTestId("studio-stage").getByTestId("bg-image")).toHaveAttribute("src", "/assets/art/rooftop-before-dawn.png");
   await page.getByRole("button", { name: "다음 대사", exact: true }).click();
   await expect(page.getByTestId("studio-stage").getByTestId("bg-image")).toHaveAttribute("src", "/assets/art/blue-pigment-cg.png");
   await page.getByRole("button", { name: "집중 모드", exact: true }).click();
+  await screenshotReady(page);
   await page.screenshot({ path: "evidence/rain-novel/editor-cg-cue.png" });
-  await page.getByRole("button", { name: "다음 대사", exact: true }).click();
-  await page.getByRole("button", { name: "다음 대사", exact: true }).click();
+  for (let index=enter;index<leave;index++) await page.getByRole("button", { name: "다음 대사", exact: true }).click();
   await expect(page.getByTestId("studio-stage").getByTestId("bg-image")).toHaveAttribute("src", "/assets/art/rooftop-before-dawn.png");
 });
 
@@ -116,10 +152,11 @@ test("all character expressions render cleanly and art selection stays usable on
   await page.getByTestId("workspace-assets").click();
   await expect(page.locator(".art-count")).toContainText(String(script.assets!.length));
   await expect(page.locator(".art-grid .art-card")).toHaveCount(script.assets!.length);
+  await screenshotReady(page);
   await page.screenshot({ path: "evidence/rain-novel/art-library.png" });
   await page.getByRole("group", { name:"이미지 종류" }).getByRole("button", { name: /캐릭터/ }).click();
   const portraits = page.locator(".art-grid canvas");
-  await expect(portraits).toHaveCount(12);
+  await expect(portraits).toHaveCount(script.assets!.filter(asset=>asset.kind==="character").length);
   for (const portrait of await portraits.all()) {
     await expect(portrait).toHaveAttribute("data-loaded", "true");
     expect(await portrait.evaluate(element => {
@@ -136,6 +173,7 @@ test("all character expressions render cleanly and art selection stays usable on
   await expect(page.getByTestId("art-mobile-preview")).toHaveAttribute("data-loaded", "true");
   await expect(page.getByTestId("art-quick-apply")).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await screenshotReady(page);
   await page.screenshot({ path: "evidence/rain-novel/art-mobile.png" });
   await page.getByTestId("art-quick-apply").click();
   await expect(page.locator(".art-mobile-selection")).toContainText("캐릭터의 표정 이미지에 적용했습니다.");
@@ -146,19 +184,24 @@ test("epilogues change background at the authored lines in editor and player", a
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/studio.html"); await page.getByTestId("workspace-stage").click();
   await page.getByTestId("studio-scene-s17b").click();
-  await page.getByTestId("studio-line-23").click();
+  const cafe = cueIndex("s17b", "backgroundUrl", "/assets/art/morning-cafe.png");
+  const riverside = cueIndex("s17b", "backgroundUrl", "/assets/art/riverside-morning.png");
+  await page.getByTestId(`studio-line-${cafe}`).click();
   await expect(page.getByTestId("studio-line-background")).toHaveValue("/assets/art/morning-cafe.png");
   await expect(page.getByTestId("studio-stage").getByTestId("bg-image")).toHaveAttribute("src", "/assets/art/morning-cafe.png");
   await page.getByTestId("studio-play").click();
   await expect(page.getByTestId("bg-image")).toHaveAttribute("src", "/assets/art/morning-cafe.png");
-  await expect(page.getByTestId("dialogue-text")).toHaveText(script.scenes.find(scene=>scene.id==="s17b")!.lines[23]!.text);
+  await expect(page.getByTestId("dialogue-text")).toHaveText(script.scenes.find(scene=>scene.id==="s17b")!.lines[cafe]!.text);
+  await screenshotReady(page);
   await page.screenshot({ path:"evidence/rain-novel/morning-cafe.png" });
-  for(let index=23; index<28; index++) {
+  for(let index=cafe; index<riverside; index++) {
+    await expect(page.locator(".dialogue-box .next-mark")).toBeVisible();
     await page.getByTestId("advance-button").click();
     await expect.poll(async() => (await page.evaluate(()=>window.__vn))?.lineIndex).toBe(index+1);
     await expect(page.getByTestId("dialogue-text")).toHaveText(script.scenes.find(scene=>scene.id==="s17b")!.lines[index+1]!.text);
   }
   await expect(page.getByTestId("bg-image")).toHaveAttribute("src", "/assets/art/riverside-morning.png");
+  await screenshotReady(page);
   await page.screenshot({ path:"evidence/rain-novel/riverside-epilogue.png" });
 });
 
@@ -166,6 +209,7 @@ test("mobile player keeps full dialogue and navigation reachable", async ({ page
   await page.setViewportSize({ width:390, height:844 });
   await page.goto("/");
   await expect(page.getByTestId("start-button")).toBeInViewport();
+  await screenshotReady(page);
   await page.screenshot({path:"evidence/rain-novel/title-mobile.png"});
   await page.getByTestId("start-button").click();
   await expect(page.getByTestId("dialogue-text")).toHaveText(script.scenes[0]!.lines[0]!.text);
@@ -173,5 +217,6 @@ test("mobile player keeps full dialogue and navigation reachable", async ({ page
   await expect(page.getByTestId("dialogue-box")).toBeInViewport();
   await expect(page.getByTestId("settings-button")).toBeInViewport();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await screenshotReady(page);
   await page.screenshot({path:"evidence/rain-novel/player-mobile.png"});
 });

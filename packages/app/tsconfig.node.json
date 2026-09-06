@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {"noEmit": true, "types": ["node"]},
+  "include": ["native-build-plugin.ts", "export-runtime-plugin.ts", "native-release-baseline.ts", "native-identity.ts", "native-font-notices.ts"]
+}

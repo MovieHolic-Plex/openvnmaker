@@ -5,15 +5,17 @@
   "type": "module",
   "packageManager": "pnpm@11.24.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=24.20.0 <25"
   },
   "scripts": {
     "dev": "pnpm --filter @vnmaker/app dev",
     "dev:gateway": "pnpm --filter @vnmaker/gateway dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test && node tools/audio-check.mjs && node --test tools/momus-gate-doctor.test.mjs",
+    "test": "pnpm -r test && node tools/audio-check.mjs && node --test tools/momus-gate-doctor.test.mjs tools/audio/reproducibility.test.mjs",
     "e2e": "playwright test",
+    "e2e:crash": "playwright test tests/e2e/editor-crash.spec.ts",
+    "e2e:portable": "playwright test tests/e2e/authoring.spec.ts tests/e2e/state-authoring.spec.ts tests/e2e/arithmetic.spec.ts tests/e2e/export-bundle.spec.ts tests/e2e/editor-session.spec.ts tests/e2e/autosave-status.spec.ts tests/e2e/project-recovery.spec.ts tests/e2e/audio-settings.spec.ts tests/e2e/music-fade.spec.ts tests/e2e/manuscript-search.spec.ts tests/e2e/runtime-credits.spec.ts tests/e2e/player-keyboard.spec.ts tests/e2e/settings-modal.spec.ts tests/e2e/history-modal.spec.ts tests/e2e/choice-keyboard.spec.ts tests/e2e/editor-resize.spec.ts tests/e2e/mobile-stage.spec.ts",
     "qa:gateway": "node tools/qa/gateway-live.mjs",
     "qa:image": "node tools/qa/image-live.mjs",
     "qa:generate": "node tools/qa/generate-live.mjs",

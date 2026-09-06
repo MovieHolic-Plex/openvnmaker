@@ -1,0 +1,10 @@
+import {readFile,writeFile,mkdir} from "node:fs/promises";
+import {resolve,join} from "node:path";
+import {framingStory as script} from "../test/fixtures/framing-story.js";
+import {collectProjectAssets} from "../src/studio/exportBundle.js";
+import {createZip} from "../src/studio/zip.js";
+const destination=resolve(process.argv[2]??"../../.qa-tmp/framing-fixture");await mkdir(destination,{recursive:true});
+const json=JSON.stringify(script,null,2),entries=[{path:"project.json",bytes:new TextEncoder().encode(json)}];
+for(const url of collectProjectAssets(script))entries.push({path:url.slice(1),bytes:new Uint8Array(await readFile(join("public",url.slice(1))))});
+await writeFile(join(destination,"project.json"),json);await writeFile(join(destination,"project.zip"),new Uint8Array(await createZip(entries).arrayBuffer()));
+console.log(destination);

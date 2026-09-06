@@ -27,6 +27,8 @@ export function ArtImage({src,alt,chromaKey,className,testId,title}:Props){
   useEffect(()=>{
     if(!chromaKey || !canvas.current)return;
     let alive=true;const node=canvas.current;const image=new Image();
+    delete node.dataset["loaded"];
+    setFailed(false);
     const draw=()=>{
       if(!alive)return;
       try{
@@ -41,9 +43,15 @@ export function ArtImage({src,alt,chromaKey,className,testId,title}:Props){
         node.dataset["loaded"]="true";setFailed(false);
       }catch{setFailed(true);}
     };
-    image.onload=draw;image.onerror=()=>{if(alive)setFailed(true);};image.src=src;
-    const observer=new ResizeObserver(()=>{if(image.complete&&image.naturalWidth)draw();});observer.observe(node);
-    return()=>{alive=false;observer.disconnect();};
+    let frame: number | undefined;
+    const queueDraw=()=>{
+      if(frame!==undefined)return;
+      frame=requestAnimationFrame(()=>{frame=undefined;if(image.complete&&image.naturalWidth)draw();});
+    };
+    image.onload=queueDraw;image.onerror=()=>{if(alive)setFailed(true);};image.src=src;
+    // Canvas dimensions affect layout; write them outside ResizeObserver delivery.
+    const observer=new ResizeObserver(queueDraw);observer.observe(node);
+    return()=>{alive=false;observer.disconnect();if(frame!==undefined)cancelAnimationFrame(frame);};
   },[src,chromaKey]);
   if(!chromaKey)return <img src={src} alt={alt} className={className} data-testid={testId} title={title} loading="lazy"/>;
   return <canvas ref={canvas} className={className} data-testid={testId} data-src={src} data-art-error={failed||undefined} role="img" aria-label={alt||"캐릭터 원화"} title={failed?"원화를 표시하지 못했습니다.":title}/>;

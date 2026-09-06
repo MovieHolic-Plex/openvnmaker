@@ -1,0 +1,811 @@
+[
+  {
+    "scene": "s03",
+    "index": 8,
+    "anchor": "가까이 다가가서야",
+    "cgUrl": "/assets/art/empty-sixth-frame-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s03",
+    "index": 13,
+    "anchor": "클램프 두 개가",
+    "cgUrl": null,
+    "framing": "wide"
+  },
+  {
+    "scene": "s06a",
+    "index": 3,
+    "anchor": "가져갈 물건은 거의",
+    "cgUrl": "/assets/art/seorin-packing-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s06a",
+    "index": 6,
+    "anchor": "서린이 종이를 접던",
+    "cgUrl": null,
+    "framing": "wide"
+  },
+  {
+    "scene": "s06b",
+    "index": 7,
+    "anchor": "그가 꺼낸 것은",
+    "cgUrl": "/assets/art/recorder-ribbon-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s06b",
+    "index": 11,
+    "anchor": "잠깐. 켜자마자",
+    "cgUrl": null,
+    "framing": "wide"
+  },
+  {
+    "scene": "s08",
+    "index": 17,
+    "anchor": "미래가 처음 동의서에는",
+    "cgUrl": "/assets/art/records-comparison-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s08",
+    "index": 22,
+    "anchor": "화면이 어두워졌다",
+    "cgUrl": null,
+    "framing": "wide"
+  },
+  {
+    "scene": "s10",
+    "index": 26,
+    "anchor": "도현이 유리를 비스듬히",
+    "cgUrl": "/assets/art/blue-pigment-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s10",
+    "index": 28,
+    "anchor": "날짜는 오늘이고",
+    "cgUrl": null,
+    "framing": "wide"
+  },
+  {
+    "scene": "s12b",
+    "index": 21,
+    "anchor": "그녀의 손이 내 손 위가",
+    "cgUrl": "/assets/art/rain-umbrella-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s12b",
+    "index": 24,
+    "anchor": "너는 왜 오늘 왔어",
+    "cgUrl": null,
+    "framing": "wide"
+  },
+  {
+    "scene": "s14",
+    "index": 12,
+    "anchor": "우리는 유리 사이 간격을",
+    "cgUrl": "/assets/art/glass-assembly-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s14",
+    "index": 19,
+    "anchor": "밖에서는 비가 조금",
+    "cgUrl": null,
+    "framing": "wide"
+  },
+  {
+    "scene": "s17a",
+    "index": 5,
+    "anchor": "첫 관람객은",
+    "cgUrl": "/assets/art/first-visitor-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s17a",
+    "index": 9,
+    "anchor": "두 번째로 온 학생은",
+    "cgUrl": null,
+    "framing": "wide"
+  },
+  {
+    "scene": "s17b",
+    "index": 43,
+    "anchor": "두 손이 우산 손잡이의",
+    "cgUrl": "/assets/art/rain-umbrella-cg.png",
+    "framing": "cinematic"
+  },
+  {
+    "scene": "s17a",
+    "index": 28,
+    "anchor": "건물 밖으로 나왔을 때",
+    "backgroundUrl": "/assets/art/campus-morning.png",
+    "framing": "wide"
+  },
+  {
+    "scene": "s17a",
+    "index": 36,
+    "anchor": "서린을 다시 만난 것은",
+    "backgroundUrl": "/assets/art/riverside-morning.png",
+    "framing": "wide"
+  },
+  {
+    "scene": "s17b",
+    "index": 23,
+    "anchor": "밖으로 나왔을 때는",
+    "backgroundUrl": "/assets/art/campus-morning.png",
+    "framing": "wide"
+  },
+  {
+    "scene": "s17b",
+    "index": 25,
+    "anchor": "강변의 작은 식당이",
+    "backgroundUrl": "/assets/art/morning-cafe.png",
+    "framing": "wide"
+  },
+  {
+    "scene": "s17b",
+    "index": 30,
+    "anchor": "식당을 나와 강변 벤치에서",
+    "backgroundUrl": "/assets/art/riverside-morning.png",
+    "framing": "wide"
+  },
+  {
+    "scene": "s01",
+    "index": 40,
+    "anchor": "교문 안으로 들어서자",
+    "sfx": "footsteps"
+  },
+  {
+    "scene": "s02",
+    "index": 38,
+    "anchor": "창 아래 풍경이 갑자기",
+    "sfx": "phone-buzz"
+  },
+  {
+    "scene": "s02",
+    "index": 43,
+    "anchor": "문을 닫을 때 첫 빗방울이",
+    "sfx": "rain-loop"
+  },
+  {
+    "scene": "s03",
+    "index": 0,
+    "anchor": "유리 복도의 끝에서",
+    "sfx": "rain-loop"
+  },
+  {
+    "scene": "s04",
+    "index": 10,
+    "anchor": "여기 첫 번째 동의서예요",
+    "sfx": "page-turn"
+  },
+  {
+    "scene": "s06a",
+    "index": 0,
+    "anchor": "서린은 작업실 바닥에",
+    "sfx": "door-open"
+  },
+  {
+    "scene": "s06a",
+    "index": 20,
+    "anchor": "서린은 시험지 위에",
+    "sfx": "brush-stroke"
+  },
+  {
+    "scene": "s06b",
+    "index": 0,
+    "anchor": "자료실 문은 어깨로",
+    "sfx": "door-open"
+  },
+  {
+    "scene": "s06b",
+    "index": 18,
+    "anchor": "도현이 두 번째 상자에서",
+    "sfx": "page-turn"
+  },
+  {
+    "scene": "s07",
+    "index": 42,
+    "anchor": "미래가 복도 끝 조명을",
+    "sfx": "footsteps"
+  },
+  {
+    "scene": "s08",
+    "index": 17,
+    "anchor": "미래가 처음 동의서에는",
+    "sfx": "page-turn"
+  },
+  {
+    "scene": "s09",
+    "index": 39,
+    "anchor": "우리는 불이 켜진 계단으로",
+    "sfx": "footsteps"
+  },
+  {
+    "scene": "s10",
+    "index": 26,
+    "anchor": "도현이 유리를 비스듬히",
+    "sfx": "brush-stroke"
+  },
+  {
+    "scene": "s12a",
+    "index": 1,
+    "anchor": "미래가 학생증을 대자",
+    "sfx": "door-open"
+  },
+  {
+    "scene": "s12a",
+    "index": 6,
+    "anchor": "세 번째 번호를 읽다",
+    "sfx": "page-turn"
+  },
+  {
+    "scene": "s12a",
+    "index": 39,
+    "anchor": "측면 문이 닫히자",
+    "sfx": "rain-loop"
+  },
+  {
+    "scene": "s12b",
+    "index": 22,
+    "anchor": "서린이 각도를 고치자",
+    "sfx": "rain-loop"
+  },
+  {
+    "scene": "s13",
+    "index": 15,
+    "anchor": "미래가 네 사람에게 종이를",
+    "sfx": "page-turn"
+  },
+  {
+    "scene": "s14",
+    "index": 18,
+    "anchor": "서린은 붓에 묻은 물기를",
+    "sfx": "brush-stroke"
+  },
+  {
+    "scene": "s14",
+    "index": 22,
+    "anchor": "우리는 처마 아래에서",
+    "sfx": "rain-loop"
+  },
+  {
+    "scene": "s15",
+    "index": 4,
+    "anchor": "미래는 문 밖으로",
+    "sfx": "footsteps"
+  },
+  {
+    "scene": "s16",
+    "index": 36,
+    "anchor": "아래층에서 관리인의 카트가",
+    "sfx": "footsteps"
+  },
+  {
+    "scene": "s17a",
+    "index": 4,
+    "anchor": "응. 문부터 열자",
+    "sfx": "door-open"
+  },
+  {
+    "scene": "s17a",
+    "index": 42,
+    "anchor": "우리는 같은 속도로 걷기까지",
+    "sfx": "footsteps"
+  },
+  {
+    "scene": "s17b",
+    "index": 25,
+    "anchor": "강변의 작은 식당이",
+    "sfx": "door-open"
+  },
+  {
+    "scene": "s17b",
+    "index": 40,
+    "anchor": "목요일에는 작은 비가",
+    "sfx": "rain-loop"
+  },
+  {
+    "scene": "s03",
+    "index": 8,
+    "anchor": "가까이 다가가서야",
+    "bgm": null
+  },
+  {
+    "scene": "s03",
+    "index": 13,
+    "anchor": "클램프 두 개가",
+    "bgm": "rain"
+  },
+  {
+    "scene": "s08",
+    "index": 13,
+    "anchor": "윤해원 씨의 요청이에요",
+    "bgm": null
+  },
+  {
+    "scene": "s08",
+    "index": 25,
+    "anchor": "나는 이상하게 안도했다",
+    "bgm": "rain"
+  },
+  {
+    "scene": "s09",
+    "index": 7,
+    "anchor": "내가 보낸 답은 요청 아래에",
+    "bgm": null
+  },
+  {
+    "scene": "s09",
+    "index": 38,
+    "anchor": "휴대전화를 잠가 주머니에",
+    "bgm": "warm"
+  },
+  {
+    "scene": "s13",
+    "index": 11,
+    "anchor": "도현은 녹음기 위에 올려 둔",
+    "bgm": null
+  },
+  {
+    "scene": "s13",
+    "index": 32,
+    "anchor": "도현이 도면의 가운데 선을",
+    "bgm": "daily"
+  },
+  {
+    "scene": "s14",
+    "index": 22,
+    "anchor": "우리는 처마 아래에서",
+    "bgm": null
+  },
+  {
+    "scene": "s14",
+    "index": 27,
+    "anchor": "미래는 설명문 초안을",
+    "bgm": "warm"
+  },
+  {
+    "scene": "s15",
+    "index": 41,
+    "anchor": "버튼을 누르자 스피커가",
+    "bgm": null
+  },
+  {
+    "scene": "s17a",
+    "index": 5,
+    "anchor": "첫 관람객은",
+    "bgm": null
+  },
+  {
+    "scene": "s17a",
+    "index": 28,
+    "anchor": "건물 밖으로 나왔을 때",
+    "bgm": "ending"
+  },
+  {
+    "scene": "s17b",
+    "index": 0,
+    "anchor": "우리는 이번 전시를 열지",
+    "bgm": null
+  },
+  {
+    "scene": "s17b",
+    "index": 25,
+    "anchor": "강변의 작은 식당이",
+    "bgm": "ending"
+  },
+  {
+    "scene": "s02",
+    "index": 15,
+    "anchor": "팔레트에 남은 청색은",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "seorin",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/seorin-working.png"
+      }
+    ]
+  },
+  {
+    "scene": "s02",
+    "index": 21,
+    "anchor": "우진아. 들어온 지",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "seorin",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s03",
+    "index": 22,
+    "anchor": "도현이 전원 분배함 옆에서",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "dohyun",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/dohyun-working.png"
+      }
+    ]
+  },
+  {
+    "scene": "s03",
+    "index": 33,
+    "anchor": "누군가는 명단만",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "dohyun",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s04",
+    "index": 10,
+    "anchor": "여기 첫 번째 동의서예요",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/mirae-reading.png"
+      }
+    ]
+  },
+  {
+    "scene": "s04",
+    "index": 24,
+    "anchor": "저번 행사에서 참가자",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s06a",
+    "index": 20,
+    "anchor": "서린은 시험지 위에",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "seorin",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/seorin-working.png"
+      }
+    ]
+  },
+  {
+    "scene": "s06a",
+    "index": 31,
+    "anchor": "그 말에 둘 다",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "seorin",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s08",
+    "index": 4,
+    "anchor": "공개본 번호와 원본 이름을",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/mirae-reading.png"
+      }
+    ]
+  },
+  {
+    "scene": "s08",
+    "index": 23,
+    "anchor": "해원 씨는 지금 어떻게",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s12a",
+    "index": 3,
+    "anchor": "그녀는 책상에 서류를",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/mirae-reading.png"
+      }
+    ]
+  },
+  {
+    "scene": "s12a",
+    "index": 12,
+    "anchor": "미래의 휴대전화에는",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s13",
+    "index": 17,
+    "anchor": "그는 카드 리더를 꺼냈다",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "dohyun",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/dohyun-working.png"
+      }
+    ]
+  },
+  {
+    "scene": "s13",
+    "index": 32,
+    "anchor": "도현이 도면의 가운데 선을",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "dohyun",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s14",
+    "index": 18,
+    "anchor": "서린은 붓에 묻은 물기를",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "seorin",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/seorin-working.png"
+      }
+    ]
+  },
+  {
+    "scene": "s14",
+    "index": 19,
+    "anchor": "밖에서는 비가 조금",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "seorin",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s07",
+    "index": 6,
+    "anchor": "서린의 소매 안쪽에",
+    "framing": "close",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "seorin",
+        "expression": "smile",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s07",
+    "index": 8,
+    "anchor": "도현이 상자를 내 쪽에",
+    "framing": "close",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "dohyun",
+        "expression": "sad",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s07",
+    "index": 10,
+    "anchor": "여섯 번째 패널은 내가 별관에서",
+    "framing": "wide",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "dohyun",
+        "expression": "neutral",
+        "poseUrl": null
+      },
+      {
+        "slot": "right",
+        "character": "seorin",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s13",
+    "index": 3,
+    "anchor": "가방은 아직 내 어깨에",
+    "framing": "close",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/mirae-reading.png"
+      }
+    ]
+  },
+  {
+    "scene": "s13",
+    "index": 5,
+    "anchor": "서린이 우산 끈을 묶는 동안",
+    "framing": "close",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "seorin",
+        "expression": "smile",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s13",
+    "index": 7,
+    "anchor": "노란 책갈피가 나중에",
+    "framing": "wide",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s15",
+    "index": 6,
+    "anchor": "서린은 나를 불러 의자에",
+    "framing": "close",
+    "sprites": [
+      {
+        "slot": "right",
+        "character": "seorin",
+        "expression": "smile",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s15",
+    "index": 8,
+    "anchor": "도현은 나를 입구로 불러",
+    "framing": "wide",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "dohyun",
+        "expression": "neutral",
+        "poseUrl": "/assets/art/dohyun-working.png"
+      }
+    ]
+  },
+  {
+    "scene": "s15",
+    "index": 10,
+    "anchor": "여기서 보니까 유리보다",
+    "sprites": [
+      {
+        "slot": "left",
+        "character": "mirae",
+        "expression": "surprised",
+        "poseUrl": null
+      }
+    ],
+    "framing": "wide"
+  },
+  {
+    "scene": "s17a",
+    "index": 21,
+    "anchor": "전선은 안 걸렸어",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "dohyun",
+        "expression": "smile",
+        "poseUrl": null
+      }
+    ],
+    "framing": "close"
+  },
+  {
+    "scene": "s17a",
+    "index": 22,
+    "anchor": "이제 십 분 남았어요",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "mirae",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ],
+    "framing": "wide"
+  },
+  {
+    "scene": "s17a",
+    "index": 24,
+    "anchor": "예전보다 가볍네",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "seorin",
+        "expression": "smile",
+        "poseUrl": null
+      }
+    ]
+  },
+  {
+    "scene": "s17b",
+    "index": 19,
+    "anchor": "상자 들 때 그 손잡이로",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "dohyun",
+        "expression": "smile",
+        "poseUrl": null
+      }
+    ],
+    "framing": "close"
+  },
+  {
+    "scene": "s17b",
+    "index": 21,
+    "anchor": "나중에 누가 오늘 뭐 했느냐고",
+    "sprites": [
+      {
+        "slot": "center",
+        "character": "seorin",
+        "expression": "neutral",
+        "poseUrl": null
+      }
+    ],
+    "framing": "wide"
+  }
+]
