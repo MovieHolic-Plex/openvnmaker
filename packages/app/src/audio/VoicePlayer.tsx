@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from "react";
+import {resolveRuntimeAsset} from "../storage/runtimeBase.js";
 export function VoicePlayer({source,cue,volume,paused,unlocked,onDone}:{source:string|undefined;cue:string;volume:number;paused:boolean;unlocked:boolean;onDone:(cue:string)=>void}){
   const ref=useRef<HTMLAudioElement>(null),done=useRef(onDone);done.current=onDone;
   const [error,setError]=useState(false);
@@ -8,5 +9,5 @@ export function VoicePlayer({source,cue,volume,paused,unlocked,onDone}:{source:s
   },[source,cue]);
   useEffect(()=>{const audio=ref.current;if(!audio)return;let cancelled=false;if(!source||paused||!unlocked)audio.pause();else void audio.play().catch(error=>{if(!cancelled&&error.name!=="AbortError"){setError(true);done.current(cue);}});return()=>{cancelled=true;};},[source,cue,paused,unlocked]);
   useEffect(()=>{if(ref.current)ref.current.volume=Math.max(0,Math.min(1,volume));},[volume]);
-  return <><audio ref={ref} data-testid="voice-audio" preload="auto" {...(source?{src:source}:{})}/>{error&&<span role="status" className="voice-playback-error">보이스 파일을 재생하지 못했습니다.</span>}</>;
+  return <><audio ref={ref} data-testid="voice-audio" preload="auto" {...(source?{src:resolveRuntimeAsset(source)}:{})}/>{error&&<span role="status" className="voice-playback-error">보이스 파일을 재생하지 못했습니다.</span>}</>;
 }

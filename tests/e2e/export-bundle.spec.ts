@@ -1,9 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
-import { script, applyChoiceFlags, choiceAllowed, lineAllowed, type StoryFlags, type VnScript } from "../../packages/content/src/index.js";
+import { script, type VnScript } from "../../packages/content/src/index.js";
+import { registerLongformExportTests } from "./helpers/longform-export.js";
 
 const fixture: VnScript = {
   title: "ZIP 검증 초안", subtitle: "현재 편집본으로 독립 실행", start: "export-start",
@@ -22,7 +23,15 @@ const fixture: VnScript = {
 
 async function installProject(page: Page, source: VnScript = fixture) {
   await page.goto("/studio.html");
-  await page.evaluate(value => { localStorage.setItem("vnmaker.studio.project.v1", JSON.stringify(value)); localStorage.removeItem("vnmaker.studio.position.v1"); }, source);
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  await page.evaluate(async value => {
+    const path = "/src/studio/projects.ts";
+    const { saveProject, activateProject }: typeof import("../../packages/app/src/studio/projects.js") = await import(path);
+    const id = crypto.randomUUID();
+    await saveProject(id, value);
+    activateProject(id, value);
+    localStorage.removeItem("vnmaker.studio.position.v1");
+  }, source);
   await page.reload();
   await expect(page.getByLabel("작품 제목")).toHaveValue(source.title);
 }
@@ -80,6 +89,7 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
   await page.getByLabel("크레딧 표기문", {exact:true}).scrollIntoViewIfNeeded();
   await page.screenshot({path:testInfo.outputPath("media-provenance-mobile.png")});
   await page.setViewportSize({width:1280,height:720});
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.reload();
   await page.getByTestId("workspace-assets").click();
   await page.getByTestId("art-card-portable-art").click();
@@ -94,6 +104,7 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
   await page.getByRole("button",{name:"제작진 1 삭제",exact:true}).click(); await expect(page.getByLabel("제작진 1 역할",{exact:true})).toHaveValue("시나리오");
   await team.scrollIntoViewIfNeeded(); await page.screenshot({path:testInfo.outputPath("team-credits-editor.png")});
   await page.setViewportSize({width:390,height:844});await team.scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath("team-credits-editor-mobile.png")});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.setViewportSize({width:1280,height:720});
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.reload(); await page.getByTestId("workspace-overview").click(); await expect(page.getByLabel("제작진 1 이름",{exact:true})).toHaveValue("한나\n도윤");
   const firstLine = "ZIP 다운로드 직전에 고친 첫 번째 대사다.";
   await page.getByLabel("작품 제목").fill(title);
@@ -241,106 +252,4 @@ test("cancel a pending export without downloading a partial game, then retry suc
   await expect(page.getByTestId("export-bundle-success")).toBeVisible(); expect(downloads).toBe(1);
 });
 
-test("the entire long-form novel exports with all rich art and plays through every route", async ({ page, browser }, testInfo) => {
-  test.setTimeout(300000);
-  await installProject(page, script);
-  await page.getByTestId("studio-export-bundle").click();
-  const downloaded = page.waitForEvent("download", { timeout: 90000 }); await page.getByTestId("export-bundle-build").click();
-  const download = await downloaded;
-  const zipPath = testInfo.outputPath("rain-novel-play.zip"); await download.saveAs(zipPath);
-  const directory = testInfo.outputPath("unpacked"); await unzip(zipPath, directory);
-  const project = JSON.parse(await readFile(resolve(directory, "project.json"), "utf8")) as VnScript;
-  expect(project).toEqual(script);
-  expect(project.scenes.length).toBe(20);
-  expect(project.scenes.reduce((count, scene) => count + scene.lines.length, 0)).toBe(829);
-  expect(project.assets?.length).toBe(35);
-  const hosting = await serve(directory); const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.addInitScript(()=>localStorage.setItem("vnmaker:settings",JSON.stringify({textSpeed:5,bgmVolume:.55,sfxVolume:.7,voiceVolume:.8})));
-  try {
-    const player = await context.newPage(); const errors: string[] = []; const external: string[] = [];
-    player.on("pageerror", error => errors.push(error.message));
-    player.on("request", request => { const url = new URL(request.url()); if (url.origin !== hosting.origin || url.pathname.startsWith("/api/")) external.push(url.href); });
-    await player.goto(hosting.origin); await expect(player.getByRole("heading", { name: script.title, exact: true })).toBeVisible();
-    await player.getByTestId("bg-image").evaluate(image => (image as HTMLImageElement).decode());
-    await player.screenshot({ path: testInfo.outputPath("longform-standalone-title.png") });
-    await player.getByTestId("start-button").click();
-    const first = project.scenes.find(scene => scene.id === project.start)!;
-    await expect(player.getByTestId("dialogue-text")).toHaveText(first.lines[0]!.text);
-    await player.getByTestId("save-button").click(); await player.getByTestId("slot-save-0").click();
-    await advance(player, 1);
-    await player.getByTestId("save-button").click(); await player.getByTestId("slot-save-1").click();
-    await player.getByTestId("load-button").click();
-    await player.screenshot({ path: testInfo.outputPath("longform-standalone-slots.png") });
-    await player.getByTestId("slot-load-0").click();
-    await expect.poll(() => player.evaluate(() => window.__vn?.lineIndex)).toBe(0);
-    await expect(player.getByTestId("dialogue-text")).toHaveText(first.lines[0]!.text);
-    await player.getByTestId("load-button").click(); await player.getByTestId("slot-load-1").click();
-    await expect.poll(() => player.evaluate(() => window.__vn?.lineIndex)).toBe(1);
-    await expect(player.getByTestId("dialogue-text")).toHaveText(first.lines[1]!.text);
-    await player.getByTestId("auto-button").click(); await player.getByTestId("art-view-button").click();
-    await expect(player.getByTestId("dialogue-text")).toHaveCount(0); await expect(player.getByTestId("save-button")).toHaveCount(0);
-    await player.screenshot({ path: testInfo.outputPath("longform-standalone-art-view.png") });
-    // Wait beyond this line's normal auto-advance deadline; viewing artwork pauses it.
-    await player.waitForTimeout(1000 + first.lines[1]!.text.length * 45);
-    expect(await player.evaluate(() => window.__vn?.lineIndex)).toBe(1);
-    await player.getByTestId("art-view-button").click(); await player.getByTestId("auto-button").click();
-    await expect(player.getByTestId("dialogue-text")).toBeVisible();
-    const visited = new Set<string>();
-    for (let step = 0; step < 30; step++) {
-      const state = await player.evaluate(() => window.__vn!); expect(state.error).toBeNull();
-      if (state.phase === "ending") break;
-      visited.add(state.sceneId);
-      if (state.phase === "choice") await player.getByTestId("choice-0").click();
-      else await player.getByTestId("skip-button").click();
-    }
-    await expect(player.getByTestId("ending-title")).toHaveText(script.scenes.find(scene => scene.id === "s17a")!.ending!);
-    await player.screenshot({ path: testInfo.outputPath("longform-standalone-ending.png") });
-    expect(visited.size).toBe(17); expect(hosting.missing).toEqual([]); expect(errors).toEqual([]); expect(external).toEqual([]);
-    // Enumerate every acyclic choice path, then execute each in the actual exported player.
-    const routes:{scenes:string[];choices:number[];flags:StoryFlags;ending:string;historyCount:number}[]=[];
-    function walk(id:string,flags:StoryFlags,scenes:string[],choices:number[],historyCount:number){
-      if(scenes.includes(id))throw new Error("This sample QA requires acyclic routes");
-      const scene=project.scenes.find(row=>row.id===id)!;expect(scene).toBeTruthy();
-      const path=[...scenes,id],count=historyCount+scene.lines.filter(line=>lineAllowed(line,flags)).length;
-      if(scene.choices?.length){
-        const allowed=scene.choices.map((choice,index)=>({choice,index})).filter(({choice})=>choiceAllowed(choice,flags));expect(allowed.length).toBeGreaterThan(0);
-        for(const {choice,index} of allowed)walk(choice.next,applyChoiceFlags(flags,choice),path,[...choices,index],count+1);
-      }else if(scene.ending)routes.push({scenes:path,choices,flags,ending:scene.ending,historyCount:count});
-      else {expect(scene.next).toBeTruthy();walk(scene.next!,flags,path,choices,count);}
-    }
-    walk(project.start,project.flags??{},[],[],0);expect(routes).toHaveLength(8);
-    const covered=new Set<string>(),endings=new Set<string>(),report=[];
-    for(const [index,route] of routes.entries()){
-      await player.setViewportSize(index%2?{width:390,height:844}:{width:1440,height:900});
-      await player.reload();await player.getByTestId("start-button").click();let decision=0;
-      for(const id of route.scenes){
-        await expect.poll(()=>player.evaluate(()=>window.__vn?.sceneId)).toBe(id);
-        expect(await player.evaluate(()=>window.__vn?.error)).toBeNull();
-        const scene=project.scenes.find(row=>row.id===id)!;
-        const currentFlags=await player.evaluate(()=>window.__vn!.flags);
-        const firstLine=scene.lines.find(line=>lineAllowed(line,currentFlags));
-        await expect(player.getByTestId("dialogue-text")).toHaveText(firstLine!.text);
-        if(!covered.has(id)){
-          await player.getByTestId("bg-image").evaluate(image=>(image as HTMLImageElement).decode());
-          await player.screenshot({path:testInfo.outputPath(`route-scene-${id}.png`)});covered.add(id);
-        }
-        await player.getByTestId("skip-button").click();
-        if(scene.choices?.length){await expect.poll(()=>player.evaluate(()=>window.__vn?.phase)).toBe("choice");await player.getByTestId(`choice-${route.choices[decision++]}`).click();}
-      }
-      await expect(player.getByTestId("ending-title")).toHaveText(route.ending);
-      expect(await player.evaluate(()=>window.__vn!.flags)).toEqual(route.flags);
-      expect(await player.evaluate(()=>window.__vn!.error)).toBeNull();
-      await player.screenshot({path:testInfo.outputPath(`route-${index+1}-ending.png`)});
-      // The ending autosave includes every completed visible line and selected choice.
-      await expect.poll(()=>player.evaluate(()=>{
-        const key=Object.keys(localStorage).find(key=>key.startsWith("vnmaker:auto:"));
-        return key ? JSON.parse(localStorage.getItem(key)!).history?.length : null;
-      })).toBe(route.historyCount);
-      endings.add(route.ending);report.push({route:index+1,...route});
-    }
-    expect([...covered].sort()).toEqual(project.scenes.map(scene=>scene.id).sort());expect(endings.size).toBe(2);
-    await writeFile(testInfo.outputPath("all-route-report.json"),JSON.stringify(report,null,2));
-    expect(hosting.missing).toEqual([]);expect(errors).toEqual([]);expect(external).toEqual([]);
-
-  } finally { await context.close(); await new Promise<void>(resolve => hosting.server.close(() => resolve())); }
-});
+registerLongformExportTests(installProject, unzip, serve);
