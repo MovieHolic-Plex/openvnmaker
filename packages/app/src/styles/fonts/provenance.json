@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "faces": [
+    {
+      "family": "IBM Plex Sans KR",
+      "weight": 400,
+      "file": "IBMPlexSansKR-Regular.woff2",
+      "source": "https://github.com/IBM/plex",
+      "commit": "bf260093582f04622aacc1e9f9ca604d7ccd0c42",
+      "path": "packages/plex-sans-kr/fonts/complete/woff2/hinted/IBMPlexSansKR-Regular.woff2",
+      "sha256": "055a35664c3c3965161c92292504c5633ba9604ec904edc1ed799bf2a436276d"
+    },
+    {
+      "family": "IBM Plex Sans KR",
+      "weight": 500,
+      "file": "IBMPlexSansKR-Medium.woff2",
+      "source": "https://github.com/IBM/plex",
+      "commit": "bf260093582f04622aacc1e9f9ca604d7ccd0c42",
+      "path": "packages/plex-sans-kr/fonts/complete/woff2/hinted/IBMPlexSansKR-Medium.woff2",
+      "sha256": "c00dcd8a9c32a6b6ab8c6b3119e68b3d7aa6eba6f4441d5493019cc019dcdd1e"
+    },
+    {
+      "family": "IBM Plex Sans KR",
+      "weight": 600,
+      "file": "IBMPlexSansKR-SemiBold.woff2",
+      "source": "https://github.com/IBM/plex",
+      "commit": "bf260093582f04622aacc1e9f9ca604d7ccd0c42",
+      "path": "packages/plex-sans-kr/fonts/complete/woff2/hinted/IBMPlexSansKR-SemiBold.woff2",
+      "sha256": "5ad7db28ba74d59fe14c260205c62ddb701320f4f098d8a45ef2757bebc29666"
+    },
+    {
+      "family": "IBM Plex Sans KR",
+      "weight": 700,
+      "file": "IBMPlexSansKR-Bold.woff2",
+      "source": "https://github.com/IBM/plex",
+      "commit": "bf260093582f04622aacc1e9f9ca604d7ccd0c42",
+      "path": "packages/plex-sans-kr/fonts/complete/woff2/hinted/IBMPlexSansKR-Bold.woff2",
+      "sha256": "cf874a368dc2c2c0e4d1933c35611b849e48942023bfdd1fa11128475dbc4860"
+    },
+    {
+      "family": "Noto Serif KR",
+      "weight": 600,
+      "file": "NotoSerifKR-SemiBold.woff2",
+      "source": "https://github.com/google/fonts",
+      "commit": "5e35378e6bda803962ee6fd257e444a7d459660d",
+      "path": "ofl/notoserifkr/NotoSerifKR[wght].ttf",
+      "sourceSha256": "11f8d5de6f1b79195efba3828aaa2ec95c1178f5ae976fb23c8d53250a9938f3",
+      "derived": "fontTools instantiateVariableFont wght=600 flavor=woff2; name table set to SemiBold",
+      "sha256": "05efc00da1572e07621de722b82e19dc65878ebd959563b20b4182ec5ec58d31"
+    },
+    {
+      "family": "Noto Serif KR",
+      "weight": 700,
+      "file": "NotoSerifKR-Bold.woff2",
+      "source": "https://github.com/google/fonts",
+      "commit": "5e35378e6bda803962ee6fd257e444a7d459660d",
+      "path": "ofl/notoserifkr/NotoSerifKR[wght].ttf",
+      "sourceSha256": "11f8d5de6f1b79195efba3828aaa2ec95c1178f5ae976fb23c8d53250a9938f3",
+      "derived": "fontTools instantiateVariableFont wght=700 flavor=woff2; name table set to Bold",
+      "sha256": "ff0d691d966c0a68115dcdb8d20006bd0201194d156eb1c297c2141fb2416696"
+    }
+  ]
+}

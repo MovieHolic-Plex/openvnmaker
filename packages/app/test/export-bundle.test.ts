@@ -46,6 +46,26 @@ test("media records survive rebasing and ZIP restoration while unrecorded assets
   const audio = {...source,audioAssets:[{id:"sound",name:"Sound",kind:"sfx",url:`/assets/user/${"a".repeat(64)}.wav`,duration:1,provenance}]};
   assert.deepEqual(parseScript(audio).audioAssets![0]!.provenance,provenance);
 });
+test("hashed local webfonts and font notices travel with the export runtime", async () => {
+  const font = encoder.encode("wOFF2local");
+  const notice = encoder.encode("IBM Plex Sans KR\nNoto Serif KR\nSIL Open Font License, Version 1.1");
+  const files = [...runtime.files,
+    { path: "IBMPlexSansKR-Regular-test.woff2", size: font.length, sha256: createHash("sha256").update(font).digest("hex") },
+    { path: "FONT-NOTICES.txt", size: notice.length, sha256: createHash("sha256").update(notice).digest("hex") },
+  ];
+  const manifest = { ...runtime, files };
+  const bundle = await buildExportBundle(fixture, { fetcher: fakeFetch({
+    "/export-runtime/manifest.json": Response.json(manifest),
+    "/export-runtime/IBMPlexSansKR-Regular-test.woff2": new Response(font),
+    "/export-runtime/FONT-NOTICES.txt": new Response(notice),
+  }) });
+  const zip = await unzip(bundle.blob);
+  const text = (path: string) => new TextDecoder().decode(zip.get(path));
+  assert.deepEqual(zip.get("IBMPlexSansKR-Regular-test.woff2"), font);
+  assert.match(text("FONT-NOTICES.txt"), /SIL Open Font License, Version 1.1/);
+  assert.ok(!text("index.html").includes("fonts.googleapis"));
+});
+
 test("runtime inventory is included byte-for-byte and protected by the export hash check", async () => {
   const bytes = encoder.encode('{"version":1,"components":[]}');
   const inventory = { path: "RUNTIME_COMPONENTS.json", size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") };

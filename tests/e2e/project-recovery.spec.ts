@@ -1,5 +1,7 @@
 import {test,expect} from "@playwright/test";
+import {createHash} from "node:crypto";
 import {readFile} from "node:fs/promises";
+import {materializeZipBackup} from "./helpers/materialize-zip-backup.js";
 
 test("lost edition marker preserves current manuscript and save data on both entry pages",async({page})=>{
   await page.goto("/studio.html");await page.getByLabel("작품 제목").fill("판본 키가 없어도 남는 원고");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
@@ -141,12 +143,17 @@ test("an entirely damaged library cannot trigger first-run sample initialization
 
 for(const format of ["json","zip"] as const)test(`all-damaged startup restores ${format} backup as a new project while retaining the writer lock`,async({page,context},info)=>{
   await page.goto("/studio.html");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
-  const backup=await page.evaluate(async format=>{
-    const projectModule="/src/studio/projects.ts",bundleModule="/src/studio/exportBundle.ts";
-    const {newProject}=await import(projectModule);const script=newProject(`외부 ${format} 복구 작품`);
-    if(format==="json")return Array.from(new TextEncoder().encode(JSON.stringify(script)));
-    const {buildExportBundle}=await import(bundleModule);const {blob}=await buildExportBundle(script);return Array.from(new Uint8Array(await blob.arrayBuffer()));
-  },format);
+  const restoreFile=format==="zip"?await(async()=>{
+    const zip=await materializeZipBackup(page,info.outputPath("backup.zip"));
+    const fileBytes=await readFile(zip.path);
+    expect(fileBytes.byteLength).toBe(zip.byteLength);
+    expect(createHash("sha256").update(fileBytes).digest("hex")).toBe(zip.sha256);
+    expect(zip.byteLength).toBeGreaterThan(8_000_000);
+    return zip.path;
+  })():{name:"backup.json",mimeType:"application/json",buffer:Buffer.from(await page.evaluate(async()=>{
+    const projectModule="/src/studio/projects.ts";const {newProject}=await import(projectModule);
+    return Array.from(new TextEncoder().encode(JSON.stringify(newProject("외부 json 복구 작품"))));
+  }))};
   await page.evaluate(async()=>{
     const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",2);r.onsuccess=()=>resolve(r.result);});
     await new Promise<void>((resolve,reject)=>{const tx=db.transaction("projects","readwrite"),store=tx.objectStore("projects");store.clear();store.put({id:"damaged-original",script:null,updatedAt:1});tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});db.close();localStorage.removeItem("vnmaker.studio.project.v1");
@@ -158,7 +165,7 @@ for(const format of ["json","zip"] as const)test(`all-damaged startup restores $
   await input.setInputFiles({name:"broken.json",mimeType:"application/json",buffer:Buffer.from('{"invalid":true}')});await expect(page.getByRole("alert")).toContainText("백업을 가져오지 못했습니다");
   expect(await page.evaluate(()=>localStorage.getItem("vnmaker.studio.project.v1"))).toBeNull();
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:info.outputPath(`backup-recovery-${format}.png`)});
-  await input.setInputFiles({name:`backup.${format}`,mimeType:format==="zip"?"application/zip":"application/json",buffer:Buffer.from(backup)});
+  await input.setInputFiles(restoreFile);
   await expect(page.getByLabel("작품 제목")).toHaveValue(`외부 ${format} 복구 작품`);await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await expect(other.getByRole("heading",{name:"다른 탭에서 편집 중입니다"})).toBeVisible();
   const rows=await page.evaluate(async()=>{
