@@ -1,0 +1,46 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { nativeBuildPlugin } from "../../../packages/app/native-build-plugin.js";
+import { compileFixtureBridge } from "./fixture-bridge.ts";
+import { gatewayPreviewPlugin } from "./gateway-middleware.ts";
+import { defineConfig, loadEnv, type Plugin } from "./vite-api.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, "../../..");
+const appRoot = resolve(repoRoot, "packages/app");
+
+function fixtureBridgePlugin(): Plugin {
+  return {
+    name: "vnmaker-e2e-fixture-bridge",
+    async configurePreviewServer(server) {
+      const files = await compileFixtureBridge(appRoot);
+      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        const path = (req.url ?? "").split("?")[0] ?? "";
+        const body = files.get(path);
+        if (!body) {
+          next();
+          return;
+        }
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/javascript; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        res.end(body);
+      });
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => ({
+  root: appRoot,
+  appType: "mpa",
+  preview: {
+    host: "127.0.0.1",
+    strictPort: true,
+  },
+  plugins: [
+    nativeBuildPlugin(appRoot, process.env.VNMAKER_RENPY_SDK ?? loadEnv(mode, appRoot, "VNMAKER_").VNMAKER_RENPY_SDK),
+    gatewayPreviewPlugin(),
+    fixtureBridgePlugin(),
+  ],
+}));
