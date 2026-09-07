@@ -23,7 +23,15 @@ const fixture: VnScript = {
 
 async function installProject(page: Page, source: VnScript = fixture) {
   await page.goto("/studio.html");
-  await page.evaluate(value => { localStorage.setItem("vnmaker.studio.project.v1", JSON.stringify(value)); localStorage.removeItem("vnmaker.studio.position.v1"); }, source);
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  await page.evaluate(async value => {
+    const path = "/src/studio/projects.ts";
+    const { saveProject, activateProject }: typeof import("../../packages/app/src/studio/projects.js") = await import(path);
+    const id = crypto.randomUUID();
+    await saveProject(id, value);
+    activateProject(id, value);
+    localStorage.removeItem("vnmaker.studio.position.v1");
+  }, source);
   await page.reload();
   await expect(page.getByLabel("작품 제목")).toHaveValue(source.title);
 }
@@ -81,6 +89,7 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
   await page.getByLabel("크레딧 표기문", {exact:true}).scrollIntoViewIfNeeded();
   await page.screenshot({path:testInfo.outputPath("media-provenance-mobile.png")});
   await page.setViewportSize({width:1280,height:720});
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.reload();
   await page.getByTestId("workspace-assets").click();
   await page.getByTestId("art-card-portable-art").click();
@@ -95,6 +104,7 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
   await page.getByRole("button",{name:"제작진 1 삭제",exact:true}).click(); await expect(page.getByLabel("제작진 1 역할",{exact:true})).toHaveValue("시나리오");
   await team.scrollIntoViewIfNeeded(); await page.screenshot({path:testInfo.outputPath("team-credits-editor.png")});
   await page.setViewportSize({width:390,height:844});await team.scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath("team-credits-editor-mobile.png")});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.setViewportSize({width:1280,height:720});
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.reload(); await page.getByTestId("workspace-overview").click(); await expect(page.getByLabel("제작진 1 이름",{exact:true})).toHaveValue("한나\n도윤");
   const firstLine = "ZIP 다운로드 직전에 고친 첫 번째 대사다.";
   await page.getByLabel("작품 제목").fill(title);
