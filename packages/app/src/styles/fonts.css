@@ -1,0 +1,42 @@
+@font-face {
+  font-family: "IBM Plex Sans KR";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSansKR-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans KR";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSansKR-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans KR";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSansKR-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans KR";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/IBMPlexSansKR-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Serif KR";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/NotoSerifKR-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Serif KR";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/NotoSerifKR-Bold.woff2") format("woff2");
+}
