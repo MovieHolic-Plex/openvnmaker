@@ -42,7 +42,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   const script = initialScript ?? bundledScript;
   const isStudioPreview = !standalone && new URLSearchParams(window.location.search).get("preview") === "1";
   const saveScope = [projectNamespace,isStudioPreview ? "preview" : ""].filter(Boolean).join(":");
-  const previewBoot = studioPreviewBoot(isStudioPreview, script);
+  const [previewBoot] = useState(() => studioPreviewBoot(isStudioPreview, script));
   const scriptRef = useRef<VnScript>(previewBoot.script);
   const [vnScript, setVnScript] = useState<VnScript>(previewBoot.script);
   const [state, dispatch] = useReducer(
