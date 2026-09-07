@@ -185,6 +185,7 @@ test("crossfade readiness does not treat a pending play as playing",async({page}
   let release=(): void=>{return;};
   let released=false;
   const held=new Promise<void>(resolve=>{release=resolve;});
+  await page.clock.install({time:clockStart});
   await page.route("**/assets/audio/bgm/rain.mp3",async route=>{
     await held;
     await route.continue();
@@ -196,6 +197,8 @@ test("crossfade readiness does not treat a pending play as playing",async({page}
   await settle(page);
   await page.getByRole("button",{name:"닫기",exact:true}).click();
   await expect(page.locator(".next-mark")).toBeAttached();
+  await page.clock.pauseAt(clockPaused);
+  const pausedNow=await page.evaluate(()=>performance.now());
   await arm(page, {kind: "crossfade"});
   await page.evaluate(()=>{
     const media=window.__audioMedia;
@@ -223,11 +226,14 @@ test("crossfade readiness does not treat a pending play as playing",async({page}
       await Promise.resolve();
       return readySettled;
     });
+    const heldNow=await page.evaluate(()=>performance.now());
+    expect(heldNow).toBe(pausedNow);
     const heldSnap=await readBgm(page);
     expect(heldSnap.active.src.includes("rain")).toBe(true);
     expect(heldSnap.active.paused).toBe(false);
     expect(heldSnap.active.readyState).toBeLessThan(2);
     expect(heldSnap.active.playing).toBe(false);
+    expect(heldSnap.idle.playing).toBe(true);
     expect(pending).toBe(false);
     release();
     released=true;
