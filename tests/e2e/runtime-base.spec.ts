@@ -16,7 +16,7 @@ let origin = "";
 let manuscript: VnScript;
 let voicePath = "";
 const encode = (value: string) => Buffer.from(value);
-const types: Readonly<Record<string, string>> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".ogg": "audio/ogg", ".mp3": "audio/mpeg" };
+const types: Readonly<Record<string, string>> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".ogg": "audio/ogg", ".mp3": "audio/mpeg", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8" };
 const server = createServer((request, response) => {
   void (async () => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
