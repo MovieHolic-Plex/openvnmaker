@@ -8,9 +8,12 @@ test("portrait player keeps one and multiple actors large without hiding dialogu
     {id:"three",chapter:"세 명",background:"title",sprites:[{slot:"left",character:script.characters[0]!.id},{slot:"center",character:script.characters[2]!.id},{slot:"right",character:script.characters[1]!.id}],lines:[{speaker:null,text:"세 사람이 함께 남긴 장면이다."}],ending:"끝"}
   ]};
   await page.addInitScript(source=>{sessionStorage.setItem("vnmaker.previewScript",JSON.stringify(source));localStorage.setItem("vnmaker:settings",JSON.stringify({textSpeed:5}));},source);
+  const nocturneRequests:string[]=[];
+  page.on("request",request=>{if(new URL(request.url()).pathname.includes("nocturne-atrium"))nocturneRequests.push(request.url());});
   await page.setViewportSize({width:390,height:844});await page.goto("/?preview=1");
   for(const [index,id] of ["one","two","three"].entries()){
     await expect.poll(()=>page.evaluate(()=>window.__vn?.sceneId)).toBe(id);
+    if(index===0){expect(nocturneRequests).toEqual([]);await expect(page.getByTestId("title-screen")).toHaveCount(0);}
     await expect(page.locator(".sprite canvas[data-loaded=true]")).toHaveCount(index+1);
     await expect.poll(()=>page.evaluate(()=>window.__vn?.typing)).toBe(false);
     await expect(page.getByTestId("dialogue-text")).toBeInViewport();await expect(page.getByTestId("settings-button")).toBeInViewport();
