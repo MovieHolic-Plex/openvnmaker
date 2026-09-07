@@ -1,4 +1,5 @@
 import {test,expect} from "@playwright/test";
+import type {} from "../../packages/app/src/App.js";
 
 test("long public credit text stays readable and scrollable in a short mobile viewport",async({page},info)=>{
   test.setTimeout(30000);
