@@ -55,7 +55,7 @@ test("player history stays readable on local Korean webfonts when Google Font ho
   expect(report.prose).toContain("IBM Plex Sans KR");
   expect(traffic.fonts.length).toBeGreaterThan(0);
   expect(traffic.fonts.every(font=>font.status===200&&font.type.includes("font/woff2")&&!google.test(font.url))).toBe(true);
-  await page.getByTestId("skip-button").click();await expect(page.getByTestId("dialogue-text")).toHaveText("읽던 자리");
+  await page.getByTestId("skip-button").focus();await page.keyboard.press("Enter");await expect(page.getByTestId("dialogue-text")).toHaveText("읽던 자리");
   await page.getByTestId("history-button").focus();await page.keyboard.press("Enter");
   await page.screenshot({path:info.outputPath("history-desktop.png")});
   await expect(page.getByRole("dialog",{name:"대사 기록",exact:true})).toBeVisible();

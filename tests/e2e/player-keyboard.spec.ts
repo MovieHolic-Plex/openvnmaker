@@ -1,4 +1,5 @@
 import {test,expect} from "@playwright/test";
+import {vnState} from "./helpers.js";
 
 test("keyboard activation opens player controls without advancing dialogue",async({page},info)=>{
   test.setTimeout(30000);
@@ -6,10 +7,13 @@ test("keyboard activation opens player controls without advancing dialogue",asyn
     localStorage.setItem("vnmaker:settings",JSON.stringify({textSpeed:5,bgmVolume:0,sfxVolume:0}));
     sessionStorage.setItem("vnmaker.previewScript",JSON.stringify({title:"키보드 검증",subtitle:"",start:"s",characters:[],scenes:[{id:"s",background:"title",lines:[{speaker:null,text:"첫 줄"},{speaker:null,text:"둘째 줄"},{speaker:null,text:"셋째 줄"}],ending:"끝"}]}));
   });
-  await page.goto("/?preview=1");await expect.poll(()=>page.evaluate(()=>window.__vn?.typing)).toBe(false);
+  await page.goto("/?preview=1");
+  await expect(page.getByTestId("dialogue-text")).toHaveText("첫 줄");
+  await expect(page.locator(".next-mark")).toBeAttached();
+  expect((await vnState(page)).typing).toBe(false);
   await page.getByTestId("settings-button").focus();await page.keyboard.press("Enter");
   await expect(page.getByTestId("settings-panel")).toBeVisible();
-  expect(await page.evaluate(()=>window.__vn?.lineIndex)).toBe(0);
+  expect((await vnState(page)).lineIndex).toBe(0);
   await page.keyboard.press("Escape");
   await page.evaluate(()=>{(document.activeElement as HTMLElement)?.blur();});
   await page.keyboard.press("Control+Enter");await page.keyboard.press("Alt+Space");
@@ -17,18 +21,25 @@ test("keyboard activation opens player controls without advancing dialogue",asyn
     document.body.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true,isComposing:true}));
     document.body.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true,repeat:true}));
   });
-  expect(await page.evaluate(()=>window.__vn?.lineIndex)).toBe(0);
+  expect((await vnState(page)).lineIndex).toBe(0);
   await page.keyboard.press("h");await expect(page.getByTestId("art-view-button")).toHaveAttribute("aria-pressed","true");
   await page.keyboard.press("Space");await expect(page.getByTestId("art-view-button")).toHaveAttribute("aria-pressed","false");
-  expect(await page.evaluate(()=>window.__vn?.lineIndex)).toBe(0);
+  expect((await vnState(page)).lineIndex).toBe(0);
   await page.getByTestId("save-button").focus();await page.keyboard.press("Space");
-  await expect(page.getByTestId("slot-picker")).toBeVisible();expect(await page.evaluate(()=>window.__vn?.lineIndex)).toBe(0);
+  await expect(page.getByTestId("slot-picker")).toBeVisible();expect((await vnState(page)).lineIndex).toBe(0);
   await page.keyboard.press("Escape");
   await page.getByTestId("advance-button").focus();await page.keyboard.press("Enter");
-  await expect.poll(()=>page.evaluate(()=>window.__vn?.lineIndex)).toBe(1);
-  await expect.poll(()=>page.evaluate(()=>window.__vn?.typing)).toBe(false);
-  await page.keyboard.press("Space");await expect.poll(()=>page.evaluate(()=>window.__vn?.lineIndex)).toBe(2);
-  await expect.poll(()=>page.evaluate(()=>window.__vn?.typing)).toBe(false);
+  await expect(page.getByTestId("dialogue-text")).toHaveText("둘째 줄");
+  await expect(page.locator(".next-mark")).toBeAttached();
+  const afterEnter = await vnState(page);
+  expect(afterEnter.typing).toBe(false);
+  expect(afterEnter.lineIndex).toBe(1);
+  await page.keyboard.press("Space");
+  await expect(page.getByTestId("dialogue-text")).toHaveText("셋째 줄");
+  await expect(page.locator(".next-mark")).toBeAttached();
+  const afterSpace = await vnState(page);
+  expect(afterSpace.typing).toBe(false);
+  expect(afterSpace.lineIndex).toBe(2);
   await page.screenshot({path:info.outputPath("keyboard-stage-desktop.png")});
   await page.setViewportSize({width:390,height:844});await page.getByTestId("settings-button").focus();await page.keyboard.press("Enter");
   const back = await page.getByTestId("studio-return").boundingBox();
