@@ -12,8 +12,8 @@ const needed=[
 ] as const;
 const weights=(faces:{family:string;weight:string;status:string}[],family:string)=>faces.filter(face=>face.family===family).map(face=>face.weight).sort();
 
-type FaceMark={kind:"face";family:string;weight:string;phase:"start"|"settle";tMs:number;status:string|null;error:string|null};
-type ReadyMark={kind:"fontsReady";phase:"start"|"settle";tMs:number};
+const vnfont="vnfont:";
+type FaceMark={kind:"face";family:string;weight:string;phase:"start"|"settle";tMs:number;statusAtStart:string|null;statusAfterLoad:string|null;error:string|null};
 type ResourceMark={
   kind:"resource";
   name:string;
@@ -49,6 +49,8 @@ export type FontTelemetry={
   reportError:string|null;
   evaluateStartedWallMs:number|null;
   evaluateSettledWallMs:number|null;
+  timeOrigin:number|null;
+  reportStartPerformanceMs:number|null;
   bound:boolean;
 };
 
@@ -66,6 +68,8 @@ function createTelemetry():FontTelemetry{
     reportError:null,
     evaluateStartedWallMs:null,
     evaluateSettledWallMs:null,
+    timeOrigin:null,
+    reportStartPerformanceMs:null,
     bound:false,
   };
   active=state;
@@ -79,6 +83,11 @@ function finite(value:number){
 function ingest(state:FontTelemetry,event:unknown){
   if(!event||typeof event!=="object")return;
   const mark=event as Record<string,unknown>;
+  if(mark.kind==="clock"){
+    if(state.timeOrigin===null&&typeof mark.timeOrigin==="number")state.timeOrigin=mark.timeOrigin;
+    if(state.reportStartPerformanceMs===null&&typeof mark.reportStartPerformanceMs==="number")state.reportStartPerformanceMs=mark.reportStartPerformanceMs;
+    return;
+  }
   if(mark.kind==="face"){
     if(state.faces.length>=24)return;
     if(mark.phase!=="start"&&mark.phase!=="settle")return;
@@ -89,7 +98,8 @@ function ingest(state:FontTelemetry,event:unknown){
       weight:mark.weight,
       phase:mark.phase,
       tMs:mark.tMs,
-      status:typeof mark.status==="string"?mark.status:null,
+      statusAtStart:typeof mark.statusAtStart==="string"?mark.statusAtStart:null,
+      statusAfterLoad:typeof mark.statusAfterLoad==="string"?mark.statusAfterLoad:null,
       error:typeof mark.error==="string"?mark.error:null,
     });
     return;
@@ -138,7 +148,8 @@ export function fontTelemetry(state:FontTelemetry){
       weight,
       loadStartedMs:start?.tMs??null,
       loadSettledMs:settle?.tMs??null,
-      status:settle?.status??start?.status??null,
+      statusAtStart:start?.statusAtStart??null,
+      statusAfterLoad:settle!==null?(settle.statusAfterLoad??null):null,
       error:settle?.error??null,
       complete:settle!==null,
     };
@@ -148,6 +159,8 @@ export function fontTelemetry(state:FontTelemetry){
     if(face.loadStartedMs===null)incomplete.push(`face-start:${face.family}:${face.weight}`);
     if(face.loadSettledMs===null)incomplete.push(`face-settle:${face.family}:${face.weight}`);
   }
+  if(state.timeOrigin===null)incomplete.push("performance.timeOrigin");
+  if(state.reportStartPerformanceMs===null)incomplete.push("reportStartPerformanceMs");
   if(state.fontsReady.startMs===null)incomplete.push("fonts.ready-start");
   if(state.fontsReady.settleMs===null)incomplete.push("fonts.ready-settle");
   if(state.report===null)incomplete.push("reportFonts-return");
@@ -157,6 +170,12 @@ export function fontTelemetry(state:FontTelemetry){
     if(row.finishedWallMs===null&&row.failedWallMs===null)incomplete.push(`woff2-finished:${row.url}`);
   }
   return{
+    clock:{
+      browser:"performance.now() and PerformanceResourceTiming; milliseconds since performance.timeOrigin",
+      timeOrigin:state.timeOrigin,
+      reportStartPerformanceMs:state.reportStartPerformanceMs,
+      nodeWall:"Date.now() on woff2 requestWallMs/responseWallMs/finishedWallMs/failedWallMs only",
+    },
     evaluateStartedWallMs:state.evaluateStartedWallMs,
     evaluateSettledWallMs:state.evaluateSettledWallMs,
     reportError:state.reportError,
@@ -172,10 +191,23 @@ export function fontTelemetry(state:FontTelemetry){
   };
 }
 
+function attachConsole(page:Page,state:FontTelemetry){
+  if(state.bound)return;
+  state.bound=true;
+  page.on("console",message=>{
+    const text=message.text();
+    if(!text.startsWith(vnfont))return;
+    try{
+      ingest(state,JSON.parse(text.slice(vnfont.length)));
+    }catch{
+      return;
+    }
+  });
+}
+
 export async function watch(page:Page){
   const state=createTelemetry();
-  await page.exposeFunction("__vnFontMark",(event:unknown)=>{ingest(state,event);});
-  state.bound=true;
+  attachConsole(page,state);
   page.on("request",request=>{
     state.requests.push(request.url());
     if(!request.url().endsWith(".woff2"))return;
@@ -210,22 +242,19 @@ export async function watch(page:Page){
 }
 
 export async function reportFonts(page:Page,state:FontTelemetry=active??createTelemetry()){
-  if(!state.bound){
-    await page.exposeFunction("__vnFontMark",(event:unknown)=>{ingest(state,event);});
-    state.bound=true;
-  }
+  attachConsole(page,state);
   state.evaluateStartedWallMs=Date.now();
   try{
     const report=await page.evaluate(async faces=>{
-      const mark=(window as unknown as {__vnFontMark?:(event:Record<string,unknown>)=>Promise<void>}).__vnFontMark;
-      if(!mark)throw new Error("missing __vnFontMark");
-      const t0=performance.now();
+      const emit=(event:Record<string,unknown>)=>{console.debug(`vnfont:${JSON.stringify(event)}`);};
+      const reportStartPerformanceMs=performance.now();
+      emit({kind:"clock",timeOrigin:performance.timeOrigin,reportStartPerformanceMs});
       const sample="한글 기록 ABC";
       const observer=new PerformanceObserver(list=>{
         for(const entry of list.getEntries()){
           if(!entry.name.endsWith(".woff2"))continue;
           const resource=entry as PerformanceResourceTiming;
-          void mark({
+          emit({
             kind:"resource",
             name:resource.name,
             startTime:resource.startTime,
@@ -236,25 +265,25 @@ export async function reportFonts(page:Page,state:FontTelemetry=active??createTe
             duration:resource.duration,
             transferSize:resource.transferSize,
             encodedBodySize:resource.encodedBodySize,
-            tMs:performance.now()-t0,
+            tMs:performance.now(),
           });
         }
       });
       observer.observe({type:"resource",buffered:true});
-      const loads=faces.map(([weight,family])=>(async()=>{
-        await mark({kind:"face",phase:"start",family,weight,tMs:performance.now()-t0,status:[...document.fonts].find(face=>face.family.replaceAll('"',"")===family&&String(face.weight)===weight)?.status??null,error:null});
-        try{
-          const loaded=await document.fonts.load(`${weight} 48px "${family}"`,sample);
-          await mark({kind:"face",phase:"settle",family,weight,tMs:performance.now()-t0,status:loaded[0]?.status??null,error:null});
-        }catch(error){
-          await mark({kind:"face",phase:"settle",family,weight,tMs:performance.now()-t0,status:"error",error:String(error)});
+      const loads=faces.map(([weight,family])=>{
+        emit({kind:"face",phase:"start",family,weight,tMs:performance.now(),statusAtStart:[...document.fonts].find(face=>face.family.replaceAll('"',"")===family&&String(face.weight)===weight)?.status??null,statusAfterLoad:null,error:null});
+        return document.fonts.load(`${weight} 48px "${family}"`,sample).then(loaded=>{
+          emit({kind:"face",phase:"settle",family,weight,tMs:performance.now(),statusAtStart:null,statusAfterLoad:loaded[0]?.status??null,error:null});
+          return loaded;
+        },error=>{
+          emit({kind:"face",phase:"settle",family,weight,tMs:performance.now(),statusAtStart:null,statusAfterLoad:"error",error:String(error)});
           throw error;
-        }
-      })());
+        });
+      });
       await Promise.all(loads);
-      await mark({kind:"fontsReady",phase:"start",tMs:performance.now()-t0});
+      emit({kind:"fontsReady",phase:"start",tMs:performance.now()});
       await document.fonts.ready;
-      await mark({kind:"fontsReady",phase:"settle",tMs:performance.now()-t0});
+      emit({kind:"fontsReady",phase:"settle",tMs:performance.now()});
       observer.disconnect();
       const width=(font:string)=>{const ctx=document.createElement("canvas").getContext("2d");if(!ctx)throw new Error("canvas");ctx.font=font;return ctx.measureText(sample).width;};
       return{
