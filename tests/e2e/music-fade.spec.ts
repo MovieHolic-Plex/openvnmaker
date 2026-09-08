@@ -17,6 +17,7 @@ declare global {
     };
     __bgmWaiters?: Array<() => void>;
     __bgmArmed?: Promise<void>;
+    __bgmStartDeadline?: () => void;
     __dialogueArmed?: Promise<void>;
   }
 }
@@ -82,9 +83,27 @@ async function armBgm(page: Page, spec: BgmArm): Promise<void> {
     if (!probe || !waiters) throw new Error("bgm probe was not installed");
     if (probe.initError) throw new Error(probe.initError);
     window.__bgmArmed = new Promise<void>((resolve, reject) => {
-      const timeout = window.setTimeout(() => reject(new Error(`bgm ${spec.check} wait`)), expectMs);
+      let timeout: number | undefined;
+      let deadlineStarted = false;
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (timeout !== undefined) window.clearTimeout(timeout);
+        resolve();
+      };
+      const fail = () => {
+        if (settled) return;
+        settled = true;
+        if (timeout !== undefined) window.clearTimeout(timeout);
+        reject(new Error(`bgm ${spec.check} wait`));
+      };
+      window.__bgmStartDeadline = () => {
+        if (settled || deadlineStarted) return;
+        deadlineStarted = true;
+        timeout = window.setTimeout(fail, expectMs);
+      };
       let phase = spec.check === "stop" && spec.duration > 0 ? 0 : 2;
-      const finish = () => { window.clearTimeout(timeout); resolve(); };
       const check = () => {
         if (spec.check === "ready") {
           const active = probe.active;
@@ -109,7 +128,10 @@ async function armBgm(page: Page, spec: BgmArm): Promise<void> {
 }
 
 async function settleBgm(page: Page): Promise<void> {
-  await page.evaluate(() => window.__bgmArmed);
+  await page.evaluate(() => {
+    window.__bgmStartDeadline?.();
+    return window.__bgmArmed;
+  });
 }
 
 async function armDialogue(page: Page, text: string): Promise<void> {
@@ -211,4 +233,51 @@ test("music fade readiness does not treat a pending play as playing", async ({pa
   } finally {
     if (!released) release();
   }
+});
+
+test("armed bgm waiter does not start the 15s bound until settle", async ({page}) => {
+  test.setTimeout(30000);
+  const deadlineSentinel = "__bgm_deadline_registered";
+  const clockStart = new Date("2026-09-07T00:00:00Z");
+  await page.clock.install({time: clockStart});
+  await page.addInitScript(() => {
+    const slot = () => ({volume: 0, paused: true, playing: false, src: ""});
+    window.__bgmProbe = {active: slot(), idle: slot(), initError: null};
+    window.__bgmWaiters = [];
+  });
+  await page.goto("about:blank");
+  await page.clock.pauseAt(new Date("2026-09-07T00:00:01Z"));
+  await page.evaluate(({ms, deadlineSentinel}) => {
+    const original = window.setTimeout.bind(window);
+    window.setTimeout = function(handler: TimerHandler, delay?: number, ...rest: unknown[]) {
+      const id = original(handler, delay, ...rest);
+      if (delay === ms) console.log(deadlineSentinel);
+      return id;
+    } as typeof window.setTimeout;
+  }, {ms: expectMs, deadlineSentinel});
+  await armBgm(page, {check: "ready", target: 0.55});
+  const peek = () => page.evaluate(async () => {
+    const armed = window.__bgmArmed;
+    if (!armed) throw new Error("no armed waiter");
+    let state: "pending" | "resolved" | "rejected" = "pending";
+    void armed.then(() => { state = "resolved"; }, () => { state = "rejected"; });
+    await Promise.resolve();
+    return state;
+  });
+  await page.clock.runFor(expectMs);
+  expect(await peek()).toBe("pending");
+  const deadlineRegistered = page.waitForEvent("console", {
+    timeout: expectMs,
+    predicate: message => message.text() === deadlineSentinel,
+  });
+  const outcome = settleBgm(page).then(
+    () => "resolved",
+    (error: unknown) => error instanceof Error ? error.message : String(error),
+  );
+  await deadlineRegistered;
+  await page.clock.runFor(expectMs - 1);
+  expect(await peek()).toBe("pending");
+  await page.clock.runFor(1);
+  expect(await peek()).toBe("rejected");
+  expect(await outcome).toMatch(/bgm ready wait/);
 });
