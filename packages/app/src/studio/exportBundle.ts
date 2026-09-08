@@ -62,7 +62,7 @@ function validMedia(path: string, bytes: Uint8Array): boolean {
 }
 function runtimeManifest(value: unknown): RuntimeManifest {
   const m = value as RuntimeManifest;
-  const path = (value: unknown) => typeof value === "string" && (value === "RUNTIME_COMPONENTS.json" || /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(js|css|txt)$/.test(value));
+  const path = (value: unknown) => typeof value === "string" && (value === "RUNTIME_COMPONENTS.json" || /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(js|css|txt|woff2)$/.test(value));
   if (!m || m.version !== 1 || !path(m.entry) || !Array.isArray(m.stylesheets) || !m.stylesheets.every(path) || !Array.isArray(m.files) || !m.files.length || m.files.length > 50 || !m.files.every(file => path(file.path) && Number.isSafeInteger(file.size) && file.size > 0 && /^[a-f0-9]{64}$/.test(file.sha256))) throw new Error("배포 플레이어 정보가 올바르지 않습니다. 앱을 다시 빌드해주세요.");
   const files = new Set(m.files.map(file => file.path));
   if (files.size !== m.files.length || !files.has(m.entry) || m.stylesheets.some(path => !files.has(path))) throw new Error("배포 플레이어 파일이 누락되었습니다.");
