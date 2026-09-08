@@ -79,6 +79,7 @@ export type SceneContextResult =
       readonly metadata: Omit<Scene, "lines">;
       readonly lines: readonly Line[];
       readonly window: ContextManifest["windows"][number];
+      readonly sceneHash: Sha256;
       readonly referenceBindings: readonly ApprovedArtBinding[];
       readonly referenceBindingHashes: ContextManifest["referenceBindingHashes"];
       readonly beforeLineId: LineId | null;
@@ -127,3 +128,9 @@ export type BranchReadResult =
       readonly facts: ContextManifest["facts"];
     })
   | Extract<BranchContextResult, { kind: "blocked" }>;
+
+export { validateOutlineDag } from "./context-plan.js";
+export type { OutlineDagFailure, OutlineDagResult } from "./context-plan.js";
+
+export { replayContextDependencies } from "./context-replay.js";
+export type { ContextDependencyReplay } from "./context-replay.js";

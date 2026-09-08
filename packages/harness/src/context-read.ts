@@ -1,3 +1,7 @@
+import {
+  sceneMetadataDependency,
+  sceneWindowDependency,
+} from "./context-projections.js";
 import type { Line } from "@vnmaker/content";
 import type { z } from "zod";
 import { canonicalHash } from "./canonical.js";
@@ -45,9 +49,15 @@ export async function readSceneContext(
     default: return assertNever(references);
   }
   const scope = { kind: "scene", sceneId: args.sceneId } as const;
+  const beforeLineId = rows[start - 1]?.id ?? null;
+  const afterLineId = rows[end]?.id ?? null;
+  const sceneHash = await canonicalHash(scene);
   const readSet: ReadSet = [
     ...references.readSet,
-    { kind: "entity", target: scope, hash: await canonicalHash(scene) },
+    await sceneMetadataDependency(scene),
+    await sceneWindowDependency(args, {
+      lines, window, beforeLineId, afterLineId,
+    }),
     {
       kind: "membership", scope, ids: [...ids].sort(),
       hash: await canonicalHash([...ids].sort()),
@@ -67,9 +77,8 @@ export async function readSceneContext(
       }),
     );
   return {
-    kind: "ready", metadata, lines, window,
-    beforeLineId: rows[start - 1]?.id ?? null,
-    afterLineId: rows[end]?.id ?? null,
+    kind: "ready", metadata, lines, window, sceneHash,
+    beforeLineId, afterLineId,
     readSet, excluded,
     referenceBindings: references.referenceBindings,
     referenceBindingHashes: references.referenceBindingHashes,

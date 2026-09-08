@@ -7,7 +7,11 @@ import type {
 import type { ContextManifest, ReadSet } from "./context-contracts.js";
 import { assertNever, sceneIdSchema } from "./primitives.js";
 import type { SceneId } from "./primitives.js";
-import type { CanonEntry, CanonSection } from "./production-contracts.js";
+import type { CanonEntry } from "./production-contracts.js";
+import {
+  contextCanonSection,
+  readStateDependencies,
+} from "./context-projections.js";
 
 const canonSections = [
   "castCanon", "worldTimeline", "branchFacts", "artDirection",
@@ -110,6 +114,30 @@ export function buildBranchContext(
   return { kind: "ready", common, conditional };
 }
 
+export async function readPredecessorDependencies(
+  source: ContextSource,
+  sceneId: SceneId,
+): Promise<ReadSet> {
+  const relevant = predecessorIds(source.script, sceneId);
+  const scenes = source.script.scenes.filter(scene => relevant.has(scene.id))
+    .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+  const dependencies = await Promise.all(scenes.map(async scene => ({
+    kind: "entity" as const,
+    target: { kind: "scene" as const, sceneId: sceneIdSchema.parse(scene.id) },
+    hash: await canonicalHash(scene),
+  })));
+  return [
+    ...dependencies,
+    {
+      kind: "query",
+      query: canonicalJson({ kind: "predecessor-scenes", sceneId }),
+      scope: [{ kind: "project" }],
+      resultIds: dependencies.map(dependency => canonicalJson(dependency.target)),
+      hash: await canonicalHash(dependencies),
+    },
+  ];
+}
+
 export async function readBranchContext(
   source: ContextSource,
   selection: Pick<BranchContextRequest, "sceneId" | "maxVisitedStates">,
@@ -125,14 +153,9 @@ export async function readBranchContext(
     default: return assertNever(branch);
   }
 
-  const relevant = predecessorIds(source.script, selection.sceneId);
-  const scenes = source.script.scenes.filter(scene => relevant.has(scene.id))
-    .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-  const sceneDependencies = await Promise.all(scenes.map(async scene => ({
-    kind: "entity" as const,
-    target: { kind: "scene" as const, sceneId: sceneIdSchema.parse(scene.id) },
-    hash: await canonicalHash(scene),
-  })));
+  const predecessorDependencies = await readPredecessorDependencies(
+    source, selection.sceneId,
+  );
   const selected = new Set([...branch.common, ...branch.conditional]);
   const facts = await Promise.all(entries.filter(row => selected.has(row.entry))
     .map(async row => ({ ...row, hash: await canonicalHash(row.entry) })));
@@ -141,18 +164,7 @@ export async function readBranchContext(
     const scope = { kind: "canon", sectionId } as const;
     const ids = section.map(entry => entry.id);
     const membership = [...ids].sort();
-    let sectionValue: CanonSection;
-    switch (sectionId) {
-      case "artDirection":
-        sectionValue = { kind: "art-direction", rules: section };
-        break;
-      case "castCanon":
-      case "worldTimeline":
-      case "branchFacts":
-        sectionValue = { kind: "entries", entries: section };
-        break;
-      default: return assertNever(sectionId);
-    }
+    const sectionValue = contextCanonSection(source.productionDocument, sectionId);
     return [
       { kind: "entity", target: scope, hash: await canonicalHash(sectionValue) },
       {
@@ -162,25 +174,10 @@ export async function readBranchContext(
       { kind: "order", scope, ids, hash: await canonicalHash(ids) },
     ] satisfies ReadSet;
   }));
-  const flags = source.script.flags ?? {};
+  const stateDependencies = await readStateDependencies(source.script);
   const readSet: ReadSet = [
-    ...sceneDependencies,
-    {
-      kind: "query",
-      query: canonicalJson({
-        kind: "predecessor-scenes", sceneId: selection.sceneId,
-      }),
-      scope: [{ kind: "project" }],
-      resultIds: sceneDependencies.map(dependency => canonicalJson(dependency.target)),
-      hash: await canonicalHash(sceneDependencies),
-    },
-    {
-      kind: "query", query: canonicalJson({ kind: "initial-state" }),
-      scope: [{ kind: "project" }],
-      resultIds: Object.keys(flags).sort().map(flagId =>
-        canonicalJson({ kind: "state", flagId })),
-      hash: await canonicalHash(flags),
-    },
+    ...predecessorDependencies,
+    ...stateDependencies,
     ...canonDependencies.flat(),
     ...facts.map((row): ReadSet[number] => ({
       kind: "entity",
