@@ -188,6 +188,7 @@ export function parseScript(value: unknown): VnScript {
       assetIds.add(asset["id"]);
       string(asset["name"], "에셋 이름");
       member(asset["kind"], ["background", "cg", "character"], "에셋 종류");
+      if (asset["compositing"] !== undefined) member(asset["compositing"], ["alpha", "legacy-chroma-key", "opaque"], "에셋 합성");
       if (!validBackgroundUrl(asset["url"])) throw new Error("에셋 이미지 주소가 올바르지 않습니다.");
       for (const key of ["prompt", "createdAt", "sceneId"] as const) if (asset[key] !== undefined) string(asset[key], `에셋 ${key}`, key === "prompt");
       if (asset["sceneId"] !== undefined && !ids.has(asset["sceneId"])) throw new Error("에셋의 대상 씬을 찾을 수 없습니다.");
