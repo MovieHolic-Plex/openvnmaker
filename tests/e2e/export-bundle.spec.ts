@@ -5,6 +5,7 @@ import { mkdir, readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { script, type VnScript } from "../../packages/content/src/index.js";
 import { registerLongformExportTests } from "./helpers/longform-export.js";
+import type {} from "../../packages/app/src/App.js";
 
 const fixture: VnScript = {
   title: "ZIP 검증 초안", subtitle: "현재 편집본으로 독립 실행", start: "export-start",
@@ -42,10 +43,87 @@ async function generatedFiles(page: Page) {
     await route.fulfill({ contentType: "image/png", body: await readFile(resolve("packages/app/public/assets/art", mapping[name]!)) });
   });
 }
+// Each signal is subscribed before its user action. The accessor observes the existing
+// diagnostic publication without changing the reducer, timers or persistence behavior.
+function publishedVn(text: string) {
+  const match = /^export:state:([^:]+):([^:]+):(\d+):(true|false)$/.exec(text);
+  if (!match?.[1] || !match[2] || !match[3] || !match[4]) return;
+  return { phase: match[1], sceneId: match[2], lineIndex: Number(match[3]), typing: match[4] === "true" };
+}
+type PublishedVn = { phase: string; sceneId: string; lineIndex: number; typing: boolean };
+const publishedLatest = new WeakMap<Page, { sample?: PublishedVn }>();
+const waitUntilLive = { listeners: 0, timers: 0 };
+function waitForPublishedVn(page: Page, predicate: (sample: PublishedVn) => boolean) {
+  return page.waitForEvent("console", {
+    timeout: 15_000,
+    predicate: message => {
+      const sample = publishedVn(message.text());
+      return !!sample && predicate(sample);
+    },
+  });
+}
+function publishedSample(page: Page) {
+  return publishedLatest.get(page)?.sample;
+}
+function waitUntilPublishedVn(page: Page, predicate: (sample: PublishedVn) => boolean) {
+  // observeExportPlayer writes the retained sample synchronously on the same
+  // console emit, before later listeners run. A matching sample is current
+  // state: return without a waiter. Otherwise attach, then read the sample
+  // again so an emit between the first read and attach cannot be lost. finish()
+  // always removes the listener and timer; nothing is swallowed.
+  const current = publishedSample(page);
+  if (current && predicate(current)) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    waitUntilLive.listeners += 1;
+    waitUntilLive.timers += 1;
+    const timer = setTimeout(() => finish(new Error("Timeout 15000ms exceeded while waiting on the published player state")), 15_000);
+    function onConsole(message: { text(): string }) {
+      const sample = publishedVn(message.text());
+      if (sample && predicate(sample)) finish();
+    }
+    function finish(error?: Error) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      waitUntilLive.timers -= 1;
+      page.off("console", onConsole);
+      waitUntilLive.listeners -= 1;
+      if (error) reject(error);
+      else resolve();
+    }
+    page.on("console", onConsole);
+    const again = publishedSample(page);
+    if (again && predicate(again)) finish();
+  });
+}
+async function observeExportPlayer(page: Page, firstLine: string) {
+  const latest: { sample?: PublishedVn } = {};
+  publishedLatest.set(page, latest);
+  page.on("console", message => {
+    const sample = publishedVn(message.text());
+    if (sample) latest.sample = sample;
+  });
+  await page.addInitScript(line => {
+    let published: Window["__vn"];
+    Object.defineProperty(window, "__vn", {
+      configurable: true, get: () => published,
+      set: (value: NonNullable<Window["__vn"]>) => {
+        published = value;
+        console.debug(`export:state:${value.phase}:${value.sceneId}:${value.lineIndex}:${value.typing}`);
+      },
+    });
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      setItem.call(this, key, value);
+      if (this === localStorage && key.startsWith("vnmaker:auto:")) console.debug(`export:autosaved:${key}:${value.includes(line) ? "first-line" : "other"}`);
+    };
+  }, firstLine);
+}
 async function advance(page: Page, index: number) {
-  await expect.poll(() => page.evaluate(() => window.__vn?.typing)).toBe(false);
-  await page.getByTestId("advance-button").click();
-  await expect.poll(() => page.evaluate(() => window.__vn?.lineIndex)).toBe(index);
+  await waitUntilPublishedVn(page, sample => sample.typing === false);
+  const progressed = waitForPublishedVn(page, sample => sample.lineIndex === index);
+  await Promise.all([progressed, page.getByTestId("advance-button").click()]);
 }
 async function unzip(zip: string, destination: string) {
   await mkdir(destination, { recursive: true });
@@ -152,6 +230,7 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
       localStorage.setItem("vnmaker:settings", JSON.stringify({ textSpeed: 5, bgmVolume: .3, sfxVolume: .3 }));
       sessionStorage.setItem("vnmaker.previewScript", JSON.stringify(oldScript));
     }, script);
+    await observeExportPlayer(player, firstLine);
     await player.goto(`${hosting.origin}/?preview=1`);
     await expect(player.getByRole("heading", { name: title, exact: true })).toBeVisible();
     await expect(player.getByTestId("continue-button")).toBeDisabled();
@@ -171,8 +250,14 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
     await player.keyboard.press("Escape"); await expect(creditPanel).not.toBeVisible();
     await expect(player.getByTestId("credits-button")).toBeFocused();
     await player.setViewportSize({width:1440,height:900});
+    const autoSaved = player.waitForEvent("console", { timeout: 15_000, predicate: message => message.text() === `export:autosaved:vnmaker:auto:${manifest.projectNamespace}:first-line` });
     await player.getByTestId("start-button").click();
     await expect(player.getByTestId("dialogue-text")).toHaveText(firstLine);
+    await waitUntilPublishedVn(player, sample => sample.typing === false);
+    const readyLive = { listeners: waitUntilLive.listeners, timers: waitUntilLive.timers };
+    await waitUntilPublishedVn(player, sample => sample.typing === false);
+    expect(waitUntilLive.listeners).toBe(readyLive.listeners);
+    expect(waitUntilLive.timers).toBe(readyLive.timers);
     await player.getByTestId("settings-button").focus(); await player.keyboard.press("Enter");
     await expect(player.getByTestId("settings-panel")).toBeVisible();
     await expect(player.getByRole("dialog", {name:"플레이 설정",exact:true})).toBeVisible();
@@ -195,9 +280,11 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
     await expect(player.getByTestId("sprite-center")).toHaveAttribute("data-src", /^\/assets\/exported\//);
     await expect(player.getByTestId("bgm-audio")).toHaveAttribute("src", "/assets/audio/bgm/rain.mp3");
     await expect.poll(() => player.getByTestId("bgm-audio").evaluate(audio => (audio as HTMLAudioElement).currentTime)).toBeGreaterThan(0);
-    await expect.poll(() => player.evaluate(namespace => localStorage.getItem(`vnmaker:auto:${namespace}`), manifest.projectNamespace)).toContain(firstLine);
-    await player.reload(); await expect(player.getByTestId("continue-button")).toBeEnabled(); await player.getByTestId("continue-button").click();
-    await expect.poll(() => player.evaluate(() => window.__vn?.lineIndex)).toBe(1);
+    await autoSaved;
+    expect(await player.evaluate(namespace => localStorage.getItem(`vnmaker:auto:${namespace}`), manifest.projectNamespace)).toContain(firstLine);
+    await player.reload(); await expect(player.getByTestId("continue-button")).toBeEnabled();
+    const restored = waitForPublishedVn(player, sample => sample.lineIndex === 1);
+    await Promise.all([restored, player.getByTestId("continue-button").click()]);
     await advance(player, 2);
     await expect(player.getByTestId("bg-image")).toHaveAttribute("src", /^\/assets\/exported\//);
     await expect(player.locator(".sprite")).toHaveCount(0);
@@ -250,6 +337,21 @@ test("cancel a pending export without downloading a partial game, then retry suc
   await expect(page.getByTestId("export-bundle-success")).toHaveCount(0); expect(downloads).toBe(0);
   const download = page.waitForEvent("download"); await page.getByTestId("export-bundle-build").click(); await download;
   await expect(page.getByTestId("export-bundle-success")).toBeVisible(); expect(downloads).toBe(1);
+});
+
+test("exported player observer does not succeed without a published lineIndex change", async ({ page }) => {
+  await observeExportPlayer(page, "ZIP 다운로드 직전에 고친 첫 번째 대사다.");
+  await page.goto("about:blank");
+  const progressed = waitForPublishedVn(page, sample => sample.lineIndex === 2);
+  await page.mouse.click(1, 1);
+  let succeeded = false;
+  try {
+    await progressed;
+    succeeded = true;
+  } catch (error) {
+    expect(String(error)).toMatch(/Timeout 15000ms/);
+  }
+  expect(succeeded).toBe(false);
 });
 
 registerLongformExportTests(installProject, unzip, serve);
