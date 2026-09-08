@@ -246,7 +246,7 @@ test("armed bgm waiter does not start the 15s bound until settle", async ({page}
     window.__bgmWaiters = [];
   });
   await page.goto("about:blank");
-  await page.clock.pauseAt(new Date("2026-09-07T00:00:01Z"));
+  await page.clock.pauseAt(new Date(clockStart.getTime() + 600_000));
   await page.evaluate(({ms, deadlineSentinel}) => {
     const original = window.setTimeout.bind(window);
     window.setTimeout = function(handler: TimerHandler, delay?: number, ...rest: unknown[]) {
