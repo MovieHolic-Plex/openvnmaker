@@ -1,12 +1,8 @@
 import { test, expect } from "@playwright/test";
+import { FIXTURE_MODULES } from "./server/fixture-bridge.ts";
 
 const VITE_JSX_RUNTIME = "**/node_modules/.vite/deps/react_jsx-dev-runtime.js*";
-const FIXTURE_MODULES = [
-  "/src/studio/projects.ts",
-  "/src/studio/exportBundle.ts",
-  "/src/studio/projectFolder.ts",
-  "/src/storage/projectAssets.ts",
-] as const;
+const FIXTURE_REEXPORT = /^export \* from "\/assets\/[^"]+\.js";\n$/;
 
 function isViteDevTransport(url: string): boolean {
   const path = new URL(url).pathname;
@@ -39,9 +35,11 @@ test("player mounts when the original Vite JSX runtime module is blocked", async
     };
   }, FIXTURE_MODULES[0]);
   expect(fixture).toEqual({ saveProject: "function", activateProject: "function", newProject: "function" });
+  expect(FIXTURE_MODULES).toContain("/src/studio/projectRepository.ts");
   for (const path of FIXTURE_MODULES) {
     const response = await page.request.get(path);
     expect(response.status()).toBe(200);
     expect(response.headers()["content-type"] ?? "").toMatch(/javascript|ecmascript/);
+    expect(await response.text()).toMatch(FIXTURE_REEXPORT);
   }
 });

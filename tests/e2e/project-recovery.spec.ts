@@ -27,6 +27,7 @@ test("missing recovery and edition keys cannot initialize a sample over a durabl
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!).title)).toBe("복구 키가 사라진 작품");
   await page.evaluate(()=>{localStorage.removeItem("vnmaker.studio.project.v1");localStorage.removeItem("vnmaker.studio.active-project.v1");localStorage.removeItem("vnmaker.edition");});
   await page.reload();await expect(page.getByRole("region",{name:"원고 복구"})).toContainText("복구 키가 사라진 작품");
+  expect(await page.evaluate(()=>localStorage.getItem("vnmaker.studio.active-project.v1"))).toBeNull();
   expect(await page.evaluate(()=>localStorage.getItem("vnmaker.studio.project.v1"))).toBeNull();
   await page.getByRole("button",{name:"이 보관함 원고로 복구"}).click();await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.reload();await expect(page.getByLabel("작품 제목")).toHaveValue("복구 키가 사라진 작품");
@@ -53,10 +54,45 @@ test("corrupt quick recovery preserves raw data and restores the validated activ
   await page.reload();await expect(page.getByLabel("작품 제목")).toHaveValue("복구할 장편 원고");
 });
 
+test("a JSON recovery import preserves the damaged mirror under its original bytes",async({page})=>{
+  // Given a damaged mirror with a durable library original.
+  await page.goto("/studio.html");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  await page.evaluate(()=>localStorage.setItem("vnmaker.studio.project.v1","{import-preserved-original"));await page.reload();
+  await expect(page.getByRole("region",{name:"원고 복구"})).toBeVisible();
+  const imported={title:"Recovered import",subtitle:"",start:"start",characters:[],scenes:[{id:"start",background:"title",lines:[{speaker:null,text:"Recovered"}],ending:"End"}]};
+  // When a user chooses the existing JSON import recovery route.
+  await page.getByTestId("studio-import").setInputFiles({name:"recovery.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify(imported))});
+  await expect(page.getByLabel("작품 제목")).toHaveValue(imported.title);
+  // Then activation retains the damaged bytes instead of overwriting the only recovery original.
+  expect(await page.evaluate(()=>Object.keys(localStorage).filter(key=>key.startsWith("vnmaker.recovery-preserved.")).map(key=>localStorage.getItem(key)))).toContain("{import-preserved-original");
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+});
+
+test("an orphaned durable head cannot be adopted by creating the same project ID",async({page})=>{
+  // Given a lost project record whose head and production document survived.
+  await page.goto("/studio.html");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  const original=await page.evaluate(async()=>{
+    const path="/src/studio/projects.ts";
+    const {database,projectRepository}:typeof import("../../packages/app/src/studio/projects.js")=await import(path);
+    const snapshot=projectRepository.current().snapshot,db=await database();
+    try{await new Promise<void>((resolve,reject)=>{const tx=db.transaction("projects","readwrite");tx.objectStore("projects").delete(snapshot.head.projectId);tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});}finally{db.close();}
+    return snapshot;
+  });
+  await page.route("**/orphan-seed",route=>route.fulfill({contentType:"text/html",body:"<!doctype html>"}));await page.goto("/orphan-seed");
+  // When a fresh document attempts creation at that old identity.
+  const outcome=await page.evaluate(async original=>{
+    const path="/src/studio/projects.ts";
+    const {projectRepository,ProjectStorageError}:typeof import("../../packages/app/src/studio/projects.js")=await import(path);
+    return projectRepository.create(original.head.projectId,original.script).then(()=>"adopted",(error:unknown)=>error instanceof ProjectStorageError?error.code:"unexpected");
+  },original);
+  // Then it cannot inherit old apply authority or claim a missing source is a new project.
+  expect(outcome).toBe("stale-head");
+});
+
 test("a corrupt library record is never offered as a recovery candidate",async({page})=>{
   await page.goto("/studio.html");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.evaluate(async()=>{
-    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",1);r.onsuccess=()=>resolve(r.result);});
+    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",2);r.onsuccess=()=>resolve(r.result);});
     await new Promise<void>((resolve,reject)=>{const tx=db.transaction("projects","readwrite");tx.objectStore("projects").put({id:localStorage.getItem("vnmaker.studio.active-project.v1")||"original-project",script:{invalid:true},updatedAt:Date.now()});tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();localStorage.setItem("vnmaker.studio.project.v1","{broken");
   });await page.reload();
   const panel=page.getByRole("region",{name:"원고 복구"});await expect(panel).toContainText("작품 보관함도 읽지 못했습니다");
@@ -68,7 +104,7 @@ test("damaged library rows do not hide healthy manuscripts or mutate their origi
   await page.goto("/studio.html");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   const damaged={id:"damaged-test",script:{title:{broken:true}},updatedAt:Date.now()+100000};
   await page.evaluate(async damaged=>{
-    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",1);r.onsuccess=()=>resolve(r.result);});
+    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",2);r.onsuccess=()=>resolve(r.result);});
     const script=JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!);script.title="정상 보관함 작품";
     await new Promise<void>((resolve,reject)=>{const tx=db.transaction("projects","readwrite");tx.objectStore("projects").put(damaged);tx.objectStore("projects").put({id:"healthy-test",script,updatedAt:Date.now()});tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});db.close();
   },damaged);
@@ -82,7 +118,7 @@ test("damaged library rows do not hide healthy manuscripts or mutate their origi
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:info.outputPath("library-damaged-mobile.png")});
   await row.getByRole("button",{name:"열기",exact:true}).click();await expect(page.getByLabel("작품 제목")).toHaveValue("정상 보관함 작품");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   expect(await page.evaluate(async()=>{
-    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",1);r.onsuccess=()=>resolve(r.result);});
+    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",2);r.onsuccess=()=>resolve(r.result);});
     return new Promise(resolve=>{const tx=db.transaction("projects","readonly"),r=tx.objectStore("projects").get("damaged-test");r.onsuccess=()=>resolve(r.result);tx.oncomplete=()=>db.close();});
   })).toEqual(damaged);
   await page.evaluate(()=>{localStorage.removeItem("vnmaker.studio.project.v1");localStorage.removeItem("vnmaker.studio.active-project.v1");});await page.reload();
@@ -93,14 +129,14 @@ test("damaged library rows do not hide healthy manuscripts or mutate their origi
 test("an entirely damaged library cannot trigger first-run sample initialization",async({page})=>{
   await page.goto("/studio.html");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.evaluate(async()=>{
-    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",1);r.onsuccess=()=>resolve(r.result);});
+    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",2);r.onsuccess=()=>resolve(r.result);});
     await new Promise<void>((resolve,reject)=>{const tx=db.transaction("projects","readwrite"),store=tx.objectStore("projects");store.clear();store.put({id:"only-damaged",script:null,updatedAt:1});tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});db.close();
     localStorage.removeItem("vnmaker.studio.project.v1");localStorage.removeItem("vnmaker.edition");
   });await page.reload();
   await expect(page.getByText("보관함의 작품 1개를 읽지 못했습니다.",{exact:false})).toBeVisible();
   expect(await page.evaluate(()=>localStorage.getItem("vnmaker.studio.project.v1"))).toBeNull();
   expect(await page.evaluate(async()=>{
-    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",1);r.onsuccess=()=>resolve(r.result);});
+    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",2);r.onsuccess=()=>resolve(r.result);});
     return new Promise(resolve=>{const tx=db.transaction("projects","readonly"),r=tx.objectStore("projects").getAll();r.onsuccess=()=>resolve(r.result);tx.oncomplete=()=>db.close();});
   })).toEqual([{id:"only-damaged",script:null,updatedAt:1}]);
 });
@@ -119,7 +155,7 @@ for(const format of ["json","zip"] as const)test(`all-damaged startup restores $
     return Array.from(new TextEncoder().encode(JSON.stringify(newProject("외부 json 복구 작품"))));
   }))};
   await page.evaluate(async()=>{
-    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",1);r.onsuccess=()=>resolve(r.result);});
+    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",2);r.onsuccess=()=>resolve(r.result);});
     await new Promise<void>((resolve,reject)=>{const tx=db.transaction("projects","readwrite"),store=tx.objectStore("projects");store.clear();store.put({id:"damaged-original",script:null,updatedAt:1});tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error);});db.close();localStorage.removeItem("vnmaker.studio.project.v1");
   });await page.reload();
   const input=page.getByLabel("복구할 백업 파일");await expect(input).toBeVisible();
@@ -133,7 +169,7 @@ for(const format of ["json","zip"] as const)test(`all-damaged startup restores $
   await expect(page.getByLabel("작품 제목")).toHaveValue(`외부 ${format} 복구 작품`);await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await expect(other.getByRole("heading",{name:"다른 탭에서 편집 중입니다"})).toBeVisible();
   const rows=await page.evaluate(async()=>{
-    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",1);r.onsuccess=()=>resolve(r.result);});
+    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("vnmaker.projects",2);r.onsuccess=()=>resolve(r.result);});
     return new Promise<any[]>(resolve=>{const tx=db.transaction("projects","readonly"),r=tx.objectStore("projects").getAll();r.onsuccess=()=>resolve(r.result);tx.oncomplete=()=>db.close();});
   });expect(rows).toHaveLength(2);expect(rows.find(row=>row.id==="damaged-original")).toEqual({id:"damaged-original",script:null,updatedAt:1});expect(rows.find(row=>row.id!=="damaged-original").script.title).toBe(`외부 ${format} 복구 작품`);
   await other.close();await page.reload();await expect(page.getByLabel("작품 제목")).toHaveValue(`외부 ${format} 복구 작품`);

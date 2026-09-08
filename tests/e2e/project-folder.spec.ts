@@ -1,10 +1,9 @@
 import {test,expect} from "@playwright/test";
-import {mkdir} from "node:fs/promises";
 import {createHash} from "node:crypto";
 import {wav} from "../../packages/app/test/fixtures/wav.js";
 import {EDITION} from "../../packages/app/src/storage/edition.js";
 
-test("folder backup commits original media, restores edits, and rejects changed files without switching",async({page})=>{
+test("folder backup commits original media, restores edits, and rejects changed files without switching",async({page},info)=>{
   page.setDefaultTimeout(15000);
   const bytes=wav(.3,440),voice=`/assets/user/${createHash("sha256").update(bytes).digest("hex")}.wav`;
   const story={title:"폴더에 보관한 작품",subtitle:"",start:"s",characters:[],scenes:[{id:"s",background:"title",lines:[{speaker:null,text:"원본 대사입니다.",voice}],ending:"끝"}]};
@@ -19,7 +18,7 @@ test("folder backup commits original media, restores edits, and rejects changed 
   await page.getByTestId("project-library").click();await page.getByRole("button",{name:"폴더에 백업",exact:true}).click();await expect(page.getByRole("status").filter({hasText:"저장 완료"})).toBeVisible();
   const saved=await page.evaluate(async()=>{const parent=(window as any).qaParent;for await(const entry of parent.values()){const file=await(await entry.getFileHandle("vnmaker-project.json")).getFile();return JSON.parse(await file.text());}});
   expect(saved.script.title).toBe(story.title);expect(saved.files.find((entry:any)=>entry.path===voice.slice(1)).sha256).toBe(voice.split("/").at(-1)!.split(".")[0]);
-  await mkdir("evidence/project-folder",{recursive:true});await page.setViewportSize({width:1280,height:720});await page.screenshot({path:"evidence/project-folder/saved-1280.png"});
+  await page.setViewportSize({width:1280,height:720});await page.screenshot({path:info.outputPath("saved-1280.png")});
   await page.getByLabel("작품 보관함 닫기").click();await page.getByTestId("studio-scene-s").click();await page.getByTestId("studio-line-text").fill("백업 후 변경한 대사");
   await page.getByTestId("project-library").click();await page.getByRole("button",{name:"폴더에서 가져오기",exact:true}).click();await expect(page.getByLabel("내 작품 보관함")).not.toBeVisible();await page.getByTestId("studio-scene-s").click();await expect(page.getByTestId("studio-line-text")).toHaveValue("원본 대사입니다.");
   const restored=await page.evaluate(async voice=>[...new Uint8Array(await(await fetch(voice)).arrayBuffer())],voice);expect(restored).toEqual([...bytes]);

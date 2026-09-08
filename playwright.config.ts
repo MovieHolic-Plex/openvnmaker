@@ -20,7 +20,7 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } } },
   ],
   webServer: {
-    command: `pnpm --filter @vnmaker/app exec vite preview --config ../../tests/e2e/server/e2e-preview.config.ts --host 127.0.0.1 --port ${PORT} --strictPort`,
+    command: `pnpm --filter @vnmaker/app exec vite build --config ../../tests/e2e/server/e2e-preview.config.ts && pnpm --filter @vnmaker/app exec vite preview --config ../../tests/e2e/server/e2e-preview.config.ts --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

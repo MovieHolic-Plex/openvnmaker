@@ -3,6 +3,7 @@ import { CharacterManager } from "./studio/CharacterManager.js";
 import { ProjectLibrary } from "./studio/ProjectLibrary.js";
 import { ACTIVE_PROJECT_KEY, activateProject } from "./studio/projects.js";
 import { useProjectAutosave } from "./studio/useProjectAutosave.js";
+import {projectRepository,CurrentRevisionChangedError,type ProjectRepository} from "./studio/projectRepository.js";
 import { ProjectRecovery } from "./studio/ProjectRecovery.js";
 import { ActorAvatar } from "./studio/ActorAvatar.js";
 import { ArtImage } from "./components/ArtImage.js";
@@ -14,7 +15,7 @@ import { Stage } from "./components/Stage.js";
 import { backgroundAt, bgmAt, cgAt, framingAt, speakerColor, speakerName, spritesAt } from "./engine/selectors.js";
 import { Icon, type IconName } from "./studio/Icon.js";
 import { Inspector, expressionLabel } from "./studio/Inspector.js";
-import { backgroundSrc, historyReducer, loadProject, newSceneId, POSITION_KEY, PROJECT_KEY, sceneTitle } from "./studio/project.js";
+import { backgroundSrc, historyReducer, loadProject, newSceneId, POSITION_KEY, sceneTitle } from "./studio/project.js";
 import { ProjectOverview, durationLabel } from "./studio/ProjectOverview.js";
 import { ManuscriptReview } from "./studio/ManuscriptReview.js";
 import { AssetLibrary } from "./studio/AssetLibrary.js";
@@ -59,11 +60,11 @@ function StoryMap({ script, selected, onSelect }: { script: VnScript; selected: 
     })}</svg>{script.scenes.map((scene, index) => { const pos = positions.get(scene.id)!; return <button key={scene.id} className={`graph-node ${selected === scene.id ? "is-selected" : ""}`} style={{ left: pos.x, top: pos.y }} onClick={() => onSelect(scene.id)} data-testid={`graph-node-${scene.id}`}><img src={backgroundSrc(scene)} alt="" /><div><span>{String(index + 1).padStart(2, "0")} / {scene.id === script.start ? "START" : scene.ending ? "ENDING" : scene.choices?.length ? "BRANCH" : "SCENE"}</span><strong>{sceneTitle(scene)}</strong><small>{scene.lines.length}줄 {scene.choices?.length ? `· 선택지 ${scene.choices.length}개` : ""}</small></div></button>; })}</div></div></div></section>;
 }
 
-export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof loadProject>}={}) {
+export function StudioApp({recoveryInitial,initialRepository=null,initialProjectId}:{recoveryInitial?:ReturnType<typeof loadProject>;initialRepository?:ProjectRepository|null;initialProjectId?:string}={}) {
   const [initial] = useState(()=>recoveryInitial??loadProject());
   const [history, dispatch] = useReducer(historyReducer, { past: [], present: initial.script, future: [] });
   const script = history.present;
-  const [activeProjectId,setActiveProjectId]=useState(()=>{try{return localStorage.getItem(ACTIVE_PROJECT_KEY)||"original-project";}catch{return "original-project";}});
+  const [activeProjectId,setActiveProjectId]=useState(()=>{try{return initialProjectId??initialRepository?.snapshot.head.projectId??localStorage.getItem(ACTIVE_PROJECT_KEY)??"original-project";}catch{return "original-project";}});
   const [position] = useState(() => {
     try { return parseEditorPosition(localStorage.getItem(POSITION_KEY)); } catch { return {}; }
   });
@@ -79,9 +80,16 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
   const [sessionSaveError, setSaveError] = useState(initial.error);
   const [saveEnabled, setSaveEnabled] = useState(!initial.error);
   const [saveRetry,setSaveRetry]=useState(0);
-  const autosave=useProjectAutosave(activeProjectId,script,saveEnabled,saveRetry);
+  const [repository,setRepository]=useState(initialRepository);
+  const autosave=useProjectAutosave(repository,{script,enabled:saveEnabled,retry:saveRetry});
   const saveError=sessionSaveError||autosave.error;
-  function retrySave(){setSaveError(null);setSaveEnabled(true);setSaveRetry(value=>value+1);}
+  async function retrySave(){try{
+    if(!repository){
+      const id=crypto.randomUUID(),next=await projectRepository.create(id,script);
+      activateProject(id,script,true);projectRepository.activate(next);setRepository(next);setActiveProjectId(id);
+    }
+    setSaveError(null);setSaveEnabled(true);setSaveRetry(value=>value+1);
+  }catch(error){setSaveError(error instanceof Error?error.message:String(error));}}
   const [showIssues, setShowIssues] = useState(false);
   const [showScenes, setShowScenes] = useState(false);
   const [focusMode, setFocusMode] = useState(position.focusMode === true);
@@ -170,6 +178,10 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
       if (!isCurrent()) throw new Error("가져오는 동안 원고가 변경되어 덮어쓰기를 중단했습니다. 현재 작업을 저장한 뒤 다시 가져오세요.");
       await saveVersion(script,"가져오기 직전 작업");
       if (!isCurrent()) throw new Error("가져오는 동안 원고가 변경되어 덮어쓰기를 중단했습니다. 현재 작업을 저장한 뒤 다시 가져오세요.");
+      if(repository)await repository.flushCurrent();
+      const id=crypto.randomUUID(),imported=await projectRepository.create(id,next);
+      if(!isCurrent())throw new CurrentRevisionChangedError();
+      activateProject(id,next,repository===null);projectRepository.activate(imported);setRepository(imported);setActiveProjectId(id);setSaveError(null);
       changeProjectEpoch(); setPreviewChoices({}); edit(next); selectScene(next.start); setSaveEnabled(true); setView("stage"); setNotice("작품을 가져왔습니다. 실행 취소로 이전 작품을 복원할 수 있습니다.");
     } catch (err) { if (token === importToken.current) setNotice(`가져오기 실패: ${err instanceof Error ? err.message : String(err)}`); }
     if (token === importToken.current && fileInput.current) fileInput.current.value = "";
@@ -181,7 +193,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
       <div className="top-actions"><VersionHistory script={script} onRestore={next=>{changeProjectEpoch();setPreviewChoices({});edit(next);selectScene(next.start);setView("stage");setNotice("백업한 버전으로 복원했습니다. 직전 작업은 버전 기록에 보관했습니다.");}}/><button type="button" className="icon-button" title="실행 취소 (Ctrl+Z)" aria-label="실행 취소" data-testid="studio-undo" disabled={!history.past.length} onClick={() => undoRedo("undo")}><Icon name="undo" /></button><button type="button" className="icon-button" title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행" disabled={!history.future.length} onClick={() => undoRedo("redo")}><Icon name="redo" /></button><span className="action-divider" /><button type="button" className="studio-button export-button" onClick={exportProject} data-testid="studio-export"><Icon name="download" /><span>JSON</span></button><ExportBundleButton script={script}/><NativeBuildButton script={script} onChange={next=>edit(next)}/><button type="button" className="studio-button primary" onClick={play} data-testid="studio-play"><Icon name="play" size={14} /><span>여기서 플레이</span></button></div>
     </header>
     {saveError && <div className="save-alert" role="alert">{saveError}<button onClick={retrySave}>{saveEnabled ? "다시 저장" : "현재 작품 저장"}</button></div>}
-    {!saveEnabled && initial.error && <ProjectRecovery id={activeProjectId} onRestore={next=>{changeProjectEpoch();setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setSaveError(null);setSaveEnabled(true);setNotice("작품 보관함 원고로 복구했습니다.");}}/>}
+    {!saveEnabled && initial.error && <ProjectRecovery id={activeProjectId} onRestore={async next=>{const recovered=await projectRepository.open(activeProjectId);activateProject(activeProjectId,next,true);projectRepository.activate(recovered);setRepository(recovered);changeProjectEpoch();setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setSaveError(null);setSaveEnabled(true);setNotice("작품 보관함 원고로 복구했습니다.");}}/>}
     <div className="studio-work">
       <aside className={`studio-rail ${showScenes ? "is-open" : ""}`}>
         <div className="project-cover"><img src={backgroundSrc(script.scenes.find(scene => scene.id === script.start) ?? script.scenes[0]!)} alt="" /><div><span>YOUR VISUAL NOVEL</span><strong>{script.title}</strong><small>{script.scenes.length}개 장면 · 예상 {durationLabel(script)}</small></div></div>
@@ -191,7 +203,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
         <label className="scene-search"><Icon name="search" size={13} /><input aria-label="씬 검색" placeholder="장면 찾기…" value={query} onChange={event => setQuery(event.target.value)} /><kbd>⌕</kbd></label>
         <ul className="studio-scene-list" data-testid="studio-scene-list">{script.scenes.filter(row => `${row.id} ${row.chapter ?? ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(row => <li key={row.id}><button type="button" className={row.id === scene.id ? "is-selected" : ""} data-testid={`studio-scene-${row.id}`} onClick={() => { selectScene(row.id); setView("stage"); }}><span className="scene-thumb"><img src={backgroundSrc(row)} alt="" /><small>{String(script.scenes.indexOf(row) + 1).padStart(2, "0")}</small></span><span className="scene-copy"><strong>{sceneTitle(row).replace(/^\d+장\s*[A-Z]?\s*·\s*/, "")}</strong><small>{row.lines.length}줄 <span>·</span> {row.choices?.length ? `분기 ${row.choices.length}` : row.ending ? "엔딩" : "장면"}</small></span>{row.choices?.length ? <Icon name="graph" size={13} /> : row.ending ? <span className="ending-dot" /> : null}</button></li>)}</ul>
         {query && !script.scenes.some(row => `${row.id} ${row.chapter ?? ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) && <p className="empty-search">일치하는 장면이 없습니다.</p>}
-        <div className="rail-bottom"><ProjectLibrary script={script} activeId={activeProjectId} onSwitch={(id,next)=>{activateProject(id,next);setActiveProjectId(id);changeProjectEpoch();revisionRef.current+=1;setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setView("stage");setSaveEnabled(true);setNotice("작품을 열었습니다.");}}/><button className="studio-button" type="button" onClick={() => fileInput.current?.click()}><Icon name="upload" />작품 가져오기</button><a href="/" data-testid="studio-to-title">작품 플레이어 <Icon name="arrow" size={12} /></a></div>
+        <div className="rail-bottom"><ProjectLibrary script={script} activeId={activeProjectId} repository={repository} onSwitch={target=>{const {script:next,head:{projectId:id}}=target.snapshot;activateProject(id,next,repository===null);projectRepository.activate(target);setRepository(target);setSaveError(null);setActiveProjectId(id);changeProjectEpoch();revisionRef.current+=1;setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setView("stage");setSaveEnabled(true);setNotice("작품을 열었습니다.");}}/><button className="studio-button" type="button" onClick={() => fileInput.current?.click()}><Icon name="upload" />작품 가져오기</button><a href="/" data-testid="studio-to-title">작품 플레이어 <Icon name="arrow" size={12} /></a></div>
         <input ref={fileInput} data-testid="studio-import" type="file" accept=".json,application/json" hidden onChange={event => void importProject(event.target.files?.[0])} />
       </aside>
       <main className="studio-center">

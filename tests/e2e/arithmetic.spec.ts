@@ -1,14 +1,41 @@
 import {test,expect} from "@playwright/test";
-import {mkdir,readFile} from "node:fs/promises";
+import {mkdir,readFile,writeFile} from "node:fs/promises";
 import {createServer} from "node:http";
 import {unzipSync} from "../../packages/app/node_modules/fflate/esm/index.mjs";
 import {arithmeticStory} from "../../packages/app/test/fixtures/arithmetic-story.js";
 import {EDITION} from "../../packages/app/src/storage/edition.js";
+declare global {interface Window {qaArithmeticCommitted:Promise<{add:Record<string,unknown>;set:Record<string,unknown>}>;}}
+
+async function observeNextDurableChoice(page:import("@playwright/test").Page){
+  await page.evaluate(async()=>{
+    const path="/src/studio/projectRepository.ts";
+    const {projectRepository}:typeof import("../../packages/app/src/studio/projectRepository.js")=await import(path);
+    const repository=projectRepository.current();
+    window.qaArithmeticCommitted=new Promise(resolve=>{
+      let began=false;
+      const unsubscribe=repository.subscribe(()=>{
+        began ||= repository.dirty;
+        if(began&&!repository.dirty){
+          unsubscribe();
+          const choice=repository.snapshot.script.scenes[0]?.choices?.[0];
+          resolve({add:choice?.add??{},set:choice?.set??{}});
+        }
+      });
+    });
+  });
+}
+
 test("authors a cumulative numeric choice, preserves it in ZIP and gates both played routes",async({page})=>{
   const {add,...choice}=arithmeticStory.scenes[0]!.choices![0]!;const story={...arithmeticStory,scenes:arithmeticStory.scenes.map((scene,index)=>index===0?{...scene,choices:[{...choice,set:{trust:3}},scene.choices![1]!]}:scene)};
   await page.addInitScript(({story,edition})=>{if(localStorage.getItem("arithmetic-seed"))return;localStorage.setItem("arithmetic-seed","1");localStorage.setItem("vnmaker.edition",edition);localStorage.setItem("vnmaker.studio.project.v1",JSON.stringify(story));},{story,edition:EDITION});
   page.setDefaultTimeout(15000);await page.setViewportSize({width:1440,height:1000});await mkdir("evidence/arithmetic",{recursive:true});await page.goto("/studio.html");await page.getByTestId("studio-scene-start").click();
-  await page.locator(".choice-edit").first().getByText("선택 결과",{exact:false}).click();await page.getByLabel("선택지 1 trust 연산").selectOption("add");await page.getByLabel("선택지 1 trust 결과",{exact:true}).fill("3");await page.getByLabel("선택지 1 trust 결과",{exact:true}).press("Tab");await page.screenshot({path:"evidence/arithmetic/editor.png"});
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  await page.locator(".choice-edit").first().getByText("선택 결과",{exact:false}).click();
+  await observeNextDurableChoice(page);
+  await page.getByLabel("선택지 1 trust 연산").selectOption("add");await page.getByLabel("선택지 1 trust 결과",{exact:true}).fill("3");await page.getByLabel("선택지 1 trust 결과",{exact:true}).press("Tab");
+  expect(await page.evaluate(()=>window.qaArithmeticCommitted)).toEqual({add:{trust:3},set:{}});
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  await page.screenshot({path:"evidence/arithmetic/editor.png"});
   await page.reload();await page.locator(".choice-edit").first().getByText("선택 결과",{exact:false}).click();await expect(page.getByLabel("선택지 1 trust 연산")).toHaveValue("add");await expect(page.getByLabel("선택지 1 trust 결과",{exact:true})).toHaveValue("3");
   for(const index of [0,1]){
     await page.getByTestId("studio-scene-start").click();await page.getByTestId("studio-play").click();
@@ -20,4 +47,19 @@ test("authors a cumulative numeric choice, preserves it in ZIP and gates both pl
   const server=createServer((request,response)=>{const path=new URL(request.url??"/","http://localhost").pathname.slice(1)||"index.html";const bytes=files[path];if(!bytes){response.writeHead(404).end();return;}response.setHeader("Content-Type",path.endsWith(".html")?"text/html":path.endsWith(".js")?"text/javascript":path.endsWith(".css")?"text/css":"application/octet-stream");response.end(bytes);});await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
   try{const {port}=server.address() as {port:number};await page.goto(`http://127.0.0.1:${port}/`);await page.getByTestId("start-button").click();for(let step=0;step<2;step++){await expect(page.locator(".next-mark")).toBeVisible();await page.getByTestId("advance-button").click();await page.getByTestId("choice-0").click();}await expect(page.locator(".next-mark")).toBeVisible();await page.getByTestId("advance-button").click();await expect(page.getByTestId("choice-0")).toBeVisible();await page.screenshot({path:"evidence/arithmetic/standalone.png"});}
   finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});
+
+test("reload restores this arithmetic add only after the edit is durably committed",async({page},info)=>{
+  const {add,...choice}=arithmeticStory.scenes[0]!.choices![0]!;const story={...arithmeticStory,scenes:arithmeticStory.scenes.map((scene,index)=>index===0?{...scene,choices:[{...choice,set:{trust:3}},scene.choices![1]!]}:scene)};
+  await page.addInitScript(({story,edition})=>{if(localStorage.getItem("arithmetic-seed"))return;localStorage.setItem("arithmetic-seed","1");localStorage.setItem("vnmaker.edition",edition);localStorage.setItem("vnmaker.studio.project.v1",JSON.stringify(story));},{story,edition:EDITION});
+  page.setDefaultTimeout(15000);await page.setViewportSize({width:1440,height:1000});await page.goto("/studio.html");await page.getByTestId("studio-scene-start").click();
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  await page.locator(".choice-edit").first().getByText("선택 결과",{exact:false}).click();
+  await observeNextDurableChoice(page);
+  await page.getByLabel("선택지 1 trust 연산").selectOption("add");await page.getByLabel("선택지 1 trust 결과",{exact:true}).fill("3");await page.getByLabel("선택지 1 trust 결과",{exact:true}).press("Tab");
+  const committed=await page.evaluate(()=>window.qaArithmeticCommitted);
+  expect(committed).toEqual({add:{trust:3},set:{}});
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  await writeFile(info.outputPath("durable-arithmetic-commit.json"),JSON.stringify(committed));
+  await page.reload();await page.locator(".choice-edit").first().getByText("선택 결과",{exact:false}).click();await expect(page.getByLabel("선택지 1 trust 연산")).toHaveValue("add");await expect(page.getByLabel("선택지 1 trust 결과",{exact:true})).toHaveValue("3");
 });

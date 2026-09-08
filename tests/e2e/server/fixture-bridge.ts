@@ -1,11 +1,12 @@
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { build, type InlineConfig } from "./vite-api.ts";
 
 export const FIXTURE_MODULES = [
   "/src/studio/projects.ts",
   "/src/studio/exportBundle.ts",
   "/src/studio/projectFolder.ts",
   "/src/storage/projectAssets.ts",
+  "/src/studio/projectRepository.ts",
 ] as const;
 
 export type FixtureModulePath = (typeof FIXTURE_MODULES)[number];
@@ -15,49 +16,37 @@ const SOURCE = {
   "/src/studio/exportBundle.ts": "src/studio/exportBundle.ts",
   "/src/studio/projectFolder.ts": "src/studio/projectFolder.ts",
   "/src/storage/projectAssets.ts": "src/storage/projectAssets.ts",
+  "/src/studio/projectRepository.ts": "src/studio/projectRepository.ts",
 } as const satisfies Record<FixtureModulePath, string>;
 
-function chunkCode(url: string, result: Awaited<ReturnType<typeof build>>): string {
-  const outputs = Array.isArray(result) ? result : [result];
-  const chunks: string[] = [];
-  for (const output of outputs) {
-    if (!("output" in output)) throw new Error(`Fixture build produced no output for ${url}`);
-    for (const item of output.output) {
-      if (item.type === "chunk") chunks.push(item.code);
-    }
+function asManifest(value: unknown, path: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`Preview manifest is not an object: ${path}`);
   }
-  const code = chunks[0];
-  if (chunks.length !== 1 || code === undefined) {
-    throw new Error(`Fixture ${url} must be a single ES module, got ${String(chunks.length)}`);
-  }
-  return code;
+  return value as Record<string, unknown>;
 }
 
-export async function compileFixtureBridge(appRoot: string): Promise<ReadonlyMap<string, Uint8Array>> {
+function hashedAssetFile(entry: unknown, url: string): string {
+  if (typeof entry !== "object" || entry === null || !("file" in entry) || typeof entry.file !== "string") {
+    throw new Error(`Fixture ${url} missing from preview manifest`);
+  }
+  const file = entry.file;
+  if (!file.startsWith("assets/") || !file.endsWith(".js")) {
+    throw new Error(`Fixture ${url} manifest file is not a hashed assets entry: ${file}`);
+  }
+  return file;
+}
+
+export function fixtureReexport(file: string): string {
+  return `export * from ${JSON.stringify(`/${file}`)};\n`;
+}
+
+export async function compileFixtureBridge(outDir: string): Promise<ReadonlyMap<string, Uint8Array>> {
+  const manifestPath = resolve(outDir, ".vite/manifest.json");
+  const manifest = asManifest(JSON.parse(await readFile(manifestPath, "utf8")), manifestPath);
   const files = new Map<string, Uint8Array>();
   for (const url of FIXTURE_MODULES) {
-    const config = {
-      configFile: false,
-      root: appRoot,
-      publicDir: false,
-      logLevel: "warn",
-      build: {
-        write: false,
-        emptyOutDir: false,
-        sourcemap: false,
-        minify: false,
-        target: "es2022",
-        lib: {
-          entry: resolve(appRoot, SOURCE[url]),
-          formats: ["es"],
-          fileName: () => "fixture.js",
-        },
-        rollupOptions: {
-          output: { codeSplitting: false },
-        },
-      },
-    } satisfies InlineConfig;
-    files.set(url, Buffer.from(chunkCode(url, await build(config))));
+    files.set(url, Buffer.from(fixtureReexport(hashedAssetFile(manifest[SOURCE[url]], url))));
   }
   return files;
 }

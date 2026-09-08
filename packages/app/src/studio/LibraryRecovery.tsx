@@ -1,7 +1,7 @@
 import {LibraryArchiveButton} from "./LibraryArchiveButton.js";
 import {useState} from "react";
 import {parseScript} from "@vnmaker/content";
-import {activateProject,saveProject} from "./projects.js";
+import {activateProject,saveProject,projectRepository} from "./projects.js";
 import {restoreProjectBundle} from "./restoreBundle.js";
 import {EDITION,EDITION_KEY} from "../storage/edition.js";
 
@@ -17,7 +17,8 @@ export function LibraryRecovery({count,onRestored}:{count:number;onRestored:()=>
       const id=crypto.randomUUID();
       await saveProject(id,script);
       localStorage.setItem(EDITION_KEY,EDITION);
-      activateProject(id,script);
+      activateProject(id,script,true);
+      projectRepository.activate(await projectRepository.open(id));
       onRestored();
     }catch(error){setError(`백업을 가져오지 못했습니다: ${error instanceof Error?error.message:String(error)}`);setBusy(false);}
   }

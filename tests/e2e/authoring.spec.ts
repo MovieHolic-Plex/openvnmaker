@@ -1,10 +1,10 @@
 import {test,expect} from "@playwright/test";
-import {mkdir,readFile} from "node:fs/promises";
+import {readFile} from "node:fs/promises";
 import {createHash} from "node:crypto";
 import path from "node:path";
 
-test.beforeEach(async({page})=>{await page.setViewportSize({width:1440,height:1000});await mkdir("evidence/production-authoring",{recursive:true});});
-test("new projects, arbitrary actors and uploaded originals survive reload, preview, switching and export",async({page,browser})=>{
+test.beforeEach(async({page})=>{await page.setViewportSize({width:1440,height:1000});});
+test("new projects, arbitrary actors and uploaded originals survive reload, preview, switching and export",async({page,browser},info)=>{
   const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
   const api:string[]=[];page.on("request",request=>{if(new URL(request.url()).pathname.startsWith("/api/"))api.push(request.url());});
   await page.goto("/studio.html");await page.getByTestId("project-library").click();await page.getByLabel("새 작품 이름").fill("밤의 증인");await page.getByTestId("project-create").click();
@@ -14,8 +14,8 @@ test("new projects, arbitrary actors and uploaded originals survive reload, prev
   await page.getByTestId("workspace-characters").click();
   for(const [id,name] of [["me","새 주인공"],["Detective_1","이서하"],["witness","목격자"],["rival","라이벌"]]){await page.getByLabel("새 캐릭터 ID").fill(id!);await page.getByLabel("새 캐릭터 이름").fill(name!);await page.getByTestId("character-add").click();}
   await expect(page.locator(".character-card")).toHaveCount(4);await page.getByLabel("Detective_1 녹색 배경 제거").check();
-  await page.screenshot({path:"evidence/production-authoring/custom-cast-desktop.png"});
-  await page.setViewportSize({width:390,height:844});await page.screenshot({path:"evidence/production-authoring/custom-cast-mobile.png"});
+  await page.screenshot({path:info.outputPath("custom-cast-desktop.png")});
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:info.outputPath("custom-cast-mobile.png")});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.setViewportSize({width:1440,height:1000});
   await page.getByTestId("workspace-assets").click();await page.getByTestId("art-import-files").setInputFiles(path.resolve("packages/app/public/assets/art/rain-library.png"));
@@ -26,13 +26,13 @@ test("new projects, arbitrary actors and uploaded originals survive reload, prev
   await expect(page.getByTestId("art-selected-preview")).toHaveAttribute("data-src",/\/assets\/user\//);await page.getByTestId("art-apply").click();
   await page.getByTestId("workspace-stage").click();await page.getByTestId("studio-line-text").fill("새로운 배우와 직접 가져온 원화로 만드는 장면입니다.");await page.getByLabel("화자",{exact:true}).selectOption("Detective_1");await page.getByText("이 대사의 배우·카메라·음악",{exact:true}).click();await page.getByLabel("left 대사 배우").selectOption("Detective_1");
   await expect(page.getByTestId("studio-stage").getByTestId("sprite-left")).toHaveAttribute("data-loaded","true");await expect(page.getByTestId("studio-stage").getByTestId("bg-image")).toHaveAttribute("src",bg);
-  await page.screenshot({path:"evidence/production-authoring/custom-project-editor.png"});await page.reload();await expect(page.getByTestId("studio-stage").getByTestId("sprite-left")).toHaveAttribute("data-loaded","true");
+  await page.screenshot({path:info.outputPath("custom-project-editor.png")});await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");await page.reload();await expect(page.getByTestId("studio-stage").getByTestId("sprite-left")).toHaveAttribute("data-loaded","true");
   await page.getByTestId("studio-play").click();await expect(page.getByTestId("dialogue-text")).toHaveText("새로운 배우와 직접 가져온 원화로 만드는 장면입니다.");await expect(page.getByTestId("sprite-left")).toHaveAttribute("data-loaded","true");await page.getByTestId("studio-return").click();
   await page.getByTestId("project-library").click();await page.getByLabel("새 작품 이름").fill("다른 작품");await page.getByTestId("project-create").click();await page.getByTestId("project-library").click();await page.locator(".project-library article").filter({hasText:"밤의 증인"}).getByRole("button",{name:"열기",exact:true}).click();
   await expect(page.getByLabel("작품 제목")).toHaveValue("밤의 증인");await expect(page.getByTestId("studio-line-text")).toHaveValue("새로운 배우와 직접 가져온 원화로 만드는 장면입니다.");await expect(page.getByTestId("studio-undo")).toBeDisabled();
-  await page.getByTestId("studio-export-bundle").click();const download=page.waitForEvent("download");await page.getByTestId("export-bundle-build").click();await (await download).saveAs("evidence/production-authoring/custom-project-game.zip");await expect(page.getByTestId("export-bundle-success")).toBeVisible();expect(errors).toEqual([]);expect(api).toEqual([]);
+  await page.getByTestId("studio-export-bundle").click();const download=page.waitForEvent("download");await page.getByTestId("export-bundle-build").click();await (await download).saveAs(info.outputPath("custom-project-game.zip"));await expect(page.getByTestId("export-bundle-success")).toBeVisible();expect(errors).toEqual([]);expect(api).toEqual([]);
   const fresh=await browser.newContext({baseURL:new URL(page.url()).origin,viewport:{width:1440,height:1000}});
-  try {const restored=await fresh.newPage();await restored.goto("/studio.html");await restored.getByTestId("project-library").click();await restored.getByTestId("project-restore-file").setInputFiles(path.resolve("evidence/production-authoring/custom-project-game.zip"));await expect(restored.getByLabel("작품 제목")).toHaveValue("밤의 증인");expect(await restored.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!).scenes[0].lines[0].id)).toBe(firstId);await expect(restored.getByTestId("studio-stage").getByTestId("sprite-left")).toHaveAttribute("data-loaded","true");await expect(restored.getByTestId("studio-stage").getByTestId("bg-image")).toHaveAttribute("src",bg);await restored.reload();await expect(restored.getByTestId("studio-stage").getByTestId("sprite-left")).toHaveAttribute("data-loaded","true");await restored.screenshot({path:"evidence/production-authoring/restored-in-clean-browser.png"});}finally{await fresh.close();}
+  try {const restored=await fresh.newPage();await restored.goto("/studio.html");await restored.getByTestId("project-library").click();await restored.getByTestId("project-restore-file").setInputFiles(path.resolve(info.outputPath("custom-project-game.zip")));await expect(restored.getByLabel("작품 제목")).toHaveValue("밤의 증인");expect(await restored.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!).scenes[0].lines[0].id)).toBe(firstId);await expect(restored.getByTestId("studio-stage").getByTestId("sprite-left")).toHaveAttribute("data-loaded","true");await expect(restored.getByTestId("studio-stage").getByTestId("bg-image")).toHaveAttribute("src",bg);await restored.reload();await expect(restored.getByTestId("studio-stage").getByTestId("sprite-left")).toHaveAttribute("data-loaded","true");await restored.screenshot({path:info.outputPath("restored-in-clean-browser.png")});}finally{await fresh.close();}
 });
 
 test("a non-image import cannot register artwork or modify the manuscript",async({page})=>{
@@ -44,7 +44,38 @@ test("new dialogue identity survives undo, redo and reload without changing the 
   await page.goto("/studio.html");await page.getByTestId("project-library").click();await page.getByLabel("새 작품 이름").fill("대사 식별자 검증");await page.getByTestId("project-create").click();await expect(page.getByLabel("작품 제목")).toHaveValue("대사 식별자 검증");
   const ids=()=>page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!).scenes[0].lines.map((line:{id:string})=>line.id));
   const original=await ids();expect(original).toHaveLength(1);
-  await page.getByTestId("studio-add-line").click();await expect.poll(async()=> (await ids()).length).toBe(2);const inserted=await ids();expect(inserted[0]).toBe(original[0]);expect(inserted[1]).not.toBe(original[0]);
-  await page.getByTestId("studio-undo").click();await expect.poll(ids).toEqual(original);await page.getByRole("button",{name:"다시 실행",exact:true}).click();await expect.poll(ids).toEqual(inserted);
-  await page.reload();await expect.poll(ids).toEqual(inserted);
+  await page.getByTestId("studio-add-line").click();await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");expect((await ids()).length).toBe(2);const inserted=await ids();expect(inserted[0]).toBe(original[0]);expect(inserted[1]).not.toBe(original[0]);
+  await page.getByTestId("studio-undo").click();await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");expect(await ids()).toEqual(original);await page.getByRole("button",{name:"다시 실행",exact:true}).click();await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");expect(await ids()).toEqual(inserted);
+  const revision=await page.evaluate(async()=>{
+    const path="/src/studio/projectRepository.ts";
+    const {projectRepository}:typeof import("../../packages/app/src/studio/projectRepository.js")=await import(path);
+    return (await projectRepository.current().flushCurrent()).head.revision;
+  });
+  expect(revision).toBe(3);
+  await page.reload();await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");expect(await ids()).toEqual(inserted);
+});
+
+test("JSON project imports create a new lineage without changing the original project",async({page},info)=>{
+  // Given a saved source and an imported project with its own native save identity.
+  await page.goto("/studio.html");await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  const snapshot=()=>page.evaluate(async()=>{
+    const path="/src/studio/projectRepository.ts";
+    const {projectRepository}:typeof import("../../packages/app/src/studio/projectRepository.js")=await import(path);
+    return projectRepository.current().flushCurrent();
+  });
+  const original=await snapshot();
+  const imported={title:"Imported identity",subtitle:"",nativeSaveId:"1".repeat(32),start:"start",characters:[],scenes:[{id:"start",background:"title",lines:[{speaker:null,text:"Imported manuscript"}],ending:"End"}]};
+  // When the author imports through the existing file control.
+  await page.getByTestId("studio-import").setInputFiles({name:"import.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify(imported))});
+  await expect(page.getByLabel("작품 제목")).toHaveValue(imported.title);await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  // Then project/lineage authority is new while native identity keeps the existing import policy.
+  const current=await snapshot();
+  expect(current.head.projectId).not.toBe(original.head.projectId);expect(current.head.lineageId).not.toBe(original.head.lineageId);expect(current.script.nativeSaveId).toBe(imported.nativeSaveId);
+  const retained=await page.evaluate(async id=>{
+    const path="/src/studio/projects.ts";
+    const {readSavedProject}:typeof import("../../packages/app/src/studio/projects.js")=await import(path);
+    return readSavedProject(id);
+  },original.head.projectId);
+  expect(retained?.script).toEqual(original.script);
+  await info.attach("import-heads",{body:JSON.stringify({original:original.head,imported:current.head},null,2),contentType:"application/json"});
 });
