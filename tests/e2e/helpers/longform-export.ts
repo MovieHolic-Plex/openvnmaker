@@ -128,7 +128,9 @@ export function registerLongformExportTests(
       if (!first?.lines[1] || !first.lines[2]) throw new Error("Expected second and third opening lines");
       await clickTo(player, "start-button", `scene:${source.start}:0:false`);
       await clickTo(player, "advance-button", `scene:${source.start}:1:false`);
-      await player.clock.install(); await player.clock.pauseAt(new Date());
+      const clockOrigin = new Date("2026-09-07T00:00:00.000Z");
+      await player.clock.install({ time: clockOrigin });
+      await player.clock.pauseAt(new Date(clockOrigin.getTime() + 600_000));
       await player.getByTestId("auto-button").click(); await player.getByTestId("art-view-button").click();
       await expect(player.getByTestId("dialogue-text")).toHaveCount(0); await expect(player.getByTestId("save-button")).toHaveCount(0);
       await player.clock.runFor(1000 + first.lines[1].text.length * 45);
