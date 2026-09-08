@@ -343,15 +343,12 @@ test("exported player observer does not succeed without a published lineIndex ch
   await observeExportPlayer(page, "ZIP 다운로드 직전에 고친 첫 번째 대사다.");
   await page.goto("about:blank");
   const progressed = waitForPublishedVn(page, sample => sample.lineIndex === 2);
+  const outcome = progressed.then(() => ({ status: "published" as const }), (error: unknown) => ({ status: "rejected" as const, error }));
   await page.mouse.click(1, 1);
-  let succeeded = false;
-  try {
-    await progressed;
-    succeeded = true;
-  } catch (error) {
-    expect(String(error)).toMatch(/Timeout 15000ms/);
-  }
-  expect(succeeded).toBe(false);
+  const result = await outcome;
+  expect(result.status).toBe("rejected");
+  if (result.status !== "rejected") throw new Error("observer succeeded without a published lineIndex 2");
+  expect(String(result.error)).toMatch(/Timeout 15000ms/);
 });
 
 registerLongformExportTests(installProject, unzip, serve);
