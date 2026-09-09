@@ -106,6 +106,14 @@ export function patchCandidateScript(script: VnScript): void {
   });
 }
 
+export function patchCandidateDocument(productionDocument: ProductionDocument): void {
+  if (workspace === null) return;
+  persist({
+    ...workspace, productionDocument: parseProductionDocument(productionDocument),
+    candidateRef: { ...workspace.candidateRef, revision: revisionSchema.parse(workspace.candidateRef.revision + 1) },
+  });
+}
+
 function installDraft(build: (title: string) => { readonly script: VnScript; readonly productionDocument: ProductionDocument }): void {
   if (workspace === null) return;
   const draft = build(workspace.script.title);

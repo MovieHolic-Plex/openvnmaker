@@ -15,7 +15,9 @@
 .harness-badge-incomplete, .harness-badge-limit { background: #ffffff0c; color: #b7b0c0; }
 .harness-badge-info { background: #c5acf724; color: #d8c4f5; }
 .harness-badge-row, .harness-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.harness-lists, .harness-diffs, .harness-quality, .harness-reuse, .harness-env, .harness-review { display: grid; gap: 10px; min-width: 0; }
+.harness-lists, .harness-diffs, .harness-quality, .harness-reuse, .harness-env, .harness-review, .harness-plan { display: grid; gap: 10px; min-width: 0; }
+.harness-plan-grid, .harness-plan-canon { display: grid; gap: 8px; min-width: 0; }
+.harness-plan .is-active { color: #d8c4f5; border-color: #c3a8ef40; }
 .harness-workspace ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .harness-workspace li { overflow-wrap: anywhere; }
 .harness-preview { position: fixed; inset: 0; z-index: 80; background: #050608f2; display: grid; grid-template-rows: auto 1fr auto; min-width: 0; }

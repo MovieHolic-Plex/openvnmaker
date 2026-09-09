@@ -5,6 +5,7 @@ export {
 export { countCharacters, sceneCharacters, estimateScriptDuration, durationLabel } from "./production-duration.js";
 export type { DurationEstimate } from "./production-duration.js";
 export { parseOutline, parseDraft } from "./production-parse.js";
+export { pathRange, sceneExits } from "./production-graph.js";
 export { makeOutlinePrompt, makeDraftPrompt } from "./production-prompts.js";
 export { createPlan, planDraftScript, assembleProduction, restoreProduction } from "./production-plan.js";
 export type {

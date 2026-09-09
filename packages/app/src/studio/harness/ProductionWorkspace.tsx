@@ -11,11 +11,12 @@ import {
 import type { ProjectRepository } from "../projectRepository.js";
 import { sameHead } from "../projects.js";
 import {
-  approveCandidatePlan, bindCandidateWorkspaceHooks, getBudgetMeter, getCandidateWorkspace, installFirstChapterCandidate, installUnwrittenNextCandidate,
+  bindCandidateWorkspaceHooks, getBudgetMeter, getCandidateWorkspace, installFirstChapterCandidate, installUnwrittenNextCandidate,
   openCandidateWorkspace, patchCandidateScript, rememberOpenPreview, restoreCandidateWorkspace,
   subscribeCandidateWorkspace,
 } from "./candidateStore.js";
 import { CandidatePreview } from "./CandidatePreview.js";
+import { PlanEditor } from "./PlanEditor.js";
 import { emitHarnessUi, persistActiveRun, readActiveRun } from "./harnessEvents.js";
 import { ProposalDiffList } from "./ProposalDiffList.js";
 import { ProposalReview } from "./ProposalReview.js";
@@ -189,9 +190,7 @@ export function ProductionWorkspace({
       {TABS.map(item => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} data-testid={`harness-tab-${item.id}`} className={tab === item.id ? "is-active" : ""} onClick={() => setTab(item.id)}>{item.name}</button>)}
     </nav>
     {tab === "planning" && <div role="tabpanel" data-testid="harness-panel-planning">
-      <label>brief<textarea data-testid="harness-brief" value={brief} maxLength={2000} onChange={event => setBrief(event.target.value)} /></label>
-      <button type="button" className="studio-button primary" data-testid="harness-create-run" disabled={busy || repository === null || !brief.trim()} onClick={() => void createRun()}>작업 생성</button>
-      <button type="button" className="studio-button" data-testid="harness-approve-plan" disabled={candidate === null} onClick={() => approveCandidatePlan(brief.trim() || candidate?.brief || "plan")}>이 제작 계획 승인</button>
+      <PlanEditor repository={repository} script={script} candidate={candidate} brief={brief} onBrief={setBrief} busy={busy} onCreateRun={() => void createRun()} />
     </div>}
     {tab === "work" && <div role="tabpanel" data-testid="harness-panel-work">
       <SceneUnitList script={candidate?.script ?? script} units={run?.units ?? []} />

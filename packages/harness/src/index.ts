@@ -42,7 +42,7 @@ export { createProductionRunner } from "./runner.js";
 export {
   DEFAULT_READING_SPEED, PRODUCTION_SCENE_LIMITS, PRODUCTION_MINUTE_LIMITS,
   MEDIUM_SCENE_LIMITS, MEDIUM_MINUTE_LIMITS,
-  countCharacters, sceneCharacters, estimateScriptDuration, durationLabel,
+  countCharacters, sceneCharacters, estimateScriptDuration, durationLabel, pathRange,
   parseOutline, parseDraft, makeOutlinePrompt, makeDraftPrompt,
   createPlan, planDraftScript, assembleProduction, restoreProduction,
 } from "./production.js";
