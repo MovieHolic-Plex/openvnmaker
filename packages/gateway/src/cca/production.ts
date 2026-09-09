@@ -82,6 +82,12 @@ export function mapProductionTurnToDispatch(
   }
 }
 
+export type ProductionTurnHook = (input: {
+  readonly request: ProviderDispatchRequest;
+  readonly result: ProductionTurnResult;
+  readonly envelope: ProductionEnvelope;
+}) => void | Promise<void>;
+
 export type ProductionDispatchDeps = {
   readonly host: string;
   readonly store: CredentialStore;
@@ -94,6 +100,7 @@ export type ProductionDispatchDeps = {
     readonly bytes: number;
   }>;
   readonly fetch?: typeof fetch;
+  readonly onTurn?: ProductionTurnHook;
 };
 
 export function createProductionDispatch(deps: ProductionDispatchDeps): ProviderDispatch {
@@ -110,6 +117,7 @@ export function createProductionDispatch(deps: ProductionDispatchDeps): Provider
         signal: request.signal,
         ...(deps.fetch === undefined ? {} : { fetch: deps.fetch }),
       });
+      if (deps.onTurn !== undefined) await deps.onTurn({ request, result, envelope: loaded.envelope });
       return mapProductionTurnToDispatch(result, loaded);
     },
   };

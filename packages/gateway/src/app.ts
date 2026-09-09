@@ -58,7 +58,10 @@ export function createApp(deps: GatewayDeps): Hono {
         import("./routes/harness.js"),
         import("./harness/runtime.js"),
       ]);
-      return harnessRoutes({ ...wired, harness: wired.harness ?? createDefaultHarnessService() });
+      return harnessRoutes({
+        ...wired,
+        harness: wired.harness ?? await createDefaultHarnessService({ credentialStore: wired.store }),
+      });
     })();
     return harnessRouter;
   };
