@@ -55,6 +55,7 @@ export function ProductionWorkspace({
   const [policy, setPolicy] = useState<"exact-only" | "bounded-payload">("exact-only");
   const [boundedConfirmed, setBoundedConfirmed] = useState(false);
   const [streamNonce, setStreamNonce] = useState(0);
+  const [selectedSceneId, setSelectedSceneId] = useState(script.start);
 
   useEffect(() => { bindCandidateWorkspaceHooks(); emitHarnessUi("ready", { view: "workspace" }); void getHarnessCapabilities().then(setCapabilities).catch(() => setCapabilities(null)); }, []);
   useEffect(() => {
@@ -197,7 +198,7 @@ export function ProductionWorkspace({
       <AssetReview source={script} candidate={candidate} capabilities={capabilities} run={run} busy={busy} />
     </div>}
     {tab === "work" && <div role="tabpanel" data-testid="harness-panel-work">
-      <SceneUnitList script={candidate?.script ?? script} units={run?.units ?? []} />
+      <SceneUnitList script={candidate?.script ?? script} units={run?.units ?? []} selectedSceneId={selectedSceneId} onSelect={setSelectedSceneId} />
       <label>instruction<input data-testid="harness-instruction" value={instruction} onChange={event => setInstruction(event.target.value)} /></label>
       <button type="button" data-testid="harness-patch-candidate" disabled={candidate === null || !instruction.trim()} onClick={() => { if (candidate === null) return; patchCandidateScript(parseScript({ ...candidate.script, title: instruction.trim() })); }}>후보에만 반영</button>
       <button type="button" data-testid="harness-first-chapter" disabled={candidate === null} onClick={() => installFirstChapterCandidate()}>첫 장 후보 초안</button>

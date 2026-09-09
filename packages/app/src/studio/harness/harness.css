@@ -27,6 +27,12 @@
 .harness-plan .is-active { color: #d8c4f5; border-color: #c3a8ef40; }
 .harness-workspace ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .harness-workspace li { overflow-wrap: anywhere; }
+.harness-window { overflow: auto; min-width: 0; contain: content; }
+.harness-window ul { gap: 0; }
+.harness-window li { min-height: 0; }
+.harness-window button { width: 100%; text-align: left; display: flex; justify-content: space-between; gap: 8px; height: 100%; }
+.harness-window .is-selected, .harness-lists .is-selected { outline: 1px solid #c3a8ef80; background: #b696eb18; }
+.harness-window-pad { flex: none; pointer-events: none; }
 .harness-preview { position: fixed; inset: 0; z-index: 80; background: #050608f2; display: grid; grid-template-rows: auto 1fr auto; min-width: 0; }
 .harness-preview-banner { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; }
 .harness-preview .stage { min-height: 0; }
@@ -35,4 +41,5 @@
 @media (max-width: 844px) {
   .harness-workspace { padding: 12px; overflow-x: auto; }
   .harness-head, .harness-tabs, .harness-preview-banner { overflow-x: auto; }
+  .harness-window { max-height: 240px; }
 }
