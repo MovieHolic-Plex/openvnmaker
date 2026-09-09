@@ -51,15 +51,51 @@ function publishedVn(text: string) {
   return { phase: match[1], sceneId: match[2], lineIndex: Number(match[3]), typing: match[4] === "true" };
 }
 type PublishedVn = { phase: string; sceneId: string; lineIndex: number; typing: boolean };
+declare global {
+  interface Window {
+    __exportVnWaiters?: Array<(sample: PublishedVn) => void>;
+    __exportVnArmed?: Promise<void>;
+    __exportVnStartDeadline?: () => void;
+  }
+}
+const expectMs = 15_000;
 const publishedLatest = new WeakMap<Page, { sample?: PublishedVn }>();
 const waitUntilLive = { listeners: 0, timers: 0 };
-function waitForPublishedVn(page: Page, predicate: (sample: PublishedVn) => boolean) {
-  return page.waitForEvent("console", {
-    timeout: 15_000,
-    predicate: message => {
-      const sample = publishedVn(message.text());
-      return !!sample && predicate(sample);
-    },
+async function armPublishedVn(page: Page, index: number) {
+  await page.evaluate(({ index, ms }) => {
+    const waiters = window.__exportVnWaiters;
+    if (!waiters) throw new Error("export player observer was not installed");
+    window.__exportVnArmed = new Promise<void>((resolve, reject) => {
+      let timeout: number | undefined;
+      let deadlineStarted = false;
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        if (timeout !== undefined) window.clearTimeout(timeout);
+        const waiterIndex = waiters.indexOf(check);
+        if (waiterIndex >= 0) waiters.splice(waiterIndex, 1);
+        if (error) reject(error);
+        else resolve();
+      };
+      function check(sample: PublishedVn) {
+        if (sample.lineIndex === index) finish();
+      }
+      window.__exportVnStartDeadline = () => {
+        if (settled || deadlineStarted) return;
+        deadlineStarted = true;
+        timeout = window.setTimeout(() => finish(new Error("Timeout 15000ms exceeded while waiting for event \"console\"")), ms);
+      };
+      waiters.push(check);
+    });
+  }, { index, ms: expectMs });
+}
+async function awaitPublishedVn(page: Page) {
+  await page.evaluate(() => {
+    const armed = window.__exportVnArmed;
+    if (!armed) throw new Error("export player observer was not armed");
+    window.__exportVnStartDeadline?.();
+    return armed;
   });
 }
 function publishedSample(page: Page) {
@@ -106,11 +142,14 @@ async function observeExportPlayer(page: Page, firstLine: string) {
   });
   await page.addInitScript(line => {
     let published: Window["__vn"];
+    const waiters: NonNullable<Window["__exportVnWaiters"]> = [];
+    window.__exportVnWaiters = waiters;
     Object.defineProperty(window, "__vn", {
       configurable: true, get: () => published,
       set: (value: NonNullable<Window["__vn"]>) => {
         published = value;
         console.debug(`export:state:${value.phase}:${value.sceneId}:${value.lineIndex}:${value.typing}`);
+        for (const waiter of waiters) waiter({ phase: value.phase, sceneId: value.sceneId, lineIndex: value.lineIndex, typing: value.typing });
       },
     });
     const setItem = Storage.prototype.setItem;
@@ -122,8 +161,9 @@ async function observeExportPlayer(page: Page, firstLine: string) {
 }
 async function advance(page: Page, index: number) {
   await waitUntilPublishedVn(page, sample => sample.typing === false);
-  const progressed = waitForPublishedVn(page, sample => sample.lineIndex === index);
-  await Promise.all([progressed, page.getByTestId("advance-button").click()]);
+  await armPublishedVn(page, index);
+  await page.getByTestId("advance-button").click();
+  await awaitPublishedVn(page);
 }
 async function unzip(zip: string, destination: string) {
   await mkdir(destination, { recursive: true });
@@ -283,8 +323,9 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
     await autoSaved;
     expect(await player.evaluate(namespace => localStorage.getItem(`vnmaker:auto:${namespace}`), manifest.projectNamespace)).toContain(firstLine);
     await player.reload(); await expect(player.getByTestId("continue-button")).toBeEnabled();
-    const restored = waitForPublishedVn(player, sample => sample.lineIndex === 1);
-    await Promise.all([restored, player.getByTestId("continue-button").click()]);
+    await armPublishedVn(player, 1);
+    await player.getByTestId("continue-button").click();
+    await awaitPublishedVn(player);
     await advance(player, 2);
     await expect(player.getByTestId("bg-image")).toHaveAttribute("src", /^\/assets\/exported\//);
     await expect(player.locator(".sprite")).toHaveCount(0);
@@ -342,13 +383,76 @@ test("cancel a pending export without downloading a partial game, then retry suc
 test("exported player observer does not succeed without a published lineIndex change", async ({ page }) => {
   await observeExportPlayer(page, "ZIP 다운로드 직전에 고친 첫 번째 대사다.");
   await page.goto("about:blank");
-  const progressed = waitForPublishedVn(page, sample => sample.lineIndex === 2);
-  const outcome = progressed.then(() => ({ status: "published" as const }), (error: unknown) => ({ status: "rejected" as const, error }));
+  await armPublishedVn(page, 2);
+  const outcome = page.evaluate(() => {
+    if (!window.__exportVnArmed) throw new Error("export player observer was not armed");
+    return window.__exportVnArmed;
+  }).then(() => ({ status: "published" as const }), (error: unknown) => ({ status: "rejected" as const, error }));
   await page.mouse.click(1, 1);
+  await awaitPublishedVn(page).then(() => undefined, () => undefined);
   const result = await outcome;
   expect(result.status).toBe("rejected");
   if (result.status !== "rejected") throw new Error("observer succeeded without a published lineIndex 2");
   expect(String(result.error)).toMatch(/Timeout 15000ms/);
+});
+
+test("exported player observer does not start the publication deadline before dispatch", async ({ page }) => {
+  test.setTimeout(30_000);
+  const deadlineSentinel = "__export_deadline_registered";
+  const firstLine = "ZIP 다운로드 직전에 고친 첫 번째 대사다.";
+  const clockStart = new Date("2026-09-07T00:00:00Z");
+  await page.clock.install({ time: clockStart });
+  await observeExportPlayer(page, firstLine);
+  await page.goto("about:blank");
+  await page.clock.pauseAt(new Date("2026-09-07T00:00:01Z"));
+  await page.evaluate(({ ms, deadlineSentinel }) => {
+    const original = window.setTimeout.bind(window);
+    window.setTimeout = function (handler: TimerHandler, delay?: number, ...rest: unknown[]) {
+      const id = original(handler, delay, ...rest);
+      if (delay === ms) console.log(deadlineSentinel);
+      return id;
+    } as typeof window.setTimeout;
+  }, { ms: expectMs, deadlineSentinel });
+  const deadlineLogs: string[] = [];
+  page.on("console", message => {
+    if (message.text() === deadlineSentinel) deadlineLogs.push(message.text());
+  });
+  await armPublishedVn(page, 2);
+  expect(deadlineLogs).toEqual([]);
+  const peek = () => page.evaluate(async () => {
+    const armed = window.__exportVnArmed;
+    if (!armed) throw new Error("no armed waiter");
+    let state: "pending" | "resolved" | "rejected" = "pending";
+    void armed.then(() => { state = "resolved"; }, () => { state = "rejected"; });
+    await Promise.resolve();
+    return state;
+  });
+  await page.clock.runFor(expectMs);
+  expect(await peek()).toBe("pending");
+  const deadlineRegistered = page.waitForEvent("console", {
+    timeout: expectMs,
+    predicate: message => message.text() === deadlineSentinel,
+  });
+  const outcome = awaitPublishedVn(page).then(
+    () => "resolved" as const,
+    (error: unknown) => error instanceof Error ? error.message : String(error),
+  );
+  await deadlineRegistered;
+  expect(await peek()).toBe("pending");
+  await page.evaluate(() => {
+    window.__vn = {
+      sceneId: "export-start",
+      lineIndex: 2,
+      affection: 0,
+      typing: false,
+      phase: "scene",
+      error: null,
+      lastDiff: null,
+      flags: {},
+    };
+  });
+  expect(await outcome).toBe("resolved");
+  expect(await peek()).toBe("resolved");
 });
 
 registerLongformExportTests(installProject, unzip, serve);
