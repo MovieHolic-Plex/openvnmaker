@@ -29,3 +29,9 @@ export type {
   ReferenceContextResult, OutlineDagFailure, OutlineDagResult,
   ContextDependencyReplay,
 } from "./context.js";
+export * from "./image-png.js";
+export * from "./image-inspect.js";
+export * from "./image-sent.js";
+export * from "./image-contracts.js";
+export * from "./image-effects.js";
+export * from "./image-derivatives.js";

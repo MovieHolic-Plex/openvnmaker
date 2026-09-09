@@ -53,6 +53,7 @@ export const productionDocumentSchema = z.strictObject({
   outline: productionOutlineSchema, artDirection: z.array(canonEntrySchema).readonly(),
   referenceBindings: z.array(approvedArtBindingSchema).readonly(),
 }).readonly();
+export type ArtRole = z.infer<typeof artRoleSchema>;
 export type ArtTarget = z.infer<typeof artTargetSchema>;
 export type ApprovedArtBinding = z.infer<typeof approvedArtBindingSchema>;
 export type ProductionOutline = z.infer<typeof productionOutlineSchema>;
