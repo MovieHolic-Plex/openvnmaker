@@ -41,6 +41,7 @@ export type HarnessCapabilityView = {
   readonly inputTokenLimit: number | null;
   readonly textStatus: string;
   readonly imageOutputStatus: string;
+  readonly imageReferenceStatus: string;
 };
 
 export type HarnessStreamEvent = { readonly seq: number; readonly type: string; readonly payload: unknown };
@@ -206,5 +207,6 @@ export async function getHarnessCapabilities(): Promise<HarnessCapabilityView> {
     inputTokenLimit: typeof bind["inputTokenLimit"] === "number" ? bind["inputTokenLimit"] : null,
     textStatus: featureStatus(text, "text"),
     imageOutputStatus: featureStatus(image, "imageOutput"),
+    imageReferenceStatus: featureStatus(image, "imageReference"),
   };
 }

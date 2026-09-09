@@ -15,7 +15,14 @@
 .harness-badge-incomplete, .harness-badge-limit { background: #ffffff0c; color: #b7b0c0; }
 .harness-badge-info { background: #c5acf724; color: #d8c4f5; }
 .harness-badge-row, .harness-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.harness-lists, .harness-diffs, .harness-quality, .harness-reuse, .harness-env, .harness-review, .harness-plan { display: grid; gap: 10px; min-width: 0; }
+.harness-lists, .harness-diffs, .harness-quality, .harness-reuse, .harness-env, .harness-review, .harness-plan, .harness-asset { display: grid; gap: 10px; min-width: 0; }
+.harness-inspect { min-height: 160px; border-radius: 8px; display: grid; place-items: center; overflow: hidden; }
+.harness-inspect[data-bg="checkerboard"] { background: repeating-conic-gradient(#c8c4ce 0 25%, #f4f1f8 0 50%) 50% / 16px 16px; }
+.harness-inspect[data-bg="white"] { background: #fff; color: #222; }
+.harness-inspect[data-bg="black"] { background: #111; }
+.harness-inspect[data-bg="stage"] { background: #1a1524; }
+.harness-inspect img { max-width: 100%; max-height: 180px; object-fit: contain; }
+.harness-asset .is-active { color: #d8c4f5; border-color: #c3a8ef40; }
 .harness-plan-grid, .harness-plan-canon { display: grid; gap: 8px; min-width: 0; }
 .harness-plan .is-active { color: #d8c4f5; border-color: #c3a8ef40; }
 .harness-workspace ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }

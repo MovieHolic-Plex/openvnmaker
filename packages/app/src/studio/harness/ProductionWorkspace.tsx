@@ -16,6 +16,7 @@ import {
   subscribeCandidateWorkspace,
 } from "./candidateStore.js";
 import { CandidatePreview } from "./CandidatePreview.js";
+import { AssetReview } from "./AssetReview.js";
 import { PlanEditor } from "./PlanEditor.js";
 import { emitHarnessUi, persistActiveRun, readActiveRun } from "./harnessEvents.js";
 import { ProposalDiffList } from "./ProposalDiffList.js";
@@ -26,8 +27,8 @@ import { StatusBadge } from "./QualityReport.js";
 import "./harness.css";
 
 const TABS = [
-  { id: "planning", name: "기획" }, { id: "work", name: "작업" }, { id: "changes", name: "후보 변경" },
-  { id: "review", name: "검수" }, { id: "environment", name: "실행 환경" },
+  { id: "planning", name: "기획" }, { id: "assets", name: "자산" }, { id: "work", name: "작업" },
+  { id: "changes", name: "후보 변경" }, { id: "review", name: "검수" }, { id: "environment", name: "실행 환경" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -191,6 +192,9 @@ export function ProductionWorkspace({
     </nav>
     {tab === "planning" && <div role="tabpanel" data-testid="harness-panel-planning">
       <PlanEditor repository={repository} script={script} candidate={candidate} brief={brief} onBrief={setBrief} busy={busy} onCreateRun={() => void createRun()} />
+    </div>}
+    {tab === "assets" && <div role="tabpanel" data-testid="harness-panel-assets">
+      <AssetReview source={script} candidate={candidate} capabilities={capabilities} run={run} busy={busy} />
     </div>}
     {tab === "work" && <div role="tabpanel" data-testid="harness-panel-work">
       <SceneUnitList script={candidate?.script ?? script} units={run?.units ?? []} />

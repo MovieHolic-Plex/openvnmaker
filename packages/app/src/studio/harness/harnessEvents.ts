@@ -9,6 +9,7 @@ export const HARNESS_UI_EVENT = {
   repropose: "vnmaker:harness-repropose",
   conflict: "vnmaker:harness-conflict",
   admission: "vnmaker:harness-admission",
+  asset: "vnmaker:harness-asset",
 } as const;
 
 export type HarnessUiEvent = keyof typeof HARNESS_UI_EVENT;
