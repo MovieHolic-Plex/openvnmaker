@@ -35,3 +35,7 @@ export * from "./image-sent.js";
 export * from "./image-contracts.js";
 export * from "./image-effects.js";
 export * from "./image-derivatives.js";
+export * from "./runner-contracts.js";
+export { MemoryRunnerStore } from "./runner-store.js";
+export { selectNextUnit, unitOutputHash, scopedReady, hasUnknownBlock } from "./runner-graph.js";
+export { createProductionRunner } from "./runner.js";
