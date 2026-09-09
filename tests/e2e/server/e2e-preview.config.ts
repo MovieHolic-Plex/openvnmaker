@@ -65,6 +65,7 @@ export default defineConfig(({ mode }) => ({
         projectRepository: resolve(appRoot, "src/studio/projectRepository.ts"),
         applyProposal: resolve(appRoot, "src/studio/harness/applyProposal.ts"),
         authoringArchive: resolve(appRoot, "src/studio/harness/authoringArchive.ts"),
+        candidateStore: resolve(appRoot, "src/studio/harness/candidateStore.ts"),
         exportBundle: resolve(appRoot, "src/studio/exportBundle.ts"),
         projectFolder: resolve(appRoot, "src/studio/projectFolder.ts"),
         projectAssets: resolve(appRoot, "src/storage/projectAssets.ts"),

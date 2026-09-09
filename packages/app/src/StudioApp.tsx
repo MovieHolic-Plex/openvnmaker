@@ -27,9 +27,10 @@ import { VersionHistory } from "./studio/VersionHistory.js";
 import { saveVersion } from "./studio/versions.js";
 import { parseEditorPosition, previewFlagsFor, type PreviewChoices } from "./studio/editorPosition.js";
 import { ProposalDecisionBar } from "./studio/harness/ProposalDecisionBar.js";
+import { ProductionWorkspace } from "./studio/harness/ProductionWorkspace.js";
 
-type View = "overview" | "stage" | "production" | "graph" | "assets" | "characters";
-const views: { id: View; name: string; icon: IconName }[] = [{ id: "overview", name: "프로젝트 홈", icon: "home" }, { id: "stage", name: "장면 편집", icon: "scenes" }, { id: "production", name: "원고·분량", icon: "layers" }, { id: "graph", name: "스토리 맵", icon: "graph" }, { id: "assets", name: "아트 디렉션", icon: "image" }, { id: "characters", name: "등장인물", icon: "users" }];
+type View = "overview" | "stage" | "production" | "workspace" | "graph" | "assets" | "characters";
+const views: { id: View; name: string; icon: IconName }[] = [{ id: "overview", name: "프로젝트 홈", icon: "home" }, { id: "stage", name: "장면 편집", icon: "scenes" }, { id: "production", name: "원고·분량", icon: "layers" }, { id: "workspace", name: "제작 작업실", icon: "spark" }, { id: "graph", name: "스토리 맵", icon: "graph" }, { id: "assets", name: "아트 디렉션", icon: "image" }, { id: "characters", name: "등장인물", icon: "users" }];
 
 function StoryMap({ script, selected, onSelect }: { script: VnScript; selected: string; onSelect: (id: string) => void }) {
   const [zoom, setZoom] = useState(0.85);
@@ -213,6 +214,7 @@ export function StudioApp({recoveryInitial,initialRepository=null,initialProject
           {!lineAllowed(line,previewFlags)&&<p className="conditional-preview-note">이 대사는 현재 미리보기 선택 경로에서 생략됩니다. 원고와 조건은 계속 편집할 수 있습니다.</p>}<span className="workspace-format"><i /> LIVE PREVIEW</span><button className={`studio-button focus-button ${focusMode ? "is-active" : ""}`} aria-pressed={focusMode} onClick={() => setFocusMode(!focusMode)}><Icon name="expand" size={13} />{focusMode ? "패널 열기" : "집중 모드"}</button></>}</div></div>
         {view === "overview" && <ProjectOverview onEdit={edit} script={script} onNavigate={setView} onSelectScene={openScene} onValidate={() => setShowIssues(true)} />}
         {view === "production" && <ManuscriptReview script={script} onSelectScene={openScene} />}
+        {view === "workspace" && <ProductionWorkspace repository={repository} script={script} onNotice={setNotice} />}
         {view === "stage" && <>
           <section className="preview-workspace"><div className="preview-meta"><span><i /> SCENE {String(sceneNumber).padStart(2, "0")}</span><div><Icon name="image" size={12} />{scene.backgroundUrl ? "프로젝트 원화" : scene.background}<span className="meta-divider" />{scene.bgm && <><Icon name="music" size={12} />{script.audioAssets?.find(asset=>asset.url===scene.bgm)?.name??(scene.bgm.startsWith("/assets/user/")?"사용자 음원":scene.bgm)}</>}</div></div>
             <section className="stage-fit" ref={stageRef} aria-label="16:9 게임 미리보기"><div className="preview-frame" style={{ width: `${previewWidth}px` }}><section className="stage" data-testid="studio-stage"><Stage background={scene.background} backgroundUrl={backgroundAt(scene,index,previewFlags)} cgUrl={cgAt(scene,index,previewFlags)} hideSprites={scene.hideSprites} framing={framingAt(scene,index,previewFlags)} characters={script.characters} sprites={spritesAt(scene,index,previewFlags)} speaking={line.speaker} chapter={null} sceneEpoch={0} transition="none" />{!artOnly && <DialogueBox speaker={speakerName(script, line.speaker)} color={speakerColor(script, line.speaker)} text={line.text} typing={true} />}</section></div></section>

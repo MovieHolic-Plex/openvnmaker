@@ -1,5 +1,5 @@
-import { assertNever, parseDecisionReceipt, parseReuseAnalysis } from "@vnmaker/harness";
-import type { CreateRunCommand, DecisionReceipt, ErrorEnvelope, ReuseAnalysis, RunCommand } from "@vnmaker/harness";
+import { assertNever, parseDecisionReceipt, parsePreviewSnapshot, parseReuseAnalysis } from "@vnmaker/harness";
+import type { CreateRunCommand, DecisionReceipt, ErrorEnvelope, PreviewSnapshot, ReuseAnalysis, RunCommand } from "@vnmaker/harness";
 
 const STUDIO = { "X-VNMaker-Studio": "1" } as const;
 
@@ -10,13 +10,37 @@ export class HarnessApiError extends Error {
   }
 }
 
+export type AuthorUnitView = {
+  readonly id: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly reason?: string;
+  readonly code?: string;
+};
+
 export type AuthorRunView = {
   readonly id: string;
   readonly version: number;
-  readonly sourceHead: { readonly projectId: string; readonly lineageId: string; readonly revision: number };
+  readonly sourceHead: { readonly projectId: string; readonly lineageId: string; readonly revision: number; readonly scriptHash: string; readonly productionHash: string };
   readonly candidateRef: { readonly candidateId: string; readonly revision: number };
   readonly state: { readonly status: string; readonly reason?: string };
+  readonly units: readonly AuthorUnitView[];
+  readonly proposalIds: readonly string[];
+  readonly tokenPolicy: string;
   readonly lastEventSeq: number;
+  readonly createdAt?: string;
+  readonly limits?: { readonly run: { readonly textAttempts: number; readonly imageAttempts: number; readonly countRequests: number } };
+};
+
+export type HarnessCapabilityView = {
+  readonly productionReady: boolean;
+  readonly liveVerification: string;
+  readonly textModelId: string;
+  readonly imageModelId: string;
+  readonly tokenWindowMode: string;
+  readonly inputTokenLimit: number | null;
+  readonly textStatus: string;
+  readonly imageOutputStatus: string;
 };
 
 export type HarnessStreamEvent = { readonly seq: number; readonly type: string; readonly payload: unknown };
@@ -62,14 +86,23 @@ function readAuthorRun(body: Record<string, unknown>): AuthorRunView {
   const head = sourceHead as Record<string, unknown>;
   const candidate = candidateRef as Record<string, unknown>;
   const runState = state as Record<string, unknown>;
-  if (typeof head["projectId"] !== "string" || typeof head["lineageId"] !== "string" || typeof head["revision"] !== "number") throw new Error("INVALID_INPUT");
+  if (typeof head["projectId"] !== "string" || typeof head["lineageId"] !== "string" || typeof head["revision"] !== "number" || typeof head["scriptHash"] !== "string" || typeof head["productionHash"] !== "string") throw new Error("INVALID_INPUT");
   if (typeof candidate["candidateId"] !== "string" || typeof candidate["revision"] !== "number") throw new Error("INVALID_INPUT");
   if (typeof runState["status"] !== "string") throw new Error("INVALID_INPUT");
+  const units = Array.isArray(nested["units"]) ? nested["units"].flatMap((row: unknown) => {
+    if (typeof row !== "object" || row === null) return [];
+    const unit = row as Record<string, unknown>;
+    if (typeof unit["id"] !== "string" || typeof unit["kind"] !== "string" || typeof unit["status"] !== "string") return [];
+    return [{ id: unit["id"], kind: unit["kind"], status: unit["status"], ...(typeof unit["reason"] === "string" ? { reason: unit["reason"] } : {}), ...(typeof unit["code"] === "string" ? { code: unit["code"] } : {}) }];
+  }) : [];
+  const proposalIds = Array.isArray(nested["proposalIds"]) ? nested["proposalIds"].filter((id: unknown): id is string => typeof id === "string") : [];
   return {
     id: nested["id"], version: nested["version"], lastEventSeq: nested["lastEventSeq"],
-    sourceHead: { projectId: head["projectId"], lineageId: head["lineageId"], revision: head["revision"] },
+    sourceHead: { projectId: head["projectId"], lineageId: head["lineageId"], revision: head["revision"], scriptHash: head["scriptHash"], productionHash: head["productionHash"] },
     candidateRef: { candidateId: candidate["candidateId"], revision: candidate["revision"] },
     state: { status: runState["status"], ...(typeof runState["reason"] === "string" ? { reason: runState["reason"] } : {}) },
+    units, proposalIds, tokenPolicy: typeof nested["tokenPolicy"] === "string" ? nested["tokenPolicy"] : "exact-only",
+    ...(typeof nested["createdAt"] === "string" ? { createdAt: nested["createdAt"] } : {}),
   };
 }
 
@@ -136,4 +169,42 @@ function parseSse(block: string): HarnessStreamEvent | null {
   }
   if (id === "") return null;
   return { seq: Number(id), type: event, payload: data === "" ? null : JSON.parse(data) as unknown };
+}
+
+export async function listHarnessRuns(projectId: string): Promise<readonly AuthorRunView[]> {
+  const body = await harnessFetch(`/api/harness/runs?projectId=${encodeURIComponent(projectId)}`);
+  const rows = body["runs"];
+  if (!Array.isArray(rows)) return [];
+  return rows.map(row => readAuthorRun(typeof row === "object" && row !== null ? row as Record<string, unknown> : {}));
+}
+
+export async function createHarnessPreview(runId: string, command: object): Promise<PreviewSnapshot> {
+  return parsePreviewSnapshot(await harnessFetch(`/api/harness/runs/${runId}/previews`, { method: "POST", body: JSON.stringify(command) }));
+}
+
+function featureStatus(model: unknown, key: string): string {
+  if (typeof model !== "object" || model === null) return "unverified";
+  const feature = (model as Record<string, unknown>)[key];
+  if (typeof feature !== "object" || feature === null) return "unverified";
+  const status = (feature as Record<string, unknown>)["status"];
+  return typeof status === "string" ? status : "unverified";
+}
+
+export async function getHarnessCapabilities(): Promise<HarnessCapabilityView> {
+  const body = await harnessFetch("/api/harness/capabilities");
+  const context = typeof body["context"] === "object" && body["context"] !== null ? body["context"] as Record<string, unknown> : {};
+  const text = body["text"];
+  const image = body["image"];
+  const binding = typeof text === "object" && text !== null ? (text as Record<string, unknown>)["binding"] : undefined;
+  const bind = typeof binding === "object" && binding !== null ? binding as Record<string, unknown> : {};
+  return {
+    productionReady: body["productionReady"] === true,
+    liveVerification: typeof body["liveVerification"] === "string" ? body["liveVerification"] : "not-performed",
+    textModelId: typeof context["textModelId"] === "string" ? context["textModelId"] : "gemini-3.8-flash-high",
+    imageModelId: typeof context["imageModelId"] === "string" ? context["imageModelId"] : "gemini-3.1-flash-image",
+    tokenWindowMode: typeof bind["tokenWindowMode"] === "string" ? bind["tokenWindowMode"] : "unknown",
+    inputTokenLimit: typeof bind["inputTokenLimit"] === "number" ? bind["inputTokenLimit"] : null,
+    textStatus: featureStatus(text, "text"),
+    imageOutputStatus: featureStatus(image, "imageOutput"),
+  };
 }
