@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseScript } from "@vnmaker/content";
+import { parseScript } from "../../content/src/index.js";
 import { characterIdSchema, identifierSchema, sceneIdSchema, textSchema } from "./primitives.js";
 import { artworkUrlSchema, audioUrlSchema, characterSchema, creditTextSchema, projectMetadataSchema, sceneSchema, storyFlagsSchema } from "./content-contracts.js";
 

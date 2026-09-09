@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Character, Choice, Line, Scene } from "@vnmaker/content";
+import type { Character, Choice, Line, Scene } from "../../content/src/index.js";
 import { canonicalHash } from "./canonical.js";
 import type { ContextSource } from "./context.js";
 import type { ReadSet } from "./context-contracts.js";

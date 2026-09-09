@@ -1,5 +1,5 @@
-import { auditScript, parseScript } from "@vnmaker/content";
-import type { VnScript } from "@vnmaker/content";
+import { auditScript, parseScript } from "../../content/src/index.js";
+import type { VnScript } from "../../content/src/index.js";
 import { DEFAULT_READING_SPEED } from "./production-limits.js";
 import { PRODUCTION_MINUTE_LIMITS } from "./production-limits.js";
 import { sceneExits } from "./production-graph.js";

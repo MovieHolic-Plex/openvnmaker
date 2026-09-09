@@ -1,7 +1,7 @@
 import { admitBudget } from "./budget.js";
 import type { BudgetAdmission, BudgetRequest } from "./budget-contracts.js";
 import type { ContextManifest, ReadSet, Target } from "./context-contracts.js";
-import type { Line, Scene } from "@vnmaker/content";
+import type { Line, Scene } from "../../content/src/index.js";
 import type { z } from "zod";
 import { canonicalHash } from "./canonical.js";
 import type {

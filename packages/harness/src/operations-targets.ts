@@ -1,4 +1,4 @@
-import type { Scene } from "@vnmaker/content";
+import type { Scene } from "../../content/src/index.js";
 import type { Candidate } from "./operations.js";
 
 /** Validate the complete private choice list before publishing or assembling it. */

@@ -1,5 +1,5 @@
-import { BACKGROUNDS, BGM } from "@vnmaker/content";
-import type { VnScript } from "@vnmaker/content";
+import { BACKGROUNDS, BGM } from "../../content/src/index.js";
+import type { VnScript } from "../../content/src/index.js";
 import { sceneCharacters } from "./production-duration.js";
 import { MEDIUM_SCENE_LIMITS } from "./production-limits.js";
 import { sceneExits } from "./production-graph.js";

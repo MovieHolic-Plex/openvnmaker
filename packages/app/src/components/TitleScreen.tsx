@@ -1,5 +1,7 @@
 import type { VnScript } from "@vnmaker/content";
-import { estimateScriptDuration, durationLabel } from "../studio/production.js";
+// 플레이어 번들은 스튜디오 barrel(@vnmaker/harness)을 경유하지 않는다. barrel 을 타면
+// zod 등 편집 전용 의존성이 배포 플레이어와 저작권 고지에 딸려 들어간다.
+import { durationLabel, estimateScriptDuration } from "../../../harness/src/production-duration.js";
 import { resolveRuntimeAsset } from "../storage/runtimeBase.js";
 interface Props { readonly script: VnScript; readonly standalone?: boolean; readonly hasSave: boolean; readonly onStart: () => void; readonly onContinue: () => void; readonly onLoad: () => void; readonly onCredits: () => void; }
 export function TitleScreen({ script, standalone=false, hasSave, onStart, onContinue, onLoad, onCredits }: Props) {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BACKGROUNDS, BGM, SFX, validAudioUrl, validBackgroundUrl } from "@vnmaker/content";
+import { BACKGROUNDS, BGM, SFX, validAudioUrl, validBackgroundUrl } from "../../content/src/index.js";
 import { choiceEffectsCompatible, uniqueDefinedIdentities } from "./boundary-refinements.js";
 import { characterIdSchema, choiceIdSchema, identifierSchema, lineIdSchema, sceneIdSchema, textSchema } from "./primitives.js";
 

@@ -1,5 +1,5 @@
-import { parseScene } from "@vnmaker/content";
-import type { Scene } from "@vnmaker/content";
+import { parseScene } from "../../content/src/index.js";
+import type { Scene } from "../../content/src/index.js";
 import { canonicalHash } from "./canonical.js";
 import { choiceSchema, lineSchema, sceneSchema } from "./content-contracts.js";
 import type { ReadSet } from "./context-contracts.js";

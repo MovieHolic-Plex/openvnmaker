@@ -1,4 +1,4 @@
-import type { Choice, Scene, VnScript } from "@vnmaker/content";
+import type { Choice, Scene, VnScript } from "../../content/src/index.js";
 
 export type ProductionTiming = {
   readonly now: () => number;

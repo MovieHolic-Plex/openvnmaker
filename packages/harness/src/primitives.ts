@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { validCharacterKey } from "@vnmaker/content";
+import { validCharacterKey } from "../../content/src/index.js";
 
 export const textSchema = z.string().max(20_000);
 export const identifierSchema = textSchema.refine(value => value.trim().length > 0);

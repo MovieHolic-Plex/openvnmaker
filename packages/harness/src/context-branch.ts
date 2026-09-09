@@ -1,5 +1,5 @@
-import { applyChoiceFlags, choiceAllowed, lineAllowed } from "@vnmaker/content";
-import type { StoryFlags } from "@vnmaker/content";
+import { applyChoiceFlags, choiceAllowed, lineAllowed } from "../../content/src/index.js";
+import type { StoryFlags } from "../../content/src/index.js";
 import { canonicalHash, canonicalJson } from "./canonical.js";
 import type {
   BranchContextRequest, BranchContextResult, BranchReadResult, ContextSource,

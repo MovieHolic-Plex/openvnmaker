@@ -1,4 +1,4 @@
-import { parseLines, parseScene } from "@vnmaker/content";
+import { parseLines, parseScene } from "../../content/src/index.js";
 import { countCharacters, sceneCharacters } from "./production-duration.js";
 import { pathRange, sceneExits } from "./production-graph.js";
 import { parseJsonBlob, requiredObject, requiredText } from "./production-json.js";

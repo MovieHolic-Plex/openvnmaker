@@ -1,4 +1,4 @@
-import type { Scene } from "@vnmaker/content";
+import type { Scene } from "../../content/src/index.js";
 import { z } from "zod";
 import { canonicalHash, canonicalJson } from "./canonical.js";
 import type { ContextSource, SceneContextResult } from "./context.js";

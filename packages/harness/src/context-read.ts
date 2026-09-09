@@ -2,7 +2,7 @@ import {
   sceneMetadataDependency,
   sceneWindowDependency,
 } from "./context-projections.js";
-import type { Line } from "@vnmaker/content";
+import type { Line } from "../../content/src/index.js";
 import type { z } from "zod";
 import { canonicalHash } from "./canonical.js";
 import type { ContextSource, SceneContextResult } from "./context.js";

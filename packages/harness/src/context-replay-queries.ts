@@ -1,4 +1,4 @@
-import type { Line } from "@vnmaker/content";
+import type { Line } from "../../content/src/index.js";
 import { canonicalHash, canonicalJson } from "./canonical.js";
 import type { ContextSource } from "./context.js";
 import type { ReadSet } from "./context-contracts.js";

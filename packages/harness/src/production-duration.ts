@@ -1,5 +1,5 @@
-import { applyChoiceFlags, choiceAllowed, lineAllowed } from "@vnmaker/content";
-import type { Scene, StoryFlags, VnScript } from "@vnmaker/content";
+import { applyChoiceFlags, choiceAllowed, lineAllowed } from "../../content/src/index.js";
+import type { Scene, StoryFlags, VnScript } from "../../content/src/index.js";
 import { DEFAULT_READING_SPEED } from "./production-limits.js";
 import { pathRange } from "./production-graph.js";
 
