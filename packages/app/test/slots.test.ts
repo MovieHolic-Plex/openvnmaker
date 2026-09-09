@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   listSlots,
-  migrateLegacySave,
   readAutoSlot,
   readSlot,
   SLOT_COUNT,
@@ -11,8 +10,6 @@ import {
   type SlotSave,
 } from "../src/storage/persist.js";
 
-const LEGACY_KEY = "vnmaker:save";
-const SLOTS_KEY = "vnmaker:slots";
 
 function installMemoryStorage(): Map<string, string> {
   const store = new Map<string, string>();
@@ -39,7 +36,7 @@ function slotFixture(index: number): SlotSave {
     savedAt: 1700000000000 + index * 1000,
     preview: `미리보기 문장 ${index}`,
     chapter: index % 2 === 0 ? `제${index + 1}장` : null,
-    thumbnail: `bg-${index}`,
+    thumbnail: `/assets/bg/slot-${index}.png`,
   };
 }
 
@@ -63,7 +60,7 @@ test("6개 슬롯에 저장한 내용이 그대로 돌아온다", () => {
   const slots = listSlots();
   assert.equal(slots.length, 6);
   assert.equal(slots[5]?.preview, "미리보기 문장 5");
-  assert.equal(slots[5]?.thumbnail, "bg-5");
+  assert.equal(slots[5]?.thumbnail, "/assets/bg/slot-5.png");
 });
 
 test("자동 슬롯은 선택지/엔딩 시점의 스냅샷을 덮어쓴다", () => {
@@ -77,20 +74,6 @@ test("자동 슬롯은 선택지/엔딩 시점의 스냅샷을 덮어쓴다", ()
   assert.equal(readAutoSlot()?.preview, "엔딩 도달");
 });
 
-test("옛날 단일 키(vnmaker:save)는 1번 슬롯으로 이주한다", () => {
-  const store = installMemoryStorage();
-  store.set(
-    LEGACY_KEY,
-    JSON.stringify({ sceneId: "s02-old", lineIndex: 3, affection: 5, savedAt: 1699999999000 }),
-  );
-  assert.equal(readSlot(0), null);
-  const migrated = migrateLegacySave();
-  assert.ok(migrated !== null);
-  assert.equal(migrated?.sceneId, "s02-old");
-  assert.equal(migrated?.lineIndex, 3);
-  const first = readSlot(0);
-  assert.equal(first?.sceneId, "s02-old");
-  assert.equal(first?.affection, 5);
-  // 슬롯 키에 실제로 기록된다.
-  assert.ok(store.has(SLOTS_KEY));
-});
+// 옛 단일 키(vnmaker:save) → 1번 슬롯 이주 테스트는 제거했다. persist.ts 의 migrateLegacySave 가
+// 이후 커밋에서 사라졌고, 이 계획은 과거 출시본의 자동 세이브 마이그레이션을 약속하지 않는다.
+// 레거시 키 자체는 loadSave/latestSave 로 계속 읽히므로 저장 데이터가 사라지는 경로는 아니다.
