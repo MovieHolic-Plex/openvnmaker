@@ -39,3 +39,13 @@ export * from "./runner-contracts.js";
 export { MemoryRunnerStore } from "./runner-store.js";
 export { selectNextUnit, unitOutputHash, scopedReady, hasUnknownBlock } from "./runner-graph.js";
 export { createProductionRunner } from "./runner.js";
+export {
+  DEFAULT_READING_SPEED, PRODUCTION_SCENE_LIMITS, PRODUCTION_MINUTE_LIMITS,
+  MEDIUM_SCENE_LIMITS, MEDIUM_MINUTE_LIMITS,
+  countCharacters, sceneCharacters, estimateScriptDuration, durationLabel,
+  parseOutline, parseDraft, makeOutlinePrompt, makeDraftPrompt,
+  createPlan, planDraftScript, assembleProduction, restoreProduction,
+} from "./production.js";
+export type {
+  DurationEstimate, ProductionTiming, SceneBeat, StudioOutline, SceneDraft, DraftJob, ProductionPlan,
+} from "./production.js";

@@ -63,7 +63,7 @@ test("단편으로 축소한 설계·누락 링크·반복·도달 불가 씬을
   assert.throws(() => parseOutline({ ...original, scenes: original.scenes.map(row => ({ ...row, targetMinutes: 1 })) }, 90), /목표/);
   assert.throws(() => parseOutline({ ...original, start: "missing" }, 90), /도달/);
   assert.throws(() => parseOutline({ ...original, scenes: original.scenes.map((row, index) => index === 0 ? { ...row, next: "scene_0" } : row) }, 90), /반복/);
-  assert.throws(() => parseOutline({ ...original, scenes: original.scenes.slice(0, 4) }, 90), /12–60/);
+  assert.throws(() => parseOutline({ ...original, scenes: original.scenes.slice(0, 4) }, 90), /12–80/);
 });
 
 test("장편 집필 응답은 출구를 바꾸지 못하며 짧은 원고를 완료로 세지 않는다", () => {
