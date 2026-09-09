@@ -7,6 +7,7 @@ import type {} from "../../../packages/app/src/App.js";
 
 type Route = { readonly scenes: readonly string[]; readonly choices: readonly number[]; readonly flags: StoryFlags; readonly ending: string; readonly historyCount: number };
 type Hosting = { readonly server: Server; readonly origin: string; readonly missing: string[] };
+type LongformMatch = { readonly exact: string } | { readonly prefix: string };
 // The oracle is captured from source before test collection, never from the downloaded game.
 const source = parseScript(JSON.parse(JSON.stringify(script)));
 const routes: Route[] = [];
@@ -27,12 +28,88 @@ function walk(id: string, route: Omit<Route, "ending">): void {
 walk(source.start, { scenes: [], choices: [], flags: source.flags ?? {}, historyCount: 0 });
 Object.freeze(routes);
 
+declare global {
+  interface Window {
+    __longformWaiters?: Array<(text: string) => void>;
+    __longformArmed?: Promise<void>;
+    __longformStartDeadline?: () => void;
+  }
+}
+const expectMs = 15_000;
+
 // Each signal is subscribed before its user action. The accessor observes the existing
 // diagnostic publication without changing the reducer, timers or persistence behavior.
+async function observeLongformPlayer(page: Page) {
+  await page.addInitScript(() => {
+    const waiters: NonNullable<Window["__longformWaiters"]> = [];
+    window.__longformWaiters = waiters;
+    let state: Window["__vn"];
+    function publish(text: string) {
+      console.debug(text);
+      for (const waiter of waiters.slice()) waiter(text);
+    }
+    Object.defineProperty(window, "__vn", {
+      configurable: true, get: () => state,
+      set: (value: NonNullable<Window["__vn"]>) => {
+        state = value;
+        publish(`longform:state:${value.phase}:${value.sceneId}:${value.lineIndex}:${value.typing}`);
+      },
+    });
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      setItem.call(this, key, value);
+      if (this === localStorage && key.startsWith("vnmaker:auto:")) publish("longform:autosaved");
+    };
+  });
+}
+async function armLongform(page: Page, match: LongformMatch | readonly LongformMatch[]) {
+  const matches = (Array.isArray(match) ? match : [match]).map(item => "exact" in item ? { exact: item.exact } : { prefix: item.prefix });
+  await page.evaluate(({ matches, ms }) => {
+    const waiters = window.__longformWaiters;
+    if (!waiters) throw new Error("longform observer was not installed");
+    window.__longformArmed = new Promise<void>((resolve, reject) => {
+      let timeout: number | undefined;
+      let deadlineStarted = false;
+      let settled = false;
+      const pending = new Set(matches.map((_, index) => index));
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        if (timeout !== undefined) window.clearTimeout(timeout);
+        const waiterIndex = waiters.indexOf(check);
+        if (waiterIndex >= 0) waiters.splice(waiterIndex, 1);
+        if (error) reject(error);
+        else resolve();
+      };
+      function check(text: string) {
+        matches.forEach((item, index) => {
+          if (!pending.has(index)) return;
+          const hit = typeof item.exact === "string" ? text === item.exact : typeof item.prefix === "string" && text.startsWith(item.prefix);
+          if (hit) pending.delete(index);
+        });
+        if (pending.size === 0) finish();
+      }
+      window.__longformStartDeadline = () => {
+        if (settled || deadlineStarted) return;
+        deadlineStarted = true;
+        timeout = window.setTimeout(() => finish(new Error("Timeout 15000ms exceeded while waiting for event \"console\"")), ms);
+      };
+      waiters.push(check);
+    });
+  }, { matches, ms: expectMs });
+}
+async function awaitLongform(page: Page) {
+  await page.evaluate(() => {
+    const armed = window.__longformArmed;
+    if (!armed) throw new Error("longform observer was not armed");
+    window.__longformStartDeadline?.();
+    return armed;
+  });
+}
 async function clickTo(page: Page, button: string, state: string) {
-  const observed = page.waitForEvent("console", { predicate: message => message.text() === `longform:state:${state}`, timeout: 15000 });
-  const saved = page.waitForEvent("console", { predicate: message => message.text() === "longform:autosaved", timeout: 15000 });
-  await Promise.all([observed, saved, page.getByTestId(button).click()]);
+  await armLongform(page, [{ exact: `longform:state:${state}` }, { exact: "longform:autosaved" }]);
+  await page.getByTestId(button).click();
+  await awaitLongform(page);
 }
 
 export function registerLongformExportTests(
@@ -68,20 +145,8 @@ export function registerLongformExportTests(
       page.on("request", request => { const url = new URL(request.url()); if (url.origin !== exported.origin || url.pathname.startsWith("/api/")) external.push(url.href); });
       await page.addInitScript(() => {
         localStorage.setItem("vnmaker:settings", JSON.stringify({ textSpeed: 5, bgmVolume: .55, sfxVolume: .7, voiceVolume: .8 }));
-        let state: Window["__vn"];
-        Object.defineProperty(window, "__vn", {
-          configurable: true, get: () => state,
-          set: (value: NonNullable<Window["__vn"]>) => {
-            state = value;
-            console.debug(`longform:state:${value.phase}:${value.sceneId}:${value.lineIndex}:${value.typing}`);
-          },
-        });
-        const setItem = Storage.prototype.setItem;
-        Storage.prototype.setItem = function (key: string, value: string) {
-          setItem.call(this, key, value);
-          if (this === localStorage && key.startsWith("vnmaker:auto:")) console.debug("longform:autosaved");
-        };
       });
+      await observeLongformPlayer(page);
       await page.goto(exported.origin);
       await expect(page.getByRole("heading", { name: source.title, exact: true })).toBeVisible();
       await use(page);
@@ -137,12 +202,14 @@ export function registerLongformExportTests(
       expect(await player.evaluate(() => window.__vn?.lineIndex)).toBe(1);
       await player.screenshot({ path: testInfo.outputPath("longform-standalone-art-view.png") });
       await player.getByTestId("art-view-button").click();
-      const resumed = player.waitForEvent("console", { predicate: message => message.text().startsWith(`longform:state:scene:${source.start}:2:`), timeout: 15000 });
-      await player.clock.runFor(700 + first.lines[1].text.length * 45); await resumed;
+      await armLongform(player, { prefix: `longform:state:scene:${source.start}:2:` });
+      await player.clock.runFor(700 + first.lines[1].text.length * 45);
+      await awaitLongform(player);
       expect(await player.evaluate(() => window.__vn?.lineIndex)).toBe(2);
       await player.getByTestId("auto-button").click();
-      const typed = player.waitForEvent("console", { predicate: message => message.text() === `longform:state:scene:${source.start}:2:false`, timeout: 15000 });
-      await Promise.all([typed, player.clock.resume()]);
+      await armLongform(player, { exact: `longform:state:scene:${source.start}:2:false` });
+      await player.clock.resume();
+      await awaitLongform(player);
       await expect(player.getByTestId("dialogue-text")).toHaveText(first.lines[2].text);
       await expect(player.getByTestId("dialogue-text")).toBeVisible();
     });
@@ -193,5 +260,99 @@ export function registerLongformExportTests(
         await writeFile(testInfo.outputPath("route-report.json"), JSON.stringify({ route: index + 1, scenes: visited, ending: await player.getByTestId("ending-title").textContent(), flags: final?.flags, historyCount }, null, 2));
       });
     }
+  });
+
+  test("longform observer does not succeed without a published state", async ({ page }) => {
+    test.setTimeout(30_000);
+    const clockStart = new Date("2026-09-07T00:00:00Z");
+    await page.clock.install({ time: clockStart });
+    await observeLongformPlayer(page);
+    await page.goto("about:blank");
+    await page.clock.pauseAt(new Date("2026-09-07T00:00:01Z"));
+    await armLongform(page, [{ exact: "longform:state:scene:s06a:0:false" }, { exact: "longform:autosaved" }]);
+    const outcome = page.evaluate(() => {
+      if (!window.__longformArmed) throw new Error("longform observer was not armed");
+      return window.__longformArmed;
+    }).then(() => ({ status: "published" as const }), (error: unknown) => ({ status: "rejected" as const, error }));
+    await page.mouse.click(1, 1);
+    await page.evaluate(() => {
+      window.__vn = {
+        sceneId: "s06a",
+        lineIndex: 0,
+        affection: 0,
+        typing: true,
+        phase: "scene",
+        error: null,
+        lastDiff: null,
+        flags: {},
+      };
+      for (const waiter of window.__longformWaiters ?? []) waiter("longform:autosaved");
+    });
+    const swallowing = awaitLongform(page).then(() => undefined, () => undefined);
+    await page.clock.runFor(expectMs);
+    await swallowing;
+    const result = await outcome;
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") throw new Error("observer succeeded without a published s06a typing-false state");
+    expect(String(result.error)).toMatch(/Timeout 15000ms/);
+  });
+
+  test("longform observer does not start the publication deadline before dispatch", async ({ page }) => {
+    test.setTimeout(30_000);
+    const deadlineSentinel = "__longform_deadline_registered";
+    const clockStart = new Date("2026-09-07T00:00:00Z");
+    await page.clock.install({ time: clockStart });
+    await observeLongformPlayer(page);
+    await page.goto("about:blank");
+    await page.clock.pauseAt(new Date("2026-09-07T00:00:01Z"));
+    await page.evaluate(({ ms, deadlineSentinel }) => {
+      const original = window.setTimeout.bind(window);
+      window.setTimeout = function (handler: TimerHandler, delay?: number, ...rest: unknown[]) {
+        const id = original(handler, delay, ...rest);
+        if (delay === ms) console.log(deadlineSentinel);
+        return id;
+      } as typeof window.setTimeout;
+    }, { ms: expectMs, deadlineSentinel });
+    const deadlineLogs: string[] = [];
+    page.on("console", message => {
+      if (message.text() === deadlineSentinel) deadlineLogs.push(message.text());
+    });
+    await armLongform(page, [{ exact: "longform:state:scene:s06a:0:false" }, { exact: "longform:autosaved" }]);
+    expect(deadlineLogs).toEqual([]);
+    const peek = () => page.evaluate(async () => {
+      const armed = window.__longformArmed;
+      if (!armed) throw new Error("no armed waiter");
+      let state: "pending" | "resolved" | "rejected" = "pending";
+      void armed.then(() => { state = "resolved"; }, () => { state = "rejected"; });
+      await Promise.resolve();
+      return state;
+    });
+    await page.clock.runFor(expectMs);
+    expect(await peek()).toBe("pending");
+    const deadlineRegistered = page.waitForEvent("console", {
+      timeout: expectMs,
+      predicate: message => message.text() === deadlineSentinel,
+    });
+    const outcome = awaitLongform(page).then(
+      () => "resolved" as const,
+      (error: unknown) => error instanceof Error ? error.message : String(error),
+    );
+    await deadlineRegistered;
+    expect(await peek()).toBe("pending");
+    await page.evaluate(() => {
+      window.__vn = {
+        sceneId: "s06a",
+        lineIndex: 0,
+        affection: 0,
+        typing: false,
+        phase: "scene",
+        error: null,
+        lastDiff: null,
+        flags: {},
+      };
+      for (const waiter of window.__longformWaiters ?? []) waiter("longform:autosaved");
+    });
+    expect(await outcome).toBe("resolved");
+    expect(await peek()).toBe("resolved");
   });
 }
