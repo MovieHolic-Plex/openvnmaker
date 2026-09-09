@@ -20,6 +20,10 @@ export interface ModelEntry {
   readonly supportsThinking?: boolean;
   readonly supportsImages?: boolean;
   readonly recommended?: boolean;
+  readonly inputTokenLimit?: number;
+  readonly outputTokenLimit?: number;
+  readonly combinedTokenLimit?: number;
+  readonly tokenWindowMode?: "input-only" | "combined" | "unknown";
   /** 업스트림과 같은 이름을 쓴다. 필드명을 바꾸면 소비자가 두 이름을 다 알아야 한다. */
   readonly quotaInfo?: ModelQuota;
 }
@@ -32,6 +36,10 @@ export interface RawModel {
   readonly supportsImages?: boolean;
   readonly recommended?: boolean;
   readonly quotaInfo?: { readonly remainingFraction?: number; readonly resetTime?: string };
+  readonly inputTokenLimit?: number;
+  readonly outputTokenLimit?: number;
+  readonly combinedTokenLimit?: number;
+  readonly tokenWindowMode?: "input-only" | "combined" | "unknown";
 }
 
 interface LoadCodeAssistResponse {
@@ -152,6 +160,7 @@ export function mapModels(raw: Record<string, RawModel> | undefined): ModelEntry
     .map((id) => {
       const m = source[id];
       const fraction = m?.quotaInfo?.remainingFraction;
+      const window = m?.tokenWindowMode;
       return {
         id,
         ...(m?.displayName === undefined ? {} : { displayName: m.displayName }),
@@ -159,6 +168,13 @@ export function mapModels(raw: Record<string, RawModel> | undefined): ModelEntry
         ...(m?.supportsThinking === undefined ? {} : { supportsThinking: m.supportsThinking }),
         ...(m?.supportsImages === undefined ? {} : { supportsImages: m.supportsImages }),
         ...(m?.recommended === undefined ? {} : { recommended: m.recommended }),
+        ...(typeof m?.inputTokenLimit === "number" && Number.isInteger(m.inputTokenLimit) && m.inputTokenLimit > 0
+          ? { inputTokenLimit: m.inputTokenLimit } : {}),
+        ...(typeof m?.outputTokenLimit === "number" && Number.isInteger(m.outputTokenLimit) && m.outputTokenLimit > 0
+          ? { outputTokenLimit: m.outputTokenLimit } : {}),
+        ...(typeof m?.combinedTokenLimit === "number" && Number.isInteger(m.combinedTokenLimit) && m.combinedTokenLimit > 0
+          ? { combinedTokenLimit: m.combinedTokenLimit } : {}),
+        ...(window === "input-only" || window === "combined" || window === "unknown" ? { tokenWindowMode: window } : {}),
         ...(typeof fraction === "number"
           ? {
               quotaInfo: {

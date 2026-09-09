@@ -3,12 +3,14 @@ import {
   validateProductionEnvelope,
 } from "../cca/production.js";
 import type { ProductionClock, ProductionEnvelope, TokenRefreshResponse } from "../cca/production.js";
+import { createSingleFlightAccess } from "../cca/production-auth.js";
 import type { CredentialStore } from "../auth/credentials.js";
-import type { CapabilityProof } from "../cca/capabilities.js";
+import type { CapabilityProof, CounterObservation } from "../cca/capabilities.js";
 import type { ModelEntry } from "../cca/client.js";
 import {
   bytesSchema, canonicalHash, capabilityBindingSchema, type BudgetAdmission, type BudgetLimits, type CapabilityBinding,
-  type ProviderDispatch, type ProviderDispatchRequest, type ProviderDispatchResult, type RunnerStore, type Unit,
+  type ProviderDispatch, type ProviderDispatchRequest, type ProviderDispatchResult, type RunnerStore,
+  type TokenCounterResult, type Unit,
 } from "../../../harness/src/index.js";
 import {
   blockedDispatchResult, modelIdForProductionKind, productionKindForUnit, resolveHarnessCapabilities,
@@ -23,6 +25,7 @@ export type HarnessDispatchDeps = {
   readonly store: RunnerStore;
   readonly turns: ProductionTurnStore;
   readonly proofs: readonly CapabilityProof[];
+  readonly counters?: readonly CounterObservation[];
   readonly models: readonly ModelEntry[];
   readonly configDigest: string;
   readonly limits: BudgetLimits;
@@ -95,7 +98,7 @@ function budgetFields(
     limitVersion: request.admission.limitVersion,
     images: request.admission.images,
     requestedOutputTokens: request.admission.requestedOutputTokens,
-    counter: { kind: "unsupported" },
+    counter: tokenCounterFor(request, capability),
     capability,
     limits,
     policy: request.admission.policy,
@@ -118,7 +121,24 @@ function dispatchFromAdmission(admission: BudgetAdmission): ProviderDispatchResu
   return { kind: "capability" };
 }
 
+function tokenCounterFor(request: ProviderDispatchRequest, capability: CapabilityBinding): TokenCounterResult {
+  const counted = request.admission.countedInputTokens;
+  if (capability.counterSupport !== "exact" || request.admission.tokenCheck !== "pass" || counted === null) {
+    return { kind: "unsupported" };
+  }
+  return {
+    kind: "exact",
+    requestPayloadHash: request.payloadHash,
+    capabilityBindingHash: request.admission.capabilityBindingHash,
+    inputTokens: counted,
+    includes: { text: true, tools: true, history: true, opaque: true, images: request.admission.images.length > 0 },
+  };
+}
+
 export function createHarnessDispatch(deps: HarnessDispatchDeps): ProviderDispatch {
+  const access = createSingleFlightAccess({
+    store: deps.credentialStore, clock: deps.clock, refresh: deps.refresh,
+  });
   const inner = createProductionDispatch({
     host: deps.host,
     store: deps.credentialStore,
@@ -151,17 +171,24 @@ export function createHarnessDispatch(deps: HarnessDispatchDeps): ProviderDispat
   });
   return {
     async dispatch(request) {
-      const credentials = await deps.credentialStore.read();
+      let credentials;
+      try {
+        const fresh = await access.ensureFreshAccess();
+        if (fresh === null) return { kind: "auth" };
+        credentials = fresh.credentials;
+      } catch {
+        return { kind: "auth" };
+      }
       const resolved = resolveHarnessCapabilities({
         credentials,
         now: deps.clock.now(),
         proofs: deps.proofs,
         models: deps.models,
         configDigest: deps.configDigest,
+        ...(deps.counters === undefined ? {} : { counters: deps.counters }),
       });
       const blocked = blockedDispatchResult(resolved.auth, resolved.report, request.kind);
       if (blocked !== null) return blocked;
-      if (credentials === null) return { kind: "auth" };
       const loaded = await loadProductionTurn({
         request, store: deps.store, turns: deps.turns, projectId: credentials.projectId,
       });

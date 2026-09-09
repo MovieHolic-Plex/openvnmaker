@@ -4,29 +4,29 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createFileStore } from "../src/auth/credentials.js";
 import type { CredentialStore } from "../src/auth/credentials.js";
+import { createFileProofStore } from "../src/auth/proofs.js";
+import type { CapabilityProofStore } from "../src/auth/proofs.js";
 import { ensureFreshAccess } from "../src/auth/tokens.js";
 import {
-  AGENT_MAX_OUTPUT_TOKENS, CCA_HOSTS, CLIENT_ID, GENERATE_MAX_OUTPUT_TOKENS, GENERATE_PROMPT_MAX,
-  GENERATE_TIMEOUT_MS, IMAGE_TIMEOUT_MS, LOAD_CODE_ASSIST_METADATA, PROVIDER, SCOPES,
-  TEXT_THINKING_CONFIG, TOKEN_URL, antigravityUserAgent, ccaHeaders,
+  CCA_HOSTS, GENERATE_TIMEOUT_MS, IMAGE_TIMEOUT_MS, TEXT_THINKING_CONFIG, ccaHeaders,
 } from "../src/config.js";
 import { fetchAvailableModels } from "../src/cca/client.js";
 import type { ModelEntry } from "../src/cca/client.js";
 import {
   OPAQUE_METADATA_PROBE_CONTRACT, PRODUCTION_IMAGE_MODEL_ID, PRODUCTION_TEXT_MODEL_ID, assertNever,
-  capabilityContextHash, collectOpaqueReplayParts, evaluateCapabilities, inspectStoredAuth, sha256Canonical,
+  capabilityContextHash, collectOpaqueReplayParts, evaluateCapabilities, inspectStoredAuth,
 } from "../src/cca/capabilities.js";
 import type { AuthState, CapabilityProof, CapabilityUpstream } from "../src/cca/capabilities.js";
+import { productionConfigDigest } from "../src/cca/capability-context.js";
 import {
-  buildObservedProof, dispatchProbePayload, loadProbeEffects, observeReferenceEvidence, observeSsePayload,
-  opaquePartsMatch, probeReferenceImageRequest, requestModelParts,
+  buildObservedProof, dispatchProbePayload, loadProbeEffects, observeExactUsage, observeReferenceEvidence,
+  observeSsePayload, opaquePartsMatch, probeReferenceImageRequest, requestModelParts,
 } from "../src/cca/capability-evidence.js";
 import { buildImageRequest, parseSseChunks } from "../src/cca/images.js";
 import { UpstreamError } from "../src/http.js";
 
 export type { ProbeEffect, ProbeEffectState } from "../src/cca/capability-evidence.js";
 export { assertUnknownRequestNotResent, probeReferenceImageRequest } from "../src/cca/capability-evidence.js";
-
 const TEXT_CONTEXT_LIMIT = 65_536;
 const WIRE_BODY_LIMIT = 20 * 1024 * 1024;
 const IMAGE_INPUT_LIMIT = 4;
@@ -39,6 +39,7 @@ export type ProbeCliArgs = {
 };
 export type ProbeDeps = {
   readonly store?: CredentialStore;
+  readonly proofStore?: CapabilityProofStore;
   readonly fetchModels?: (accessToken: string) => Promise<{ readonly models: readonly ModelEntry[] }>;
   readonly postSse?: (accessToken: string, body: unknown, timeoutMs: number) => Promise<string>;
   readonly now?: () => Date;
@@ -147,13 +148,7 @@ export async function runAuthorizedProbe(args: ProbeCliArgs, deps: ProbeDeps = {
   }
   const context = {
     accountScope: auth.accountScope, providerProjectId: auth.providerProjectId,
-    configDigest: sha256Canonical({
-      provider: PROVIDER, hosts: CCA_HOSTS, clientId: CLIENT_ID, tokenUrl: TOKEN_URL, scopes: SCOPES,
-      metadata: LOAD_CODE_ASSIST_METADATA, userAgent: antigravityUserAgent(),
-      textModelId: PRODUCTION_TEXT_MODEL_ID, imageModelId: PRODUCTION_IMAGE_MODEL_ID, thinking: TEXT_THINKING_CONFIG,
-      textTimeout: GENERATE_TIMEOUT_MS, imageTimeout: IMAGE_TIMEOUT_MS, capabilityProtocol: 1,
-      textOutput: GENERATE_MAX_OUTPUT_TOKENS, agentOutput: AGENT_MAX_OUTPUT_TOKENS, promptMax: GENERATE_PROMPT_MAX,
-    }),
+    configDigest: productionConfigDigest(),
     textModelId: PRODUCTION_TEXT_MODEL_ID, imageModelId: PRODUCTION_IMAGE_MODEL_ID,
   };
   const catalogue = await fetchModels(credentials.access);
@@ -236,13 +231,18 @@ export async function runAuthorizedProbe(args: ProbeCliArgs, deps: ProbeDeps = {
       text: false, tools: false, opaqueRoundtrip: false, imageOutput, imageReference,
     }),
   ];
-  const verified = evaluateCapabilities({ auth, context, models: catalogue.models, proofs, upstream: forbiddenUpstream });
+  const counters = [
+    { modelId: PRODUCTION_TEXT_MODEL_ID, contextHash, exactUsage: [first.response, replayed.response].some(observeExactUsage) },
+    { modelId: PRODUCTION_IMAGE_MODEL_ID, contextHash, exactUsage: imageResponses.some(observeExactUsage) },
+  ];
+  const verified = evaluateCapabilities({ auth, context, models: catalogue.models, proofs, counters, upstream: forbiddenUpstream });
+  if (deps.proofStore !== undefined) await deps.proofStore.write({ proofs, counters });
   await writeReceipt(args.out, { status: "completed", tokenCheck: admission.tokenCheck, authorization: admission.authorization,
     liveVerification: verified.liveVerification, opaque: OPAQUE_METADATA_PROBE_CONTRACT, report: verified, proofs });
 }
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  runAuthorizedProbe(parseProbeCli(process.argv.slice(2))).catch((error: unknown) => {
+  runAuthorizedProbe(parseProbeCli(process.argv.slice(2)), { proofStore: createFileProofStore() }).catch((error: unknown) => {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });

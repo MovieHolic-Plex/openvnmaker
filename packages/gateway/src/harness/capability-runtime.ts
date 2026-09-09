@@ -2,7 +2,7 @@ import {
   PRODUCTION_IMAGE_MODEL_ID, PRODUCTION_TEXT_MODEL_ID, evaluateCapabilities, inspectStoredAuth,
 } from "../cca/capabilities.js";
 import type {
-  AuthState, CapabilityProof, CapabilityReport, FeatureReadiness,
+  AuthState, CapabilityProof, CapabilityReport, CounterObservation, FeatureReadiness,
 } from "../cca/capabilities.js";
 import type { ModelEntry } from "../cca/client.js";
 import type { Credentials } from "../auth/credentials.js";
@@ -27,6 +27,7 @@ export function resolveHarnessCapabilities(input: {
   readonly proofs: readonly CapabilityProof[];
   readonly models: readonly ModelEntry[];
   readonly configDigest: string;
+  readonly counters?: readonly CounterObservation[];
 }): { readonly auth: AuthState; readonly report: CapabilityReport } {
   const auth = inspectStoredAuth(input.credentials, input.now);
   const accountScope = auth.kind === "present"
@@ -48,6 +49,7 @@ export function resolveHarnessCapabilities(input: {
       },
       models: input.models,
       proofs: input.proofs,
+      ...(input.counters === undefined ? {} : { counters: input.counters }),
       upstream: { generate: async () => { throw new Error("live-probe-forbidden"); } },
     }),
   };

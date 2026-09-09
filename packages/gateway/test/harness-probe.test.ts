@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { createMemoryStore } from "../src/auth/credentials.js";
+import { createMemoryProofStore } from "../src/auth/proofs.js";
 import {
   PRODUCTION_IMAGE_MODEL_ID, PRODUCTION_TEXT_MODEL_ID, sha256Canonical,
 } from "../src/cca/capabilities.js";
@@ -99,10 +100,11 @@ test("fixture probe records proofs, effects, and ready features without fetch", 
   const echo1 = sse([{ functionCall: { name: "echo", args: { value: "vnmaker-capability-probe" }, id: "c1" }, thoughtSignature: "sig" }]);
   const echo2 = sse([{ text: "vnmaker-capability-probe" }]);
   const image = sse([{ inlineData: { mimeType: "image/png", data: "AAAB" } }]);
+  const proofStore = createMemoryProofStore();
   await runAuthorizedProbe(
     { authorizeText: 3, authorizeImages: 2, tokenPolicy: "bounded-payload", out },
     {
-      store: store(), fetchModels: async () => ({ models: catalogue() }), now: () => new Date("2026-09-09T00:00:00.000Z"),
+      store: store(), proofStore, fetchModels: async () => ({ models: catalogue() }), now: () => new Date("2026-09-09T00:00:00.000Z"),
       postSse: async (_token, body) => {
         const rec = readObject(body);
         if (rec?.["model"] === PRODUCTION_IMAGE_MODEL_ID) return image;
@@ -131,6 +133,10 @@ test("fixture probe records proofs, effects, and ready features without fetch", 
   assert.equal(report?.["productionReady"], true);
   const proofs = readArray(receipt["proofs"]);
   assert.equal(proofs.length, 2);
+  const stored = await proofStore.read();
+  assert.equal(stored.proofs.length, 2);
+  assert.equal(stored.proofs[0]?.modelId, PRODUCTION_TEXT_MODEL_ID);
+  assert.equal(stored.proofs[1]?.modelId, PRODUCTION_IMAGE_MODEL_ID);
   for (const item of proofs) {
     const proof = readObject(item);
     assert.equal(typeof proof?.["evidenceHash"] === "string" && HASH.test(proof["evidenceHash"]), true);

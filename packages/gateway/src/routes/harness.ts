@@ -2,8 +2,10 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { HarnessError } from "../../../harness/src/index.js";
 import type { GatewayDeps } from "../app.js";
-import { PRODUCTION_IMAGE_MODEL_ID, PRODUCTION_TEXT_MODEL_ID, evaluateCapabilities, inspectStoredAuth } from "../cca/capabilities.js";
+import { createFileProofStore } from "../auth/proofs.js";
+import { productionCatalogue, productionConfigDigest } from "../cca/capability-context.js";
 import { headersFrom, studioRequestAllowed } from "../harness/access.js";
+import { resolveHarnessCapabilities } from "../harness/capability-runtime.js";
 import { readBoundedText } from "../harness/body.js";
 import { fromUnknown, jsonError } from "../harness/errors.js";
 import { ssePacket } from "../harness/events.js";
@@ -45,18 +47,12 @@ export function harnessRoutes(deps: GatewayDeps): Hono {
   const bodyOf = async (c: { req: { raw: Request } }) => readBoundedText(c.req.raw);
 
   routes.get("/capabilities", c => wrap(c, async () => {
-    const creds = await deps.store.read();
-    const auth = inspectStoredAuth(creds, Date.now());
-    const providerProjectId = auth.kind === "present" || auth.kind === "expired" ? auth.providerProjectId : "none";
-    const accountScope = auth.kind === "present" ? auth.accountScope : "none";
-    return c.json(evaluateCapabilities({
-      auth, models: [], proofs: [],
-      context: {
-        accountScope, providerProjectId, configDigest: "0".repeat(64),
-        textModelId: PRODUCTION_TEXT_MODEL_ID, imageModelId: PRODUCTION_IMAGE_MODEL_ID,
-      },
-      upstream: { generate: async () => { throw new Error("live-probe-forbidden"); } },
-    }));
+    const stored = await createFileProofStore().read();
+    const resolved = resolveHarnessCapabilities({
+      credentials: await deps.store.read(), now: Date.now(), proofs: stored.proofs, counters: stored.counters,
+      models: productionCatalogue(), configDigest: productionConfigDigest(),
+    });
+    return c.json(resolved.report);
   }));
   routes.get("/runs", c => wrap(c, () => send(service.listRuns(
     c.req.query("projectId"), c.req.query("lineageId"), c.req.query("cursor"), c.req.query("limit"),

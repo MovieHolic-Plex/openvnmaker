@@ -107,7 +107,12 @@ export function createProductionDispatch(deps: ProductionDispatchDeps): Provider
   const access = createSingleFlightAccess(deps);
   return {
     async dispatch(request) {
-      const fresh = await access.ensureFreshAccess();
+      let fresh;
+      try {
+        fresh = await access.ensureFreshAccess();
+      } catch {
+        return { kind: "auth" };
+      }
       if (fresh === null) return { kind: "auth" };
       const loaded = await deps.loadTurn(request);
       const result = await runProductionTurn({

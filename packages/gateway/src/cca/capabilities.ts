@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Credentials } from "../auth/credentials.js";
+import { observedExactUsage, tokenBindingFields } from "./capability-binding.js";
+import type { CounterObservation } from "./capability-binding.js";
 import type { ModelEntry } from "./client.js";
 
 export const PRODUCTION_TEXT_MODEL_ID = "gemini-3.8-flash-high";
@@ -44,18 +46,20 @@ export type ModelReadiness = {
   readonly imageOutput: FeatureReadiness; readonly imageReference: FeatureReadiness;
   readonly binding: {
     readonly accountScope: string; readonly providerProjectId: string; readonly modelId: string;
-    readonly configDigest: string; readonly evidenceHash: string; readonly counterSupport: "unsupported";
-    readonly tokenWindowMode: "unknown"; readonly inputTokenLimit: null; readonly outputTokenLimit: null;
-    readonly combinedTokenLimit: null; readonly ready: boolean;
+    readonly configDigest: string; readonly evidenceHash: string; readonly counterSupport: "exact" | "unsupported";
+    readonly tokenWindowMode: "input-only" | "combined" | "unknown"; readonly inputTokenLimit: number | null;
+    readonly outputTokenLimit: number | null; readonly combinedTokenLimit: number | null; readonly ready: boolean;
   };
 };
 export type CapabilityReport = {
   readonly context: CapabilityContext; readonly contextHash: string; readonly text: ModelReadiness;
   readonly image: ModelReadiness; readonly productionReady: boolean; readonly liveVerification: "not-performed" | "performed";
 };
+export type { CounterObservation } from "./capability-binding.js";
 export type CapabilityInput = {
   readonly auth: AuthState; readonly context: CapabilityContext; readonly models: readonly ModelEntry[];
-  readonly proofs: readonly CapabilityProof[]; readonly upstream: CapabilityUpstream;
+  readonly proofs: readonly CapabilityProof[]; readonly counters?: readonly CounterObservation[];
+  readonly upstream: CapabilityUpstream;
 };
 
 export function assertNever(value: never): never {
@@ -183,7 +187,10 @@ function modelReady(modelId: string, text: FeatureReadiness, tools: FeatureReadi
   return false;
 }
 
-function evaluateModel(auth: AuthState, context: CapabilityContext, modelId: string, models: readonly ModelEntry[], proofs: readonly CapabilityProof[], contextHash: string): ModelReadiness {
+function evaluateModel(
+  auth: AuthState, context: CapabilityContext, modelId: string, models: readonly ModelEntry[],
+  proofs: readonly CapabilityProof[], counters: readonly CounterObservation[], contextHash: string,
+): ModelReadiness {
   const entry = exactEntry(models, modelId);
   const text = evaluateFeature(auth, modelId, entry, "text", contextHash, proofs);
   const tools = evaluateFeature(auth, modelId, entry, "tools", contextHash, proofs);
@@ -202,18 +209,17 @@ function evaluateModel(auth: AuthState, context: CapabilityContext, modelId: str
     binding: {
       accountScope, providerProjectId, modelId, configDigest: context.configDigest,
       evidenceHash: sha256Canonical({ contextHash, proof: matched ?? null }),
-      counterSupport: "unsupported", tokenWindowMode: "unknown",
-      inputTokenLimit: null, outputTokenLimit: null, combinedTokenLimit: null, ready,
+      ...tokenBindingFields(entry, observedExactUsage(counters, modelId, contextHash)), ready,
     },
   };
 }
 
-/** Pure catalogue/evidence evaluation. Never generates and never claims a live PASS. */
 export function evaluateCapabilities(input: CapabilityInput): CapabilityReport {
   void input.upstream;
   const contextHash = capabilityContextHash(input.context);
-  const text = evaluateModel(input.auth, input.context, input.context.textModelId, input.models, input.proofs, contextHash);
-  const image = evaluateModel(input.auth, input.context, input.context.imageModelId, input.models, input.proofs, contextHash);
+  const counters = input.counters ?? [];
+  const text = evaluateModel(input.auth, input.context, input.context.textModelId, input.models, input.proofs, counters, contextHash);
+  const image = evaluateModel(input.auth, input.context, input.context.imageModelId, input.models, input.proofs, counters, contextHash);
   return {
     context: input.context, contextHash, text, image,
     productionReady: text.binding.ready && image.binding.ready,

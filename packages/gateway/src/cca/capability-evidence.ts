@@ -28,6 +28,20 @@ export function observeSsePayload(payload: string): {
   return { text, tools, imageOutput: collectImages(chunks).images.some((image) => image.data.length > 0) };
 }
 
+export function observeExactUsage(payload: string): boolean {
+  for (const chunk of parseSseChunks(payload)) {
+    const usage = readObject(readObject(chunk)?.["response"])?.["usageMetadata"];
+    const rec = readObject(usage);
+    if (rec === undefined) continue;
+    const input = rec["promptTokenCount"] ?? rec["inputTokenCount"];
+    const output = rec["candidatesTokenCount"] ?? rec["outputTokenCount"];
+    if (typeof input === "number" && typeof output === "number" && Number.isFinite(input) && Number.isFinite(output)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function requestCarriesReferenceInput(body: unknown): boolean {
   const request = readObject(readObject(body)?.["request"]);
   for (const content of readArray(request?.["contents"])) {
