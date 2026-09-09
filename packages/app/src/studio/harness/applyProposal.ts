@@ -5,7 +5,7 @@ import {
 } from "@vnmaker/harness";
 import { storeAssets, type StoredAsset } from "../../storage/projectAssets.js";
 import { listProposalDecisions, sameHead, type StoredDecision } from "../projects.js";
-import type { ProjectRepository, ProjectSnapshot } from "../projectRepository.js";
+import type { ProjectCommit, ProjectRepository, ProjectSnapshot } from "../projectRepository.js";
 
 export { canonicalHash, parseDecisionReceipt, parseProductionDocument, parseProjectHead, parseProposal };
 export const APPLY_EVENT = "vnmaker:harness-apply";
@@ -32,8 +32,17 @@ export type ApplyProposalFailure = {
 };
 export type ApplyProposalResult = { readonly ok: true; readonly receipt: DecisionReceipt; readonly duplicate: boolean } | ApplyProposalFailure;
 type ApplyKind = "applied" | "rejected";
+export type ApplyRepository = {
+  readonly snapshot: ProjectSnapshot;
+  readonly current: { readonly generation: AbortSignal };
+  flushCurrent(): Promise<ProjectSnapshot>;
+  commit(input: ProjectCommit): Promise<ProjectSnapshot>;
+  readDecision(proposalId: string): Promise<StoredDecision | null>;
+  rejectDecision(receipt: DecisionReceipt): Promise<void>;
+  markDecisionAcked(proposalId: string): Promise<void>;
+};
 export type ApplyProposalInput = {
-  readonly repository: ProjectRepository;
+  readonly repository: ApplyRepository;
   readonly application: ReviewedProposalApplication;
   readonly kind: ApplyKind;
   readonly receiptId: string;
@@ -132,7 +141,7 @@ async function prepareAssets(required: readonly Sha256[], assets: readonly Prepa
   return null;
 }
 
-async function tryAck(stored: StoredDecision, ack: (receipt: DecisionReceipt) => Promise<void>, repository: ProjectRepository): Promise<void> {
+async function tryAck(stored: StoredDecision, ack: (receipt: DecisionReceipt) => Promise<void>, repository: ApplyRepository): Promise<void> {
   if (stored.ackStatus === "acked") { emitApply("acked", stored.receipt); return; }
   try {
     await ack(stored.receipt);

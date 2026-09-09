@@ -161,9 +161,8 @@ export function createHarnessService(bindings: HarnessBindings): HarnessService 
       const key = `${ack.decisionReceipt.projectId}:${ack.decisionReceipt.lineageId}:${ack.decisionReceipt.proposalId}`;
       const existing = decisions.get(key);
       if (existing !== undefined) {
-        if (existing.kind !== ack.decisionReceipt.kind || existing.proposalDigest !== ack.decisionReceipt.proposalDigest) {
-          throw new HarnessError("DECISION_CONFLICT");
-        }
+        if (existing.proposalDigest !== ack.decisionReceipt.proposalDigest) throw new HarnessError("ID_PAYLOAD_CONFLICT");
+        if (existing.kind !== ack.decisionReceipt.kind) throw new HarnessError("DECISION_CONFLICT");
         return { status: 200, body: existing };
       }
       decisions.set(key, ack.decisionReceipt);
