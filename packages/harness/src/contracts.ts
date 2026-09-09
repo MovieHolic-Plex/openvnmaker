@@ -11,3 +11,4 @@ export * from "./reuse-contracts.js";
 export * from "./lifecycle-contracts.js";
 export * from "./command-contracts.js";
 export * from "./budget-contracts.js";
+export * from "./capability-contracts.js";
