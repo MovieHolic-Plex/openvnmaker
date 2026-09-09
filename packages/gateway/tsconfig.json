@@ -4,13 +4,13 @@
     "module": "NodeNext",
     "moduleResolution": "nodenext",
     "outDir": "dist",
-    "rootDir": "src",
     "lib": [
       "ES2022"
     ],
     "types": [
       "node"
-    ]
+    ],
+    "noEmit": true
   },
   "include": [
     "src/**/*.ts"
