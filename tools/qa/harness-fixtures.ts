@@ -46,8 +46,10 @@ async function main(): Promise<void> {
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, media.bytes);
     }
-    infrastructure = await exerciseInfrastructure(runtime);
+    // 경로 단정을 브라우저 인프라보다 먼저 수행한다. 인프라 자원 경합이 주입한
+    // 결함 검증을 가리면 실패 사유가 ERR_ASSERTION 이 아니라 QA_RUNTIME_ERROR 로 바뀐다.
     for (const expected of oracle) observed.push(assertRoute(tested, expected));
+    infrastructure = await exerciseInfrastructure(runtime);
   } catch (error: unknown) {
     if (!(error instanceof Error)) throw error;
     failure = { name: error.name, message: error.message, code: error instanceof AssertionError ? error.code : "QA_RUNTIME_ERROR",
