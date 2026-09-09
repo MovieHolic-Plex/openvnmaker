@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -18,14 +18,14 @@ import {
 } from "../src/cca/capabilities.js";
 import type { AuthState, CapabilityProof, CapabilityUpstream } from "../src/cca/capabilities.js";
 import {
-  buildObservedProof, dispatchProbePayload, observeSsePayload, opaquePartsMatch, requestModelParts,
+  buildObservedProof, dispatchProbePayload, loadProbeEffects, observeReferenceEvidence, observeSsePayload,
+  opaquePartsMatch, probeReferenceImageRequest, requestModelParts,
 } from "../src/cca/capability-evidence.js";
-import type { ProbeEffect } from "../src/cca/capability-evidence.js";
 import { buildImageRequest, parseSseChunks } from "../src/cca/images.js";
 import { UpstreamError } from "../src/http.js";
 
 export type { ProbeEffect, ProbeEffectState } from "../src/cca/capability-evidence.js";
-export { assertUnknownRequestNotResent } from "../src/cca/capability-evidence.js";
+export { assertUnknownRequestNotResent, probeReferenceImageRequest } from "../src/cca/capability-evidence.js";
 
 const TEXT_CONTEXT_LIMIT = 65_536;
 const WIRE_BODY_LIMIT = 20 * 1024 * 1024;
@@ -90,22 +90,6 @@ export function admitProbeGuards(input: {
   return { allowed, tokenCheck, reason, authorization: allowed && tokenCheck === "unknown" && input.policy === "bounded-payload" ? "bounded-payload-approved" : null };
 }
 
-async function loadEffects(directory: string): Promise<readonly ProbeEffect[]> {
-  let raw: unknown = [];
-  try { raw = JSON.parse(await readFile(join(directory, "effects.json"), "utf8")); } catch { raw = []; }
-  if (!Array.isArray(raw)) throw new Error("INVALID_INPUT");
-  return raw.map((value) => {
-    if (typeof value !== "object" || value === null) throw new Error("INVALID_INPUT");
-    const payloadHash = Reflect.get(value, "payloadHash");
-    const state = Reflect.get(value, "state");
-    if (typeof payloadHash !== "string") throw new Error("INVALID_INPUT");
-    switch (state) {
-      case "intent": case "dispatched": case "succeeded": case "known-failed": case "unknown": return { payloadHash, state };
-      default: throw new Error("INVALID_INPUT");
-    }
-  });
-}
-
 const forbiddenUpstream: CapabilityUpstream = { generate: async () => { throw new Error("evaluateCapabilities must not generate"); } };
 
 export function echoRequest(projectId: string, requestId: string, modelParts: readonly unknown[] = []): Record<string, unknown> {
@@ -145,7 +129,7 @@ function writeReceipt(directory: string, body: unknown): Promise<void> {
 
 export async function runAuthorizedProbe(args: ProbeCliArgs, deps: ProbeDeps = {}): Promise<void> {
   await mkdir(args.out, { recursive: true });
-  let effects = await loadEffects(args.out);
+  let effects = await loadProbeEffects(args.out);
   const store = deps.store ?? createFileStore();
   const sendSse = deps.postSse ?? postSse;
   const fetchModels = deps.fetchModels ?? fetchAvailableModels;
@@ -198,20 +182,42 @@ export async function runAuthorizedProbe(args: ProbeCliArgs, deps: ProbeDeps = {
   let imageRequests: readonly unknown[] = [];
   let imageResponses: readonly string[] = [];
   let imageOutput = false;
+  let imageReference = false;
+  let usedImages = 0;
   if (args.authorizeImages > 0) {
     const imageBody = buildImageRequest({ prompt: "A simple blue ceramic cup on a plain white background.",
       projectId: credentials.projectId, model: PRODUCTION_IMAGE_MODEL_ID });
     const imageAdmit = admitProbeGuards({
       textContextBytes: wireBodyBytes, wireBodyBytes: Buffer.byteLength(JSON.stringify(imageBody), "utf8"),
       images: [], authorizeText: args.authorizeText, authorizeImages: args.authorizeImages,
-      reservedText: 0, reservedImages: 1, tokenCheck: "unknown", policy: args.tokenPolicy,
+      reservedText: 0, reservedImages: usedImages + 1, tokenCheck: "unknown", policy: args.tokenPolicy,
     });
     if (imageAdmit.tokenCheck === "pass") throw new Error("tokenCheck unknown must not be reported as PASS");
     if (imageAdmit.allowed) {
       const image = await dispatchProbePayload(args.out, effects, imageBody, () => sendSse(credentials.access, imageBody, IMAGE_TIMEOUT_MS));
+      effects = image.effects;
+      usedImages += 1;
       imageRequests = [imageBody];
       imageResponses = [image.response];
       imageOutput = observeSsePayload(image.response).imageOutput;
+    }
+    const reference = probeReferenceImageRequest(credentials.projectId);
+    const refAdmit = admitProbeGuards({
+      textContextBytes: wireBodyBytes, wireBodyBytes: Buffer.byteLength(JSON.stringify(reference.body), "utf8"),
+      images: [{ rawBytes: reference.rawBytes }], authorizeText: args.authorizeText, authorizeImages: args.authorizeImages,
+      reservedText: 0, reservedImages: usedImages + 1, tokenCheck: "unknown", policy: args.tokenPolicy,
+    });
+    if (refAdmit.tokenCheck === "pass") throw new Error("tokenCheck unknown must not be reported as PASS");
+    if (refAdmit.allowed) {
+      try {
+        const edited = await dispatchProbePayload(args.out, effects, reference.body, () => sendSse(credentials.access, reference.body, IMAGE_TIMEOUT_MS));
+        effects = edited.effects;
+        imageRequests = [...imageRequests, reference.body];
+        imageResponses = [...imageResponses, edited.response];
+        imageReference = observeReferenceEvidence(reference.body, edited.response);
+      } catch (error) {
+        if (!(error instanceof UpstreamError)) throw error;
+      }
     }
   }
   const observedAt = (deps.now ?? (() => new Date()))().toISOString();
@@ -227,7 +233,7 @@ export async function runAuthorizedProbe(args: ProbeCliArgs, deps: ProbeDeps = {
     buildObservedProof({
       modelId: PRODUCTION_IMAGE_MODEL_ID, contextHash, observedAt,
       requestBodies: imageRequests, responsePayloads: imageResponses,
-      text: false, tools: false, opaqueRoundtrip: false, imageOutput, imageReference: false,
+      text: false, tools: false, opaqueRoundtrip: false, imageOutput, imageReference,
     }),
   ];
   const verified = evaluateCapabilities({ auth, context, models: catalogue.models, proofs, upstream: forbiddenUpstream });

@@ -1,11 +1,11 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { UpstreamError } from "../http.js";
 import {
-  assertNever, collectOpaqueReplayParts, sha256Canonical, storedProbeProof,
+  PRODUCTION_IMAGE_MODEL_ID, assertNever, collectOpaqueReplayParts, sha256Canonical, storedProbeProof,
 } from "./capabilities.js";
 import type { CapabilityProof } from "./capabilities.js";
-import { collectImages, parseSseChunks } from "./images.js";
+import { buildImageRequest, collectImages, generateTinyPng, parseSseChunks } from "./images.js";
 import { readArray, readObject } from "./production-util.js";
 
 export type ProbeEffectState = "intent" | "dispatched" | "succeeded" | "known-failed" | "unknown";
@@ -26,6 +26,53 @@ export function observeSsePayload(payload: string): {
     if (typeof name === "string" && name.length > 0) tools = true;
   }
   return { text, tools, imageOutput: collectImages(chunks).images.some((image) => image.data.length > 0) };
+}
+
+export function requestCarriesReferenceInput(body: unknown): boolean {
+  const request = readObject(readObject(body)?.["request"]);
+  for (const content of readArray(request?.["contents"])) {
+    for (const part of readArray(readObject(content)?.["parts"])) {
+      const data = readObject(readObject(part)?.["inlineData"])?.["data"];
+      if (typeof data === "string" && data.length > 0) return true;
+    }
+  }
+  return false;
+}
+
+export function observeReferenceEvidence(request: unknown, response: string): boolean {
+  return requestCarriesReferenceInput(request) && observeSsePayload(response).imageOutput;
+}
+
+export function probeReferenceImageRequest(projectId: string): {
+  readonly body: Record<string, unknown>; readonly rawBytes: number;
+} {
+  const bytes = generateTinyPng();
+  const data = Buffer.from(bytes).toString("base64");
+  return {
+    rawBytes: bytes.byteLength,
+    body: buildImageRequest({
+      prompt: "Recolor this reference cup slightly, keeping the same object.",
+      projectId, model: PRODUCTION_IMAGE_MODEL_ID, requestId: "probe-image-ref-1",
+      references: [{ mimeType: "image/png", data }],
+    }),
+  };
+}
+
+export async function loadProbeEffects(directory: string): Promise<readonly ProbeEffect[]> {
+  let raw: unknown = [];
+  try { raw = JSON.parse(await readFile(join(directory, "effects.json"), "utf8")); } catch { raw = []; }
+  if (!Array.isArray(raw)) throw new Error("INVALID_INPUT");
+  return raw.map((value) => {
+    if (typeof value !== "object" || value === null) throw new Error("INVALID_INPUT");
+    const payloadHash = Reflect.get(value, "payloadHash");
+    const state = Reflect.get(value, "state");
+    if (typeof payloadHash !== "string") throw new Error("INVALID_INPUT");
+    switch (state) {
+      case "intent": case "dispatched": case "succeeded": case "known-failed": case "unknown":
+        return { payloadHash, state };
+      default: throw new Error("INVALID_INPUT");
+    }
+  });
 }
 
 export function opaquePartsMatch(sentParts: readonly unknown[], collectedParts: readonly unknown[]): boolean {

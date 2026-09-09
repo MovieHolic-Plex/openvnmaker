@@ -127,7 +127,8 @@ test("fixture probe records proofs, effects, and ready features without fetch", 
   assert.equal(featureCode(imageModel, "text"), "CONFIG_MODEL_MISMATCH");
   assert.equal(featureCode(imageModel, "tools"), "CONFIG_MODEL_MISMATCH");
   assert.equal(featureStatus(imageModel, "imageOutput"), "ready");
-  assert.equal(featureCode(imageModel, "imageReference"), "PROBE_FAILED");
+  assert.equal(featureStatus(imageModel, "imageReference"), "ready");
+  assert.equal(report?.["productionReady"], true);
   const proofs = readArray(receipt["proofs"]);
   assert.equal(proofs.length, 2);
   for (const item of proofs) {
@@ -138,7 +139,7 @@ test("fixture probe records proofs, effects, and ready features without fetch", 
   const effectsRaw = JSON.parse(await readFile(join(out, "effects.json"), "utf8"));
   assert.equal(Array.isArray(effectsRaw), true);
   const effects = readArray(effectsRaw);
-  assert.equal(effects.length, 3);
+  assert.equal(effects.length, 4);
   for (const item of effects) {
     const rec = readObject(item);
     assert.equal(rec?.["state"], "succeeded");
