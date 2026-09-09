@@ -2,7 +2,10 @@ import { z } from "zod";
 import { uniqueDefinedIdentities } from "./boundary-refinements.js";
 import { candidateIdSchema, choiceIdSchema, hashSchema, identifierSchema, projectHeadSchema, projectIdSchema, revisionSchema, runIdSchema, sceneIdSchema, uuidSchema, positiveIntegerSchema } from "./primitives.js";
 import { characterSchema, sceneSchema, storyFlagsSchema } from "./content-contracts.js";
-import { approvedArtBindingSchema, productionDocumentSchema } from "./production-contracts.js";
+import {
+  approvedArtBindingSchema, artRoleSchema, artTargetMatchesRole,
+  artTargetSchema, productionDocumentSchema,
+} from "./production-contracts.js";
 import { scriptSchema } from "./script-contracts.js";
 import { reviewRecordSchema } from "./review-contracts.js";
 
@@ -13,6 +16,10 @@ export const previewEntrySchema = z.discriminatedUnion("kind", [
 export const previewBoundarySchema = z.strictObject({
   fromSceneId: sceneIdSchema, choiceId: choiceIdSchema.optional(), targetSceneId: sceneIdSchema, reason: z.literal("unwritten-scene"),
 }).readonly();
+export const previewMissingAssetSchema = z.strictObject({
+  assetId: identifierSchema, name: identifierSchema,
+  role: artRoleSchema, target: artTargetSchema,
+}).refine(asset => artTargetMatchesRole(asset.role, asset.target)).readonly();
 export const previewSnapshotSchema = z.strictObject({
   kind: z.literal("candidate-preview"), previewId: uuidSchema, projectId: projectIdSchema, runId: runIdSchema,
   candidateId: candidateIdSchema, candidateRevision: revisionSchema, sourceHead: projectHeadSchema, snapshotHash: hashSchema,
@@ -22,7 +29,9 @@ export const previewSnapshotSchema = z.strictObject({
     .refine(cast => uniqueDefinedIdentities(cast.map(character => character.id))).readonly(), initialFlags: storyFlagsSchema,
   assetBindings: z.array(approvedArtBindingSchema).readonly(), boundaries: z.array(previewBoundarySchema).readonly(),
   includedUnitHashes: z.array(hashSchema).readonly(),
-}).readonly();
+  missingAssets: z.array(previewMissingAssetSchema).max(2000).readonly().optional(),
+}).refine(snapshot => !snapshot.missingAssets?.some(missing =>
+  snapshot.assetBindings.some(binding => binding.assetId === missing.assetId))).readonly();
 export const releaseAssetSchema = z.strictObject({
   path: z.string().regex(/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-][a-zA-Z0-9._-]*$/), hash: hashSchema, size: positiveIntegerSchema,
 }).readonly();
@@ -41,6 +50,7 @@ export const importedCandidateSeedSchema = z.strictObject({
   provenance: z.literal("imported"),
 }).readonly();
 export type PreviewSnapshot = z.infer<typeof previewSnapshotSchema>;
+export type PreviewMissingAsset = z.infer<typeof previewMissingAssetSchema>;
 export type PreviewBoundary = z.infer<typeof previewBoundarySchema>;
 export type ReleaseSnapshot = z.infer<typeof releaseSnapshotSchema>;
 export type ImportedCandidateSeed = z.infer<typeof importedCandidateSeedSchema>;
