@@ -34,5 +34,6 @@ export const validationReportSchema = z.strictObject({
   reviewIds: z.array(uuidSchema).readonly(),
 }).readonly();
 export type ReviewRecord = z.infer<typeof reviewRecordSchema>;
+export type ReviewDisposition = z.infer<typeof reviewDispositionSchema>;
 export type Issue = z.infer<typeof issueSchema>;
 export type ValidationReport = z.infer<typeof validationReportSchema>;

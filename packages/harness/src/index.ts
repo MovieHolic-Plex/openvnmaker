@@ -49,3 +49,9 @@ export {
 export type {
   DurationEstimate, ProductionTiming, SceneBeat, StudioOutline, SceneDraft, DraftJob, ProductionPlan,
 } from "./production.js";
+export { validateWorkspace } from "./validation.js";
+export type {
+  AssetInspection, ChapterEvaluation, CheckStatus, CompletionGate, GateBlocker,
+  MissingStaging, QuotaRecord, RepeatedBody, RouteCoverage, RouteDistinguishing, RoutePathReport,
+  WorkspaceValidationInput, WorkspaceValidationReport,
+} from "./validation.js";

@@ -1,5 +1,9 @@
 import type { VnScript } from "@vnmaker/content";
-import { canonicalHash, parseProposal, type ReuseAnalysis, type ValidationReport } from "@vnmaker/harness";
+import {
+  canonicalHash, parseProductionDocument, parseProposal, validateWorkspace,
+  type ProductionDocument, type ReuseAnalysis, type WorkspaceValidationReport,
+} from "@vnmaker/harness";
+import { useState } from "react";
 import type { ProjectRepository } from "../projectRepository.js";
 import { stageReviewedProposal } from "./applyProposal.js";
 import { getCandidateWorkspace } from "./candidateStore.js";
@@ -7,13 +11,28 @@ import { ProposalDiffList } from "./ProposalDiffList.js";
 import { QualityReport } from "./QualityReport.js";
 import { ReuseReview } from "./ReuseReview.js";
 
-export function candidateValidation(candidate: VnScript, planned: readonly string[]): ValidationReport {
-  const written = new Set(candidate.scenes.map(scene => scene.id));
-  const closed = planned.every(id => written.has(id));
-  return {
-    schema: true, graph: closed, assets: true, runtime: closed,
-    requiredAssetsMissing: [], issues: [], reviewIds: [],
-  };
+function fallbackDocument(candidate: VnScript, planned: readonly string[]): ProductionDocument {
+  return parseProductionDocument({
+    version: 1, brief: "", castCanon: [], worldTimeline: [], branchFacts: [],
+    outline: {
+      title: candidate.title, subtitle: candidate.subtitle, bible: "", start: candidate.start,
+      scenes: planned.map(id => ({
+        id, chapter: "1", title: id, summary: id, artDirection: "pending",
+        targetMinutes: 1, background: "title",
+      })),
+    },
+    artDirection: [], referenceBindings: [],
+  });
+}
+
+export function workspaceReport(candidate: VnScript, planned: readonly string[], approvals: readonly string[] = []): WorkspaceValidationReport {
+  const workspace = getCandidateWorkspace();
+  return validateWorkspace({
+    script: candidate,
+    productionDocument: workspace?.productionDocument ?? fallbackDocument(candidate, planned),
+    reviews: [], requiredAssetHashes: [], presentAssetHashes: [], assetInspections: [],
+    plannedSceneIds: planned, chapterApprovals: approvals, quota: null,
+  });
 }
 
 export function ProposalReview({
@@ -28,14 +47,16 @@ export function ProposalReview({
   readonly applied: boolean;
   readonly onRepropose: () => void;
 }) {
-  const validation = candidateValidation(candidate, planned);
-  const ready = validation.schema && validation.graph && validation.assets && validation.runtime;
+  const [approvals, setApprovals] = useState<readonly string[]>([]);
+  const report = workspaceReport(candidate, planned, approvals);
+  const ready = report.gate.proposalReady;
   async function stageApply(): Promise<void> {
     const workspace = getCandidateWorkspace();
     if (repository === null || workspace === null || !ready) return;
     const body = {
       id: crypto.randomUUID(), runId: workspace.runId, baseHead: repository.snapshot.head, operations: [],
-      requiredAssetHashes: [], contextManifestHash: await canonicalHash("workspace-context"), validation,
+      requiredAssetHashes: [], contextManifestHash: await canonicalHash("workspace-context"),
+      validation: report.compact,
     };
     stageReviewedProposal({
       proposal: parseProposal({ ...body, digest: await canonicalHash(body) }),
@@ -45,8 +66,8 @@ export function ProposalReview({
   }
   return <section className="harness-review" data-testid="harness-proposal-review">
     <QualityReport
-      validation={validation} previewEligible={candidate.scenes.length > 0} proposalReady={ready}
-      applied={applied} released={false} written={candidate.scenes.length} planned={planned.length}
+      report={report} applied={applied} released={false}
+      onApproveChapter={id => setApprovals(current => current.includes(id) ? current : [...current, id])}
     />
     <ProposalDiffList source={source} candidate={candidate} />
     <ReuseReview analysis={analysis} busy={busy} onRepropose={onRepropose} />
