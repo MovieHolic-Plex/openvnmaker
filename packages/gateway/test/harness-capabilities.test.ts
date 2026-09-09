@@ -88,7 +88,8 @@ test("exact-catalog-capabilities: ready only when catalogue key and probe eviden
     ],
   });
   // Then: both models are surfaced separately, and ready requires exact key + matching evidence.
-  assert.equal(agreed.liveVerification, "not-performed");
+  assert.equal(agreed.liveVerification, "performed");
+  assert.equal(visionFlagWithoutProof.liveVerification, "not-performed");
   assert.equal(agreed.text.modelId, textModelId);
   assert.equal(agreed.image.modelId, imageModelId);
   assert.equal(agreed.text.text.status, "ready");
@@ -164,4 +165,66 @@ test("missing-or-vision-only: missing alias, vision-only image model, and expire
   assert.notEqual(missingAlias.image.imageOutput.status === "blocked" ? missingAlias.image.imageOutput.block.code : null, expired.text.text.status === "blocked" ? expired.text.text.block.code : null);
   assert.equal(upstream.calls, 0);
   assert.equal(fetchCalls, 0);
+});
+
+function blockCode(feature: { readonly status: string; readonly block?: { readonly code: string } }): string | null {
+  return feature.status === "blocked" ? feature.block?.code ?? null : null;
+}
+
+test("matching proof makes features ready and marks liveVerification performed", () => {
+  const contextHash = capabilityContextHash(context);
+  const agreed = evaluateCapabilities({
+    auth: presentAuth, context, models: catalogue, upstream: unusedUpstream(),
+    proofs: [
+      proof(textModelId, contextHash, { text: true, tools: true, opaqueRoundtrip: true, imageOutput: false, imageReference: false }),
+      proof(imageModelId, contextHash, { text: false, tools: false, opaqueRoundtrip: false, imageOutput: true, imageReference: true }),
+    ],
+  });
+  assert.equal(agreed.liveVerification, "performed");
+  assert.equal(agreed.text.text.status, "ready");
+  assert.equal(agreed.text.tools.status, "ready");
+  assert.equal(agreed.image.imageOutput.status, "ready");
+  assert.equal(agreed.image.imageReference.status, "ready");
+  assert.equal(agreed.productionReady, true);
+});
+
+test("proof with a different contextHash is PROBE_STALE", () => {
+  const stale = evaluateCapabilities({
+    auth: presentAuth, context, models: catalogue, upstream: unusedUpstream(),
+    proofs: [proof(textModelId, "1".repeat(64), { text: true, tools: true, opaqueRoundtrip: true, imageOutput: false, imageReference: false })],
+  });
+  assert.equal(blockCode(stale.text.text), "PROBE_STALE");
+  assert.equal(stale.liveVerification, "performed");
+  assert.notEqual(stale.text.text.status, "ready");
+});
+
+test("proof present with feature flag false is PROBE_FAILED", () => {
+  const contextHash = capabilityContextHash(context);
+  const failed = evaluateCapabilities({
+    auth: presentAuth, context, models: catalogue, upstream: unusedUpstream(),
+    proofs: [proof(textModelId, contextHash, { text: false, tools: false, opaqueRoundtrip: false, imageOutput: false, imageReference: false })],
+  });
+  assert.equal(blockCode(failed.text.text), "PROBE_FAILED");
+  assert.equal(blockCode(failed.text.tools), "PROBE_FAILED");
+});
+
+test("no proofs stay unverified and liveVerification not-performed", () => {
+  const none = evaluateCapabilities({
+    auth: presentAuth, context, models: catalogue, proofs: [], upstream: unusedUpstream(),
+  });
+  assert.equal(none.text.text.status, "unverified");
+  assert.equal(none.text.tools.status, "unverified");
+  assert.equal(none.image.imageOutput.status, "unverified");
+  assert.equal(none.liveVerification, "not-performed");
+  assert.equal(none.productionReady, false);
+});
+
+test("image bytes absent does not make imageOutput ready", () => {
+  const contextHash = capabilityContextHash(context);
+  const absent = evaluateCapabilities({
+    auth: presentAuth, context, models: catalogue, upstream: unusedUpstream(),
+    proofs: [proof(imageModelId, contextHash, { text: false, tools: false, opaqueRoundtrip: false, imageOutput: false, imageReference: false })],
+  });
+  assert.notEqual(absent.image.imageOutput.status, "ready");
+  assert.equal(blockCode(absent.image.imageOutput), "PROBE_FAILED");
 });

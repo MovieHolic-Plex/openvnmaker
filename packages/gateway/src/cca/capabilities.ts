@@ -51,7 +51,7 @@ export type ModelReadiness = {
 };
 export type CapabilityReport = {
   readonly context: CapabilityContext; readonly contextHash: string; readonly text: ModelReadiness;
-  readonly image: ModelReadiness; readonly productionReady: boolean; readonly liveVerification: "not-performed";
+  readonly image: ModelReadiness; readonly productionReady: boolean; readonly liveVerification: "not-performed" | "performed";
 };
 export type CapabilityInput = {
   readonly auth: AuthState; readonly context: CapabilityContext; readonly models: readonly ModelEntry[];
@@ -216,7 +216,8 @@ export function evaluateCapabilities(input: CapabilityInput): CapabilityReport {
   const image = evaluateModel(input.auth, input.context, input.context.imageModelId, input.models, input.proofs, contextHash);
   return {
     context: input.context, contextHash, text, image,
-    productionReady: text.binding.ready && image.binding.ready, liveVerification: "not-performed",
+    productionReady: text.binding.ready && image.binding.ready,
+    liveVerification: input.proofs.length > 0 ? "performed" : "not-performed",
   };
 }
 

@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createFileStore } from "../src/auth/credentials.js";
+import type { CredentialStore } from "../src/auth/credentials.js";
 import { ensureFreshAccess } from "../src/auth/tokens.js";
 import {
   AGENT_MAX_OUTPUT_TOKENS, CCA_HOSTS, CLIENT_ID, GENERATE_MAX_OUTPUT_TOKENS, GENERATE_PROMPT_MAX,
@@ -10,13 +11,21 @@ import {
   TEXT_THINKING_CONFIG, TOKEN_URL, antigravityUserAgent, ccaHeaders,
 } from "../src/config.js";
 import { fetchAvailableModels } from "../src/cca/client.js";
+import type { ModelEntry } from "../src/cca/client.js";
 import {
   OPAQUE_METADATA_PROBE_CONTRACT, PRODUCTION_IMAGE_MODEL_ID, PRODUCTION_TEXT_MODEL_ID, assertNever,
   capabilityContextHash, collectOpaqueReplayParts, evaluateCapabilities, inspectStoredAuth, sha256Canonical,
 } from "../src/cca/capabilities.js";
-import type { AuthState, CapabilityUpstream } from "../src/cca/capabilities.js";
+import type { AuthState, CapabilityProof, CapabilityUpstream } from "../src/cca/capabilities.js";
+import {
+  buildObservedProof, dispatchProbePayload, observeSsePayload, opaquePartsMatch, requestModelParts,
+} from "../src/cca/capability-evidence.js";
+import type { ProbeEffect } from "../src/cca/capability-evidence.js";
 import { buildImageRequest, parseSseChunks } from "../src/cca/images.js";
 import { UpstreamError } from "../src/http.js";
+
+export type { ProbeEffect, ProbeEffectState } from "../src/cca/capability-evidence.js";
+export { assertUnknownRequestNotResent } from "../src/cca/capability-evidence.js";
 
 const TEXT_CONTEXT_LIMIT = 65_536;
 const WIRE_BODY_LIMIT = 20 * 1024 * 1024;
@@ -28,8 +37,12 @@ export type TokenCheck = "pass" | "fail" | "unknown";
 export type ProbeCliArgs = {
   readonly authorizeText: number; readonly authorizeImages: number; readonly tokenPolicy: TokenPolicy; readonly out: string;
 };
-export type ProbeEffectState = "intent" | "dispatched" | "succeeded" | "known-failed" | "unknown";
-export type ProbeEffect = { readonly payloadHash: string; readonly state: ProbeEffectState };
+export type ProbeDeps = {
+  readonly store?: CredentialStore;
+  readonly fetchModels?: (accessToken: string) => Promise<{ readonly models: readonly ModelEntry[] }>;
+  readonly postSse?: (accessToken: string, body: unknown, timeoutMs: number) => Promise<string>;
+  readonly now?: () => Date;
+};
 
 export function parseProbeCli(args: readonly string[]): ProbeCliArgs {
   const { values } = parseArgs({ args: [...args], allowPositionals: false, strict: true, options: {
@@ -77,17 +90,6 @@ export function admitProbeGuards(input: {
   return { allowed, tokenCheck, reason, authorization: allowed && tokenCheck === "unknown" && input.policy === "bounded-payload" ? "bounded-payload-approved" : null };
 }
 
-export function assertUnknownRequestNotResent(effects: readonly ProbeEffect[], payloadHash: string): void {
-  for (const effect of effects) {
-    if (effect.payloadHash !== payloadHash) continue;
-    switch (effect.state) {
-      case "unknown": case "dispatched": throw new Error("UNKNOWN_EFFECT");
-      case "intent": case "succeeded": case "known-failed": break;
-      default: return assertNever(effect.state);
-    }
-  }
-}
-
 async function loadEffects(directory: string): Promise<readonly ProbeEffect[]> {
   let raw: unknown = [];
   try { raw = JSON.parse(await readFile(join(directory, "effects.json"), "utf8")); } catch { raw = []; }
@@ -106,7 +108,7 @@ async function loadEffects(directory: string): Promise<readonly ProbeEffect[]> {
 
 const forbiddenUpstream: CapabilityUpstream = { generate: async () => { throw new Error("evaluateCapabilities must not generate"); } };
 
-function echoRequest(projectId: string, requestId: string, modelParts: readonly unknown[] = []): Record<string, unknown> {
+export function echoRequest(projectId: string, requestId: string, modelParts: readonly unknown[] = []): Record<string, unknown> {
   const user = { role: "user", parts: [{ text: "Call echo with value vnmaker-capability-probe, then return its result." }] };
   const contents = modelParts.length === 0 ? [user] : [user, { role: "model", parts: modelParts },
     { role: "user", parts: [{ functionResponse: { name: "echo", response: { value: "vnmaker-capability-probe" } } }] }];
@@ -141,10 +143,12 @@ function writeReceipt(directory: string, body: unknown): Promise<void> {
   return writeFile(join(directory, "receipt.json"), `${JSON.stringify(body, null, 2)}\n`);
 }
 
-export async function runAuthorizedProbe(args: ProbeCliArgs): Promise<void> {
+export async function runAuthorizedProbe(args: ProbeCliArgs, deps: ProbeDeps = {}): Promise<void> {
   await mkdir(args.out, { recursive: true });
-  const effects = await loadEffects(args.out);
-  const store = createFileStore();
+  let effects = await loadEffects(args.out);
+  const store = deps.store ?? createFileStore();
+  const sendSse = deps.postSse ?? postSse;
+  const fetchModels = deps.fetchModels ?? fetchAvailableModels;
   let credentials = await store.read();
   let auth: AuthState = inspectStoredAuth(credentials, Date.now());
   if (auth.kind !== "present") {
@@ -168,11 +172,10 @@ export async function runAuthorizedProbe(args: ProbeCliArgs): Promise<void> {
     }),
     textModelId: PRODUCTION_TEXT_MODEL_ID, imageModelId: PRODUCTION_IMAGE_MODEL_ID,
   };
-  const catalogue = await fetchAvailableModels(credentials.access);
+  const catalogue = await fetchModels(credentials.access);
   const report = evaluateCapabilities({ auth, context, models: catalogue.models, proofs: [], upstream: forbiddenUpstream });
   const echo = echoRequest(credentials.projectId, "probe-echo-1");
   const wireBodyBytes = Buffer.byteLength(JSON.stringify(echo), "utf8");
-  assertUnknownRequestNotResent(effects, sha256Canonical(echo));
   const admission = admitProbeGuards({
     textContextBytes: wireBodyBytes, wireBodyBytes, images: [], authorizeText: args.authorizeText,
     authorizeImages: args.authorizeImages, reservedText: 1, reservedImages: 0, tokenCheck: "unknown", policy: args.tokenPolicy,
@@ -180,27 +183,56 @@ export async function runAuthorizedProbe(args: ProbeCliArgs): Promise<void> {
   if (admission.tokenCheck === "pass") throw new Error("tokenCheck unknown must not be reported as PASS");
   if (!report.text.present || !report.image.present || !admission.allowed) {
     await writeReceipt(args.out, { status: "blocked", report, admission, tokenCheck: admission.tokenCheck,
-      liveVerification: "not-performed", contextHash: capabilityContextHash(context), opaque: OPAQUE_METADATA_PROBE_CONTRACT });
+      liveVerification: report.liveVerification, contextHash: capabilityContextHash(context), opaque: OPAQUE_METADATA_PROBE_CONTRACT });
     return;
   }
-  const replayParts = collectOpaqueReplayParts(parseSseChunks(await postSse(credentials.access, echo, GENERATE_TIMEOUT_MS)));
+  const first = await dispatchProbePayload(args.out, effects, echo, () => sendSse(credentials.access, echo, GENERATE_TIMEOUT_MS));
+  effects = first.effects;
+  const replayParts = collectOpaqueReplayParts(parseSseChunks(first.response));
   const second = echoRequest(credentials.projectId, "probe-echo-2", replayParts);
-  assertUnknownRequestNotResent(effects, sha256Canonical(second));
-  await postSse(credentials.access, second, GENERATE_TIMEOUT_MS);
+  const replayed = await dispatchProbePayload(args.out, effects, second, () => sendSse(credentials.access, second, GENERATE_TIMEOUT_MS));
+  effects = replayed.effects;
+  const firstObs = observeSsePayload(first.response);
+  const secondObs = observeSsePayload(replayed.response);
+  const opaqueRoundtrip = opaquePartsMatch(requestModelParts(second), replayParts);
+  let imageRequests: readonly unknown[] = [];
+  let imageResponses: readonly string[] = [];
+  let imageOutput = false;
   if (args.authorizeImages > 0) {
     const imageBody = buildImageRequest({ prompt: "A simple blue ceramic cup on a plain white background.",
       projectId: credentials.projectId, model: PRODUCTION_IMAGE_MODEL_ID });
-    assertUnknownRequestNotResent(effects, sha256Canonical(imageBody));
     const imageAdmit = admitProbeGuards({
       textContextBytes: wireBodyBytes, wireBodyBytes: Buffer.byteLength(JSON.stringify(imageBody), "utf8"),
       images: [], authorizeText: args.authorizeText, authorizeImages: args.authorizeImages,
       reservedText: 0, reservedImages: 1, tokenCheck: "unknown", policy: args.tokenPolicy,
     });
     if (imageAdmit.tokenCheck === "pass") throw new Error("tokenCheck unknown must not be reported as PASS");
-    if (imageAdmit.allowed) await postSse(credentials.access, imageBody, IMAGE_TIMEOUT_MS);
+    if (imageAdmit.allowed) {
+      const image = await dispatchProbePayload(args.out, effects, imageBody, () => sendSse(credentials.access, imageBody, IMAGE_TIMEOUT_MS));
+      imageRequests = [imageBody];
+      imageResponses = [image.response];
+      imageOutput = observeSsePayload(image.response).imageOutput;
+    }
   }
+  const observedAt = (deps.now ?? (() => new Date()))().toISOString();
+  const contextHash = capabilityContextHash(context);
+  const proofs: readonly CapabilityProof[] = [
+    buildObservedProof({
+      modelId: PRODUCTION_TEXT_MODEL_ID, contextHash, observedAt,
+      requestBodies: [echo, second], responsePayloads: [first.response, replayed.response],
+      text: firstObs.text || secondObs.text, tools: firstObs.tools && opaqueRoundtrip,
+      opaqueRoundtrip,
+      imageOutput: false, imageReference: false,
+    }),
+    buildObservedProof({
+      modelId: PRODUCTION_IMAGE_MODEL_ID, contextHash, observedAt,
+      requestBodies: imageRequests, responsePayloads: imageResponses,
+      text: false, tools: false, opaqueRoundtrip: false, imageOutput, imageReference: false,
+    }),
+  ];
+  const verified = evaluateCapabilities({ auth, context, models: catalogue.models, proofs, upstream: forbiddenUpstream });
   await writeReceipt(args.out, { status: "completed", tokenCheck: admission.tokenCheck, authorization: admission.authorization,
-    liveVerification: "performed", opaque: OPAQUE_METADATA_PROBE_CONTRACT, report });
+    liveVerification: verified.liveVerification, opaque: OPAQUE_METADATA_PROBE_CONTRACT, report: verified, proofs });
 }
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
