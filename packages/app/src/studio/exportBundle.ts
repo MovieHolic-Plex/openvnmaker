@@ -3,7 +3,10 @@ import { createZip, type ZipEntry } from "./zip.js";
 import { mediaCredits } from "./mediaCredits.js";
 
 export interface ExportProgress { readonly phase: "player" | "assets" | "zip"; readonly complete: number; readonly total: number; readonly path?: string }
-interface ExportOptions { readonly fetcher?: typeof fetch; readonly signal?: AbortSignal; readonly onProgress?: (progress: ExportProgress) => void }
+interface ExportOptions {
+  readonly fetcher?: typeof fetch; readonly signal?: AbortSignal; readonly onProgress?: (progress: ExportProgress) => void;
+  readonly projectNamespace?: string; readonly extraEntries?: readonly ZipEntry[]; readonly readmeText?: string;
+}
 interface RuntimeManifest { version: number; entry: string; stylesheets: string[]; files: { path: string; size: number; sha256: string }[] }
 const encode = (text: string) => new TextEncoder().encode(text);
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, value => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!);
@@ -121,11 +124,17 @@ export async function buildExportBundle(source: VnScript, options: ExportOptions
   const credits = mediaCredits(exported, collectProjectAssets(exported));
   entries.push({ path: "MEDIA_CREDITS.json", bytes: encode(credits.json) }, { path: "MEDIA_CREDITS.txt", bytes: encode(credits.text) });
   const manuscript = encode(JSON.stringify(exported, null, 2));
-  const projectNamespace = `bundle-${(await sha256(manuscript)).slice(0, 16)}`;
   const html = `<!doctype html>\n<html lang="ko"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#15131d"/><title>${escapeHtml(script.title)}</title>${runtime.stylesheets.map(path => `<link rel="stylesheet" href="./${path}"/>`).join("")}</head><body><div id="root"></div><script type="module" src="./${runtime.entry}"></script></body></html>\n`;
   entries.push({ path: "index.html", bytes: encode(html) }, { path: "project.json", bytes: manuscript });
+  for (const extra of options.extraEntries ?? []) {
+    if (entries.some(entry => entry.path === extra.path)) throw new Error(`ZIP 파일 경로가 올바르지 않습니다: ${extra.path}`);
+    entries.push(extra);
+  }
+  const projectNamespace = options.projectNamespace ?? `bundle-${(await sha256(manuscript)).slice(0, 16)}`;
+  if (options.projectNamespace !== undefined && !/^(?:bundle|release)-[a-f0-9]{16}$/.test(projectNamespace)) throw new Error("배포 정보가 올바르지 않습니다.");
   entries.push({ path: "bundle.json", bytes: encode(JSON.stringify({ version: 1, title: script.title, projectNamespace, createdAt: new Date().toISOString(), files: [...entries].sort((a, b) => a.path.localeCompare(b.path)).map(entry => ({ path: entry.path, bytes: entry.bytes.length })) }, null, 2)) });
-  entries.push({ path: "README.txt", bytes: encode(`${script.title}\n\n이 ZIP은 현재 편집한 원고, 등록 이미지와 모든 연출 파일, 독립 플레이어를 포함합니다.\n\n실행\n1. ZIP을 새 폴더에 모두 풀어주세요.\n2. 그 폴더에서 정적 웹 서버를 실행합니다. Python이 있다면: python -m http.server 8080\n3. 브라우저에서 http://localhost:8080 을 엽니다.\n\n배포\n정적 호스팅 사이트의 루트에 이 폴더 전체를 올려주세요. 하위 경로 배포 대신 별도 사이트/서브도메인을 사용하세요.\nindex.html을 file://로 더블클릭하면 브라우저 보안 정책 때문에 원고를 읽을 수 없습니다. 서버 API·앱 로그인·AI 호출은 필요하지 않습니다.\n\n원고와 저장\nproject.json은 내보내기를 누른 순간의 편집 원고입니다. 원본 편집 프로젝트는 변경하지 않습니다. 이 파일은 VN Maker에서 JSON으로 다시 가져올 수 있습니다.\n저장은 이 작품 버전의 ${projectNamespace} 영역을 사용합니다. 다른 작품 및 이전 원고 버전의 저장 기록은 읽지 않습니다. 브라우저와 사이트 주소별로 저장됩니다.\n원고를 수정한 뒤에는 에디터에서 새 ZIP을 만들어주세요. ZIP 안에서 project.json만 바꾸면 버전 구분 정보는 갱신되지 않습니다.\n`) });
+  const readme = options.readmeText ?? `${script.title}\n\n이 ZIP은 현재 편집한 원고, 등록 이미지와 모든 연출 파일, 독립 플레이어를 포함합니다.\n\n실행\n1. ZIP을 새 폴더에 모두 풀어주세요.\n2. 그 폴더에서 정적 웹 서버를 실행합니다. Python이 있다면: python -m http.server 8080\n3. 브라우저에서 http://localhost:8080 을 엽니다.\n\n배포\n정적 호스팅 사이트의 루트(/) 또는 하위 경로(/games/medium/)에 이 폴더 전체를 올려주세요. 하위 경로 주소는 끝에 / 가 있어야 합니다.\nindex.html을 file://로 더블클릭하면 브라우저 보안 정책 때문에 원고를 읽을 수 없습니다. 서버 API·앱 로그인·AI 호출은 필요하지 않습니다.\n\n원고와 저장\nproject.json은 내보내기를 누른 순간의 편집 원고입니다. 원본 편집 프로젝트는 변경하지 않습니다. 이 파일은 VN Maker에서 JSON으로 다시 가져올 수 있습니다.\n저장은 이 작품 버전의 ${projectNamespace} 영역을 사용합니다. 다른 작품 및 이전 원고 버전의 저장 기록은 읽지 않습니다. 브라우저와 사이트 주소별로 저장됩니다.\n원고를 수정한 뒤에는 에디터에서 새 ZIP을 만들어주세요. ZIP 안에서 project.json만 바꾸면 버전 구분 정보는 갱신되지 않습니다.\n`;
+  entries.push({ path: "README.txt", bytes: encode(readme) });
   options.onProgress?.({ phase: "zip", complete: entries.length, total: entries.length });
   options.signal?.throwIfAborted();
   const blob = createZip(entries.sort((a, b) => a.path.localeCompare(b.path)));
