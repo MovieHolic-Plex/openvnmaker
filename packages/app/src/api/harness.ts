@@ -1,5 +1,5 @@
-import { parseReuseAnalysis } from "@vnmaker/harness";
-import type { CreateRunCommand, ErrorEnvelope, ReuseAnalysis, RunCommand } from "@vnmaker/harness";
+import { assertNever, parseDecisionReceipt, parseReuseAnalysis } from "@vnmaker/harness";
+import type { CreateRunCommand, DecisionReceipt, ErrorEnvelope, ReuseAnalysis, RunCommand } from "@vnmaker/harness";
 
 const STUDIO = { "X-VNMaker-Studio": "1" } as const;
 
@@ -83,6 +83,17 @@ export async function getHarnessRun(runId: string): Promise<AuthorRunView> {
 
 export async function mutateHarnessRun(runId: string, action: Exclude<RunCommand["action"], "previews">, command: object): Promise<AuthorRunView> {
   return readAuthorRun(await harnessFetch(`/api/harness/runs/${runId}/${action}`, { method: "POST", body: JSON.stringify(command) }));
+}
+
+export async function ackHarnessDecision(runId: string, kind: "applied" | "rejected", receipt: DecisionReceipt): Promise<DecisionReceipt> {
+  switch (kind) {
+    case "applied": case "rejected": break;
+    default: return assertNever(kind);
+  }
+  if (receipt.kind !== kind) throw new HarnessApiError({ code: "INVALID_INPUT", message: "INVALID_INPUT", retryable: false }, 400);
+  return parseDecisionReceipt(await harnessFetch(`/api/harness/runs/${runId}/${kind}`, {
+    method: "POST", body: JSON.stringify({ requestId: receipt.receiptId, decisionReceipt: receipt }),
+  }));
 }
 
 export async function analyzeHarnessReuse(runId: string, command: object): Promise<ReuseAnalysis> {

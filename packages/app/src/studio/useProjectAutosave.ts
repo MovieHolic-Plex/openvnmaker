@@ -13,7 +13,10 @@ export function useProjectAutosave(repository:ProjectRepository|null,{script,ena
     if(observed.current?.repository!==repository){
       observed.current={repository,script:repository.snapshot.script};
     }
-    if(observed.current.script!==script){repository.stage(script);observed.current={repository,script};}
+    if(observed.current.script!==script){
+      if(script!==repository.snapshot.script)repository.stage(script);
+      observed.current={repository,script};
+    }
   },[repository,script,enabled]);
   useEffect(()=>{
     if(!enabled||!repository)return;

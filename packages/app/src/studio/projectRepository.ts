@@ -1,13 +1,14 @@
 import {parseScript,type VnScript} from "@vnmaker/content";
-import {canonicalHash,parseProductionDocument,parseProjectHead,revisionSchema,type ProductionDocument,type ProjectHead,type Revision} from "@vnmaker/harness";
-import {commitStoredProject,readStoredProject,sameHead,validatedProject,ProjectStorageError} from "./projects.js";
+import {canonicalHash,parseDecisionReceipt,parseProductionDocument,parseProjectHead,revisionSchema,type DecisionReceipt,type ProductionDocument,type ProjectHead,type Revision,type Sha256} from "@vnmaker/harness";
+import {commitRejectedDecision,commitStoredProject,markProposalAcked,readProposalDecision,readStoredProject,sameHead,validatedProject,ProjectStorageError,type StoredDecision} from "./projects.js";
 
 export class StaleGenerationError extends Error {override readonly name="StaleGenerationError";constructor(){super("이 저장 요청의 편집 세대가 만료되었습니다.");}}
 export class CurrentRevisionChangedError extends Error {override readonly name="CurrentRevisionChangedError";constructor(){super("저장 중 현재 원고가 변경되었습니다. 최신 원고를 다시 저장하세요.");}}
 type ProjectContent={readonly script:VnScript;readonly productionDocument:ProductionDocument};
 export type ProjectSnapshot=ProjectContent & {readonly head:ProjectHead};
 export type DraftRevision=ProjectContent & {readonly generation:AbortSignal;readonly revision:Revision};
-export type ProjectCommit=ProjectContent & {readonly generation:AbortSignal;readonly expectedHead:ProjectHead};
+export type AppliedDecisionDraft={readonly receiptId:string;readonly proposalId:string;readonly proposalDigest:Sha256;readonly createdAt:string};
+export type ProjectCommit=ProjectContent & {readonly generation:AbortSignal;readonly expectedHead:ProjectHead;readonly appliedDecision?:AppliedDecisionDraft};
 
 async function snapshotHead(base:ProjectHead,revision:Revision,content:ProjectContent):Promise<ProjectHead>{
   const [scriptHash,productionHash]=await Promise.all([canonicalHash(content.script),canonicalHash(content.productionDocument)]);
@@ -123,9 +124,30 @@ export class ProjectRepository {
         const revision=revisionSchema.parse(this.revision+1),head=await snapshotHead(input.expectedHead,revision,{script,productionDocument});
         const check=()=>{if(input.generation!==this.generation.signal)throw new StaleGenerationError();if(this.dirty)throw new CurrentRevisionChangedError();};
         check();
-        await commitStoredProject({record:{id:head.projectId,script,updatedAt:Date.now()},head,productionDocument,expectedHead:input.expectedHead,expectedRecord:null,metadataOnly:false},check,AbortSignal.any([input.generation,this.replacement.signal]));
+        const applied=input.appliedDecision;
+        const decision=applied===undefined?undefined:{
+          projectId:head.projectId,lineageId:head.lineageId,proposalId:applied.proposalId,ackStatus:"pending" as const,
+          receipt:parseDecisionReceipt({
+            receiptId:applied.receiptId,projectId:head.projectId,lineageId:head.lineageId,proposalId:applied.proposalId,
+            proposalDigest:applied.proposalDigest,kind:"applied",baseHead:input.expectedHead,resultHead:head,createdAt:applied.createdAt,
+          }),
+        };
+        await commitStoredProject({record:{id:head.projectId,script,updatedAt:Date.now()},head,productionDocument,expectedHead:input.expectedHead,expectedRecord:null,metadataOnly:false,...(decision===undefined?{}:{decision})},check,AbortSignal.any([input.generation,this.replacement.signal]));
         this.revision=revision;this.durable={head,script,productionDocument};this.invalidate();return this.durable;
       }finally{this.replacement=null;}
+    });
+  }
+  readDecision(proposalId:string):Promise<StoredDecision|null>{
+    return readProposalDecision(this.durable.head.projectId,this.durable.head.lineageId,proposalId);
+  }
+  rejectDecision(receipt:DecisionReceipt):Promise<void>{
+    return this.serialize(async()=>{
+      await commitRejectedDecision({projectId:receipt.projectId,lineageId:receipt.lineageId,proposalId:receipt.proposalId,receipt,ackStatus:"pending"});
+    });
+  }
+  markDecisionAcked(proposalId:string):Promise<void>{
+    return this.serialize(async()=>{
+      await markProposalAcked(this.durable.head.projectId,this.durable.head.lineageId,proposalId);
     });
   }
 }

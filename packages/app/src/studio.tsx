@@ -9,6 +9,7 @@ import type {ProjectRepository} from "./studio/projectRepository.js";
 import { PROJECT_KEY, loadProject } from "./studio/project.js";
 import { parseScript } from "@vnmaker/content";
 import {canonicalHash} from "@vnmaker/harness";
+import {recoverAcceptedHead} from "./studio/harness/applyProposal.js";
 import "./styles/global.css";
 import "./styles/studio.css";
 import "./styles/studio-modern.css";
@@ -56,8 +57,12 @@ if (!navigator.locks) {
         const saved=await readSavedProject(id);
         const loaded=saved?await projectRepository.open(id):await projectRepository.create(id,initial.script);
         if(await canonicalHash(initial.script)!==loaded.snapshot.head.scriptHash){
-          initial.script=loaded.snapshot.script;
-          initial.error="빠른 복구 원고와 보관함의 저장본이 다릅니다. 보관함 저장본을 화면에 표시했습니다. 복구 원문도 유지했으니 원문을 백업하거나 보관함 원고로 복구하세요.";
+          if(await recoverAcceptedHead(loaded,initial.script)){
+            repository=loaded;initial.script=loaded.snapshot.script;projectRepository.activate(loaded);
+          }else{
+            initial.script=loaded.snapshot.script;
+            initial.error="빠른 복구 원고와 보관함의 저장본이 다릅니다. 보관함 저장본을 화면에 표시했습니다. 복구 원문도 유지했으니 원문을 백업하거나 보관함 원고로 복구하세요.";
+          }
         }else{repository=loaded;initial.script=loaded.snapshot.script;projectRepository.activate(loaded);}
       }catch(error){initial.error=error instanceof Error?error.message:String(error);}
     }

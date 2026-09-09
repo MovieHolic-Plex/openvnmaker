@@ -7,6 +7,7 @@ export const FIXTURE_MODULES = [
   "/src/studio/projectFolder.ts",
   "/src/storage/projectAssets.ts",
   "/src/studio/projectRepository.ts",
+  "/src/studio/harness/applyProposal.ts",
 ] as const;
 
 export type FixtureModulePath = (typeof FIXTURE_MODULES)[number];
@@ -17,6 +18,7 @@ const SOURCE = {
   "/src/studio/projectFolder.ts": "src/studio/projectFolder.ts",
   "/src/storage/projectAssets.ts": "src/storage/projectAssets.ts",
   "/src/studio/projectRepository.ts": "src/studio/projectRepository.ts",
+  "/src/studio/harness/applyProposal.ts": "src/studio/harness/applyProposal.ts",
 } as const satisfies Record<FixtureModulePath, string>;
 
 function asManifest(value: unknown, path: string): Record<string, unknown> {
