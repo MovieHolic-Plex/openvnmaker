@@ -5,5 +5,5 @@
     "noEmit": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["./**/*.ts", "../../../tools/qa/harness-fixtures*.ts"]
+  "include": ["./**/*.ts", "../../../tools/qa/harness-fixtures*.ts", "../../../tools/qa/harness-native*.ts"]
 }

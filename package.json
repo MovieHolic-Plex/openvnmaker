@@ -13,7 +13,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck && pnpm typecheck:harness-fixtures",
     "typecheck:harness-fixtures": "tsc --noEmit -p tests/fixtures/harness/tsconfig.json",
-    "test:harness-fixtures": "node --test --import tsx tests/fixtures/harness/*.test.ts tools/qa/harness-fixtures.test.ts",
+    "test:harness-fixtures": "node --test --import tsx tests/fixtures/harness/*.test.ts tools/qa/harness-fixtures.test.ts tools/qa/harness-native.test.ts",
     "qa:harness-fixtures": "tsx tools/qa/harness-fixtures.ts",
     "test": "pnpm -r test && node tools/audio-check.mjs && node --test tools/momus-gate-doctor.test.mjs tools/audio/reproducibility.test.mjs && pnpm test:harness-fixtures",
     "e2e": "playwright test",

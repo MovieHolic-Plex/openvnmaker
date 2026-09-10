@@ -3,8 +3,10 @@ import {createPortal} from "react-dom";
 import type {VnScript} from "@vnmaker/content";
 import {buildExportBundle} from "./exportBundle.js";
 import {Icon} from "./Icon.js";
+import {assertReleaseBytesPresent,attachReleaseManifest,nativeBuildManuscript} from "./nativeRelease.js";
 import {NativeBaselineSelector,selectedNativeBaseline} from "./NativeBaselineSelector.js";
 import {NativeBuildComparison} from "./NativeCompatibilityReview.js";
+import {projectRepository} from "./projectRepository.js";
 import "./export-bundle.css";
 import "./native-build.css";
 
@@ -39,13 +41,15 @@ export function NativeBuildButton({script,onChange}:{script:VnScript;onChange:(s
   async function build(){
     const controller=new AbortController();preparation.current=controller;setPreparing(true);setError("");setJob(null);setJobId(null);localStorage.removeItem(KEY);
     try{
-      const release=script.nativeSaveId?script:{...script,nativeSaveId:crypto.randomUUID().replaceAll("-","")};
-      const baseline=selectedNativeBaseline(release.nativeSaveId!);
-      if(release!==script)onChange(release);
-      const bundle=await buildExportBundle(release,{signal:controller.signal,onProgress:progress=>setMessage(progress.phase==="assets"?`원본 확인 · ${progress.complete} / ${progress.total}`:"현재 편집본 준비 중")});
+      const {snapshot,manuscript,pinnedSaveId}=await nativeBuildManuscript(script,{repository:projectRepository.current(),readAssetBytes:async path=>{const response=await fetch(path,{signal:controller.signal,cache:"no-store",redirect:"error"});return response.ok?new Uint8Array(await response.arrayBuffer()):undefined;}});
+      const baseline=selectedNativeBaseline(pinnedSaveId);
+      if(!script.nativeSaveId)onChange({...script,nativeSaveId:pinnedSaveId});
+      const bundle=await buildExportBundle(manuscript,{signal:controller.signal,onProgress:progress=>setMessage(progress.phase==="assets"?`원본 확인 · ${progress.complete} / ${progress.total}`:"현재 편집본 준비 중")});
       if(bundle.blob.size>512*1024*1024)throw new Error("현재 네이티브 빌드는 512MB 이하의 게임 묶음을 지원합니다.");
+      const archive=new Uint8Array(await bundle.blob.arrayBuffer());
+      await assertReleaseBytesPresent(archive,snapshot);
       setMessage("로컬 빌드 서버에 전송 중");
-      const result=await request("/jobs",{method:"POST",headers:{"Content-Type":"application/zip",...(baseline?{"X-VNMaker-Baseline":baseline}:{})},body:bundle.blob,signal:controller.signal});
+      const result=await request("/jobs",{method:"POST",headers:{"Content-Type":"application/zip",...(baseline?{"X-VNMaker-Baseline":baseline}:{})},body:attachReleaseManifest(archive,snapshot),signal:controller.signal});
       setJobId(result.id);localStorage.setItem(KEY,result.id);setJob({id:result.id,phase:"upload",log:""});
     }catch(error){if(!controller.signal.aborted)setError(error instanceof Error?error.message:String(error));}
     finally{preparation.current=null;setPreparing(false);}

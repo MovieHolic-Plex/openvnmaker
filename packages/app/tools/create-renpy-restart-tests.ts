@@ -2,6 +2,7 @@ import {readFile,writeFile} from "node:fs/promises";
 import path from "node:path";
 import {applyChoiceFlags,choiceAllowed,lineAllowed,parseScript,type Scene,type StoryFlags} from "@vnmaker/content";
 import {backgroundAt,bgmAt,cgAt,spritesAt,framingAt} from "../src/engine/selectors.js";
+import {VN_WAIT_READY_LINE} from "../src/studio/nativeParity.js";
 import {renpyText} from "../src/studio/renpyScript.js";
 if(!process.argv[2])throw new Error("Pass a disposable extracted native game directory.");
 const directory=path.resolve(process.argv[2]);
@@ -41,9 +42,9 @@ checkpoints.forEach(({scene,flags,route,affection},index)=>{
     `    assert eval vn_framing == ${json(framingAt(scene,last,flags))}`,
     `    assert eval {key: value for key, value in vn_slots.items() if value.get("character")} == ${json(Object.fromEntries(spritesAt(scene,last,flags).map(actor=>[actor.slot,actor])))}`,
     `    assert eval _history_list[-1].what == ${renpyText(lastLine.text)}`,
-    '    pause .5',
+    VN_WAIT_READY_LINE,
     `    assert eval renpy.music.get_playing() == ${json(bgmAt(scene,last,flags)?`assets/audio/bgm/${bgmAt(scene,last,flags)}.mp3`:null)}`,
-    `    move ${renpyText(first.text)}`,'    pause .1',
+    `    move ${renpyText(first.text)}`,VN_WAIT_READY_LINE,
     `    screenshot "checkpoint-${number}.png" max_pixel_difference 0.001 crop (0, 0, 900, 400)`
   ];
   const setup=(name:string)=>[`testcase ${name}_${number}:`,'    $ _test.timeout = 90','    $ _test.transition_timeout = .01','    $ _test.screenshot_directory = "tests/restart-qa"','    $ preferences.text_cps = 0'];
@@ -53,7 +54,7 @@ checkpoints.forEach(({scene,flags,route,affection},index)=>{
   // ShowMenu's nested context can leave its completed EndPhase spinning.
   out.push('    advance until screen "choice"',...common,'    run ShowMenu("save")','    run FileSave(1, confirm=False)','    assert eval renpy.can_load("1-1")','    click "돌아가기"','    assert screen "choice"','');
   out.push(...setup('resume'),'    assert screen "main_menu"','    assert eval renpy.can_load("1-1")','    run FileLoad(1, confirm=False)',...common,
-    `    click ${renpyText(first.text)}`,'    pause .6',`    assert ${renpyText(nextLine.text)}`,`    assert eval vn_flags == ${json(firstFlags)}`,
+    `    click ${renpyText(first.text)}`,VN_WAIT_READY_LINE,`    assert ${renpyText(nextLine.text)}`,`    assert eval vn_flags == ${json(firstFlags)}`,
     '    click "되감기"',...common,'');
 });
 await writeFile(path.join(directory,"game/vn_qa.rpy"),out.join("\n"));

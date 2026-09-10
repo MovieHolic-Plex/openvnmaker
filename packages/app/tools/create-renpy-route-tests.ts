@@ -1,6 +1,7 @@
 import {readFile,writeFile} from "node:fs/promises";
 import path from "node:path";
 import {applyChoiceFlags,choiceAllowed,parseScript,type StoryFlags} from "@vnmaker/content";
+import {VN_WAIT_READY_LINE} from "../src/studio/nativeParity.js";
 import {renpyText} from "../src/studio/renpyScript.js";
 const directory=path.resolve(process.argv[2]??"");
 const script=parseScript(JSON.parse(await readFile(path.join(directory,"game/project.json"),"utf8")));
@@ -20,7 +21,7 @@ const lines=["testsuite global:","    teardown:","        exit",""];
 routes.forEach((route,index)=>{
   lines.push(`testcase route_${index+1}:`,"    $ _test.timeout = 90","    $ _test.transition_timeout = .01","    $ preferences.text_cps = 0","    run Start()");
   for(const choice of route.choices)lines.push('    advance until screen "choice"',`    click ${renpyText(choice)}`);
-  lines.push('    advance until screen "vn_ending"',"    pause .3",`    assert eval renpy.get_widget("vn_ending", "ending_title").get_all_text() == ${JSON.stringify(route.ending)}`,`    assert eval vn_flags == json.loads(${JSON.stringify(JSON.stringify(route.flags))})`,`    screenshot "route-${index+1}-ending.png"`,"");
+  lines.push('    advance until screen "vn_ending"',VN_WAIT_READY_LINE,`    assert eval renpy.get_widget("vn_ending", "ending_title").get_all_text() == ${JSON.stringify(route.ending)}`,`    assert eval vn_flags == json.loads(${JSON.stringify(JSON.stringify(route.flags))})`,`    screenshot "route-${index+1}-ending.png"`,"");
 });
 await writeFile(path.join(directory,"game/vn_qa.rpy"),lines.join("\n"));
 console.log(`Wrote ${routes.length} native route tests.`);

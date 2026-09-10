@@ -2,6 +2,7 @@ import {readFile,writeFile} from "node:fs/promises";
 import path from "node:path";
 import {applyChoiceFlags,parseScript,lineAllowed} from "@vnmaker/content";
 import {backgroundAt,bgmAt,cgAt,spritesAt,framingAt} from "../src/engine/selectors.js";
+import {VN_WAIT_READY_LINE} from "../src/studio/nativeParity.js";
 import {renpyText} from "../src/studio/renpyScript.js";
 if(!process.argv[2])throw new Error("Pass a native project directory.");
 const directory=path.resolve(process.argv[2]);
@@ -29,21 +30,21 @@ const restoredChecks=[
   `    assert eval vn_cg == ${json(cgAt(scene,last,before)??null)}`,
   `    assert eval vn_framing == ${JSON.stringify(framingAt(scene,last,before))}`,
   `    assert eval {key: value for key, value in vn_slots.items() if value.get("character")} == ${json(actors)}`,
-  '    pause .5',
+  VN_WAIT_READY_LINE,
   '    $ renpy.log("QA music=" + repr(renpy.music.get_playing()))',
   `    assert eval renpy.music.get_playing() == ${json(music?`assets/audio/bgm/${music}.mp3`:null)}`,
   `    move ${renpyText(first.text)}`,
-  '    pause .1',
+  VN_WAIT_READY_LINE,
   '    screenshot "choice-state.png" max_pixel_difference 0.001 crop (0, 0, 900, 400)',
 ];
 await writeFile(path.join(directory,"game/vn_qa.rpy"),[
   "testsuite global:","    teardown:","        exit","",
   "testcase save_roundtrip:","    $ _test.timeout = 30","    $ _test.transition_timeout = .01",'    $ _test.screenshot_directory = "tests/save-qa"',"    $ preferences.text_cps = 0","    run Start()",'    advance until screen "choice"',
-  ...restoredChecks,'    run ShowMenu("save")',"    pause .3","    run FileSave(1, confirm=False)",'    assert eval renpy.can_load("1-1")','    screenshot "saved-before-choice.png"','    click "돌아가기"',
+  ...restoredChecks,'    run ShowMenu("save")',VN_WAIT_READY_LINE,"    run FileSave(1, confirm=False)",'    assert eval renpy.can_load("1-1")','    screenshot "saved-before-choice.png"','    click "돌아가기"',
   `    click ${renpyText(first.text)}`,`    assert ${renpyText(firstLine.text)}`,`    assert eval vn_flags == ${json(firstFlags)}`,
   '    click "되감기"',...restoredChecks,'    screenshot "rolled-back-choice.png"',
   `    click ${renpyText(second.text)}`,`    assert ${renpyText(secondLine.text)}`,`    assert eval vn_flags == ${json(secondFlags)}`,
-  '    run ShowMenu("load")',"    pause .3","    run FileLoad(1, confirm=False)",...restoredChecks,'    screenshot "loaded-original-choice.png"',
+  '    run ShowMenu("load")',VN_WAIT_READY_LINE,"    run FileLoad(1, confirm=False)",...restoredChecks,'    screenshot "loaded-original-choice.png"',
   `    click ${renpyText(first.text)}`,`    assert ${renpyText(firstLine.text)}`,`    assert eval vn_flags == ${json(firstFlags)}`,
   '    screenshot "continued-after-load.png"',""
 ].join("\n"));
