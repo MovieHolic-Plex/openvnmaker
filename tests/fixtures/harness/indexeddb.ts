@@ -14,7 +14,10 @@ export async function probeIndexedDb(options: TransactionProbe) {
         signal.addEventListener("abort", listener.abort, { once: true });
         request.addEventListener("success", () => { signal.removeEventListener("abort", listener.abort); resolve(request.result); }, { once: true });
         request.addEventListener("error", () => { signal.removeEventListener("abort", listener.abort); reject(request.error); }, { once: true });
-        request.addEventListener("blocked", () => { signal.removeEventListener("abort", listener.abort); reject(new DOMException("Fixture database blocked", "InvalidStateError")); }, { once: true });
+        // blocked 은 실패가 아니다. 다른 연결이 아직 닫히는 중이라는 뜻이며, 명세상
+        // 그 연결이 닫히면 success 나 error 가 이어서 발생한다. 여기서 즉시 거절하면
+        // 동시 실행에서 간헐적으로 깨진다. deadline 은 signal 이 계속 지킨다.
+        request.addEventListener("blocked", () => { /* await the follow-up success/error */ }, { once: true });
       });
     },
   };
