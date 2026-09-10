@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildImageRequest, collectImages, parseSseChunks } from "../src/cca/images.js";
+import { buildImageRequest, collectImages, generateTinyPng, parseSseChunks } from "../src/cca/images.js";
+import { readArray, readObject } from "../src/cca/production-util.js";
 import { extensionFor, sanitizeName } from "../src/images/store.js";
 import { createApp } from "../src/app.js";
 import { createMemoryStore } from "../src/auth/credentials.js";
@@ -31,6 +32,27 @@ test("requestId 는 요청마다 다르다", () => {
   const a = buildImageRequest({ prompt: "p", projectId: "x" }) as Record<string, unknown>;
   const b = buildImageRequest({ prompt: "p", projectId: "x" }) as Record<string, unknown>;
   assert.notEqual(a["requestId"], b["requestId"]);
+});
+
+test("참조 이미지는 prompt 옆에 inlineData 로 실린다", () => {
+  const body = buildImageRequest({
+    prompt: "recolor", projectId: "x", requestId: "probe-image-ref-1",
+    references: [{ mimeType: "image/png", data: "AAAB" }],
+  });
+  const contents = readArray(readObject(readObject(body)?.["request"])?.["contents"]);
+  const parts = readArray(readObject(contents[0])?.["parts"]);
+  assert.equal(body["requestId"], "probe-image-ref-1");
+  assert.equal(readObject(parts[0])?.["text"], "recolor");
+  assert.deepEqual(readObject(readObject(parts[1])?.["inlineData"]), { mimeType: "image/png", data: "AAAB" });
+  const bare = buildImageRequest({ prompt: "p", projectId: "x" });
+  const bareContents = readArray(readObject(readObject(bare)?.["request"])?.["contents"]);
+  assert.equal(readArray(readObject(bareContents[0])?.["parts"]).length, 1);
+});
+
+test("tiny png is generated in-process", () => {
+  const png = generateTinyPng();
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(png.byteLength > 32, true);
 });
 
 const sse = [

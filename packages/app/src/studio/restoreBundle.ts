@@ -38,10 +38,10 @@ export async function readProjectBundle(file: Blob): Promise<{ script: VnScript;
       unzip(bytes, { filter(entry) {
         if (++count > 12000 || !safePath(entry.name) || names.has(entry.name)) throw new Error("중복되거나 안전하지 않은 ZIP 경로입니다.");
         names.add(entry.name);
-        const wanted = entry.name === "project.json" || /^assets\/.+\.(png|jpg|jpeg|webp|mp3|ogg|wav)$/i.test(entry.name);
+        const wanted = entry.name === "project.json" || entry.name === "release.json" || /^assets\/.+\.(png|jpg|jpeg|webp|mp3|ogg|wav)$/i.test(entry.name);
         if (!wanted) return false;
         total += entry.originalSize;
-        if (!Number.isSafeInteger(entry.originalSize) || entry.originalSize < 0 || entry.originalSize > 64 * 1024 * 1024 || total > MAX_BYTES || entry.name === "project.json" && entry.originalSize > 8 * 1024 * 1024) throw new Error("압축을 푼 작품의 크기 제한을 초과했습니다.");
+        if (!Number.isSafeInteger(entry.originalSize) || entry.originalSize < 0 || entry.originalSize > 64 * 1024 * 1024 || total > MAX_BYTES || (entry.name === "project.json" || entry.name === "release.json") && entry.originalSize > 8 * 1024 * 1024) throw new Error("압축을 푼 작품의 크기 제한을 초과했습니다.");
         return true;
       } }, (error, result) => error ? reject(error) : resolve(result));
     } catch (error) { reject(error); }

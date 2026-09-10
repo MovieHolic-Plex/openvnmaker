@@ -1,0 +1,45 @@
+.harness-workspace { min-width: 0; max-width: 100%; overflow: auto; padding: 18px 20px 28px; display: grid; gap: 14px; }
+.harness-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.harness-head [data-scope="source"], .harness-head [data-scope="candidate"] { border: 1px solid #ffffff18; border-radius: 6px; padding: 6px 10px; }
+.harness-head [data-scope="source"] { color: #c5d4c8; }
+.harness-head [data-scope="candidate"] { color: #d8c4f5; }
+.harness-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.harness-tabs button { border: 1px solid #ffffff14; background: #ffffff04; color: #b9b1c4; border-radius: 6px; padding: 8px 12px; }
+.harness-tabs button.is-active { color: #d8c4f5; border-color: #c3a8ef40; background: #b696eb18; }
+.harness-workspace textarea, .harness-workspace input, .harness-workspace select { width: 100%; max-width: 100%; background: #15141c; color: inherit; border: 1px solid #ffffff14; border-radius: 6px; padding: 8px; }
+.harness-workspace label { display: grid; gap: 6px; }
+.harness-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 10px; letter-spacing: .02em; }
+.harness-badge-success { background: #87cbbb24; color: #9be0d2; }
+.harness-badge-warning { background: #d4a36a24; color: #e3c08a; }
+.harness-badge-error { background: #bb625824; color: #e1acaa; }
+.harness-badge-incomplete, .harness-badge-limit { background: #ffffff0c; color: #b7b0c0; }
+.harness-badge-info { background: #c5acf724; color: #d8c4f5; }
+.harness-badge-row, .harness-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.harness-lists, .harness-diffs, .harness-quality, .harness-reuse, .harness-env, .harness-review, .harness-plan, .harness-asset { display: grid; gap: 10px; min-width: 0; }
+.harness-inspect { min-height: 160px; border-radius: 8px; display: grid; place-items: center; overflow: hidden; }
+.harness-inspect[data-bg="checkerboard"] { background: repeating-conic-gradient(#c8c4ce 0 25%, #f4f1f8 0 50%) 50% / 16px 16px; }
+.harness-inspect[data-bg="white"] { background: #fff; color: #222; }
+.harness-inspect[data-bg="black"] { background: #111; }
+.harness-inspect[data-bg="stage"] { background: #1a1524; }
+.harness-inspect img { max-width: 100%; max-height: 180px; object-fit: contain; }
+.harness-asset .is-active { color: #d8c4f5; border-color: #c3a8ef40; }
+.harness-plan-grid, .harness-plan-canon { display: grid; gap: 8px; min-width: 0; }
+.harness-plan .is-active { color: #d8c4f5; border-color: #c3a8ef40; }
+.harness-workspace ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.harness-workspace li { overflow-wrap: anywhere; }
+.harness-window { overflow: auto; min-width: 0; contain: content; }
+.harness-window ul { gap: 0; }
+.harness-window li { min-height: 0; }
+.harness-window button { width: 100%; text-align: left; display: flex; justify-content: space-between; gap: 8px; height: 100%; }
+.harness-window .is-selected, .harness-lists .is-selected { outline: 1px solid #c3a8ef80; background: #b696eb18; }
+.harness-window-pad { flex: none; pointer-events: none; }
+.harness-preview { position: fixed; inset: 0; z-index: 80; background: #050608f2; display: grid; grid-template-rows: auto 1fr auto; min-width: 0; }
+.harness-preview-banner { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; }
+.harness-preview .stage { min-height: 0; }
+.harness-boundary { position: absolute; inset: auto 8% 12%; z-index: 90; background: #1c1b24; border: 1px solid #c5acf744; border-radius: 10px; padding: 16px; display: grid; gap: 8px; }
+.harness-placeholder { position: absolute; inset: 12% 18%; z-index: 5; display: grid; place-items: center; background: repeating-conic-gradient(#222 0 25%, #111 0 50%); color: #eee; }
+@media (max-width: 844px) {
+  .harness-workspace { padding: 12px; overflow-x: auto; }
+  .harness-head, .harness-tabs, .harness-preview-banner { overflow-x: auto; }
+  .harness-window { max-height: 240px; }
+}

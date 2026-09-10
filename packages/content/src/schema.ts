@@ -148,6 +148,8 @@ export interface AudioAsset {
 
 /** Reusable artwork owned by the project. URLs are served locally. */
 export interface Artwork {
+  /** Per-image policy; omission retains the legacy character chroma-key behavior. */
+  readonly compositing?: "alpha" | "legacy-chroma-key" | "opaque";
   readonly provenance?: MediaProvenance;
   readonly id: string;
   readonly name: string;

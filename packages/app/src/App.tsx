@@ -1,5 +1,5 @@
 import {manuscriptKey} from "./storage/manuscriptKey.js";
-import { parseScript, script as bundledScript } from "@vnmaker/content";
+import { script as bundledScript } from "@vnmaker/content";
 import type { VnScript } from "@vnmaker/content";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { BgmPlayer } from "./audio/BgmPlayer.js";
@@ -16,7 +16,8 @@ import { CreditsPanel } from "./components/CreditsPanel.js";
 import { TitleScreen } from "./components/TitleScreen.js";
 import { reduce } from "./engine/reducer.js";
 import { currentLine, currentScene, backgroundAt, bgmAt, cgAt, framingAt, speakerColor, speakerName, spritesAt } from "./engine/selectors.js";
-import { initialState, type SaveData, type VnAction, type VnState } from "./engine/types.js";
+import { type SaveData, type VnAction, type VnState } from "./engine/types.js";
+import { studioPreviewBoot } from "./previewBoot.js";
 import { useTypewriter } from "./hooks/useTypewriter.js";
 import { defaultSettings, latestSave, listSlots, loadSettings, readAutoSlot, readSlot, writeAutoSlot, writeSave, writeSettings, writeSlot, type Settings, type SlotSave } from "./storage/persist.js";
 
@@ -41,12 +42,12 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   const script = initialScript ?? bundledScript;
   const isStudioPreview = !standalone && new URLSearchParams(window.location.search).get("preview") === "1";
   const saveScope = [projectNamespace,isStudioPreview ? "preview" : ""].filter(Boolean).join(":");
-  const scriptRef = useRef<VnScript>(script);
-  const [vnScript, setVnScript] = useState<VnScript>(script);
+  const [previewBoot] = useState(() => studioPreviewBoot(isStudioPreview, script));
+  const scriptRef = useRef<VnScript>(previewBoot.script);
+  const [vnScript, setVnScript] = useState<VnScript>(previewBoot.script);
   const [state, dispatch] = useReducer(
     (s: VnState, a: VnAction) => reduce(scriptRef.current, s, a),
-    script,
-    initialState,
+    previewBoot.state,
   );
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [voiceDone,setVoiceDone]=useState("");
@@ -163,22 +164,6 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
     setVnScript(next);
     dispatch({ type: "start" });
   }, []);
-
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("vnmaker.previewScript");
-      if (!raw || !isStudioPreview) return;
-      const parsed = parseScript(JSON.parse(raw));
-      bootScript(parsed);
-      const position = JSON.parse(sessionStorage.getItem("vnmaker.previewPosition") ?? "null") as { sceneId?: string; lineIndex?: number; flags?: VnState["flags"] } | null;
-      const previewScene = parsed.scenes.find(row => row.id === position?.sceneId);
-      if (previewScene && typeof position?.lineIndex === "number") {
-        dispatch({ type: "restore", sceneId: previewScene.id, lineIndex: Math.max(0, Math.min(position.lineIndex, previewScene.lines.length - 1)), affection: 0, ...(position.flags ? {flags:position.flags} : {}) });
-      }
-    } catch {
-      // 깨진 미리보기 JSON 은 무시한다.
-    }
-  }, [bootScript, isStudioPreview]);
 
   const backToTitle = useCallback(() => {
     scriptRef.current = script;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { resolveRuntimeAsset } from "../storage/runtimeBase.js";
 interface Props { src:string; alt:string; chromaKey?:string|undefined; className?:string; testId?:string; title?:string; }
 let compositor: { canvas: HTMLCanvasElement; gl: WebGLRenderingContext } | undefined;
 function getCompositor() {
@@ -23,6 +24,7 @@ function getCompositor() {
 /** Source bitmaps stay unchanged. One shared GPU compositor renders keyed game
  * art into display canvases; thumbnails do not allocate a WebGL context each. */
 export function ArtImage({src,alt,chromaKey,className,testId,title}:Props){
+  const resolvedSrc=resolveRuntimeAsset(src);
   const canvas=useRef<HTMLCanvasElement>(null);const[failed,setFailed]=useState(false);
   useEffect(()=>{
     if(!chromaKey || !canvas.current)return;
@@ -48,11 +50,11 @@ export function ArtImage({src,alt,chromaKey,className,testId,title}:Props){
       if(frame!==undefined)return;
       frame=requestAnimationFrame(()=>{frame=undefined;if(image.complete&&image.naturalWidth)draw();});
     };
-    image.onload=queueDraw;image.onerror=()=>{if(alive)setFailed(true);};image.src=src;
+    image.onload=queueDraw;image.onerror=()=>{if(alive)setFailed(true);};image.src=resolvedSrc;
     // Canvas dimensions affect layout; write them outside ResizeObserver delivery.
     const observer=new ResizeObserver(queueDraw);observer.observe(node);
     return()=>{alive=false;observer.disconnect();if(frame!==undefined)cancelAnimationFrame(frame);};
-  },[src,chromaKey]);
-  if(!chromaKey)return <img src={src} alt={alt} className={className} data-testid={testId} title={title} loading="lazy"/>;
-  return <canvas ref={canvas} className={className} data-testid={testId} data-src={src} data-art-error={failed||undefined} role="img" aria-label={alt||"캐릭터 원화"} title={failed?"원화를 표시하지 못했습니다.":title}/>;
+  },[resolvedSrc,chromaKey]);
+  if(!chromaKey)return <img src={resolvedSrc} alt={alt} className={className} data-testid={testId} title={title} loading="lazy"/>;
+  return <canvas ref={canvas} className={className} data-testid={testId} data-src={resolvedSrc} data-art-error={failed||undefined} role="img" aria-label={alt||"캐릭터 원화"} title={failed?"원화를 표시하지 못했습니다.":title}/>;
 }

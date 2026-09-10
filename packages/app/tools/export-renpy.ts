@@ -7,6 +7,7 @@ import {readProjectBundle} from "../src/studio/restoreBundle.js";
 import {generateRenpyScript,RENPY_DIRECTION_RUNTIME,renpyText} from "../src/studio/renpyScript.js";
 import {RENPY_PLAYER_THEME} from "../src/studio/renpyTheme.js";
 import {mediaCredits} from "../src/studio/mediaCredits.js";
+import {NATIVE_BUILD_CLASSIFY,prepareNativeSource,verifySnapshotBytes} from "../src/studio/nativeRelease.js";
 import {writeNativeFontNotices} from "../native-font-notices.js";
 
 const [bundleArg,sdkArg,destinationArg,baselineOption,baselineArg,...extra]=process.argv.slice(2);
@@ -15,38 +16,42 @@ if(extra.length||baselineOption&&!(["--previous-build","--history-root"].include
 const destination=path.resolve(destinationArg),sdk=path.resolve(sdkArg);
 if(await stat(destination).then(()=>true,()=>false))throw new Error("출력 폴더가 이미 있습니다. 새 폴더를 지정하세요.");
 const {script,files}=await readProjectBundle(new Blob([await readFile(path.resolve(bundleArg))]));
-const native=generateRenpyScript(script);
-const {identity,manuscriptHash,stable}=nativeIdentity(script);
+const prepared=prepareNativeSource({script,files,...(files["release.json"]?{releaseJson:files["release.json"]}:{})});
+if(prepared.release)await verifySnapshotBytes(prepared.release,prepared.files);
+const native=generateRenpyScript(prepared.manuscript);
+const {identity,manuscriptHash,stable}=nativeIdentity(prepared.manuscript);
 const baseline=baselineOption==="--previous-build"?path.resolve(baselineArg!):baselineOption==="--history-root"&&stable?await latestNativeBaseline(path.resolve(baselineArg!),identity):undefined;
 const game=path.join(destination,"game");
 await mkdir(game,{recursive:true});
 await writeNativeFontNotices(sdk,destination);
 if(process.platform!=="win32")throw new Error("현재 네이티브 프리뷰 빌드 도구는 Windows에서 검증 중입니다.");
 execFileSync(path.join(sdk,"lib/py3-windows-x86_64/python.exe"),[path.join(sdk,"renpy.py"),"launcher","generate_gui",destination,"--template",path.join(sdk,"gui"),"--width","1280","--height","720","--accent","#a5e5d7","--boring","#151923","--language","korean","--start"],{cwd:sdk,stdio:"inherit",windowsHide:true});
-for(const [name,bytes] of Object.entries(files)) {
-  if(name!=="project.json"&&!name.startsWith("assets/"))continue;
+for(const [name,bytes] of Object.entries(prepared.files)) {
+  if(name!=="project.json"&&name!=="release.json"&&!name.startsWith("assets/"))continue;
   const target=path.join(game,name);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,bytes);
 }
+await writeFile(path.join(game,"project.json"),JSON.stringify(prepared.manuscript,null,2));
+await writeFile(path.join(destination,"native-parity.json"),JSON.stringify(prepared.parity,null,2));
 await mkdir(path.join(game,"fonts"),{recursive:true});
-const credits=mediaCredits(script,Object.keys(files).filter(name=>name.startsWith("assets/")).map(name=>`/${name}`));
+const credits=mediaCredits(prepared.manuscript,Object.keys(prepared.files).filter(name=>name.startsWith("assets/")).map(name=>`/${name}`));
 await writeFile(path.join(game,"MEDIA_CREDITS.json"),credits.json);
 await writeFile(path.join(game,"MEDIA_CREDITS.txt"),credits.text);
 await cp(path.join(sdk,"sdk-fonts/SourceHanSansLite.ttf"),path.join(game,"fonts/SourceHanSansLite.ttf"));
 await writeFile(path.join(game,"script.rpy"),native);
-if(baseline)console.log("Previous release baseline:",await installNativeBaseline(destination,identity,baseline,script));
+if(baseline)console.log("Previous release baseline:",await installNativeBaseline(destination,identity,baseline,prepared.manuscript));
 await writeFile(path.join(game,"vn_direction.rpy"),RENPY_DIRECTION_RUNTIME);
 // Retain the SDK's complete save/load/accessibility screens; override project-specific values.
 let options=await readFile(path.join(game,"options.rpy"),"utf8");
-options=options.replace(/^define config.name = .*$/m,`define config.name = ${renpyText(script.title)}`).replace(/^define build.name = .*$/m,`define build.name = "vnmaker-${identity}"`).replace(/^define config.save_directory = .*$/m,`define config.save_directory = "vnmaker-${identity}"`);
+options=options.replace(/^define config.name = .*$/m,`define config.name = ${renpyText(prepared.manuscript.title)}`).replace(/^define build.name = .*$/m,`define build.name = "vnmaker-${identity}"`).replace(/^define config.save_directory = .*$/m,`define config.save_directory = "vnmaker-${identity}"`);
 await writeFile(path.join(game,"options.rpy"),options);
-await writeFile(path.join(game,"vn_build.rpy"),'init python:\n    build.classify("game/vn_qa.*", None)\n    build.classify("game/testcases.*", None)\n    build.classify("tests/**", None)\n');
+await writeFile(path.join(game,"vn_build.rpy"),NATIVE_BUILD_CLASSIFY);
 let gui=await readFile(path.join(game,"gui.rpy"),"utf8");
 gui=gui.replace(/"DejaVuSans.ttf"/g,'"fonts/SourceHanSansLite.ttf"').replace(/"#00b8c3"/g,'"#a5e5d7"');
 await writeFile(path.join(game,"gui.rpy"),gui);
 await writeFile(path.join(game,"vn_style.rpy"),RENPY_PLAYER_THEME);
-await writeFile(path.join(destination,"README.txt"),`${script.title}\n\nVN Maker experimental Ren'Py project.\nOpen this directory in Ren'Py 8.5.3, run lint, then Build Distributions.\nThis is not a Steam upload or a signed release. Validate every route, save/load, rollback, fonts and image compositing before shipping.\nThe SDK GUI and font retain their upstream licenses. See the SDK LICENSE and licenses directory.\nNative release ID: ${identity}\nStable release identity: ${stable}\nManuscript SHA-256: ${manuscriptHash}\nKeeping the save directory does not guarantee save compatibility after story changes. Test old saves against every update.\n`);
+await writeFile(path.join(destination,"README.txt"),`${prepared.manuscript.title}\n\nVN Maker experimental Ren'Py project.\nOpen this directory in Ren'Py 8.5.3, run lint, then Build Distributions.\nThis is not a Steam upload or a signed release. Validate every route, save/load, rollback, fonts and image compositing before shipping.\nThe SDK GUI and font retain their upstream licenses. See the SDK LICENSE and licenses directory.\nNative release ID: ${identity}\nStable release identity: ${stable}\nManuscript SHA-256: ${manuscriptHash}\nKeeping the save directory does not guarantee save compatibility after story changes. Test old saves against every update.\n`);
 for(const name of ["LICENSE","LICENSE.txt","licenses"])if(await stat(path.join(sdk,name)).then(()=>true,()=>false))await cp(path.join(sdk,name),path.join(destination,name),{recursive:true});
 await cp(new URL("../../../LICENSE",import.meta.url),path.join(destination,"VNMAKER-LICENSE.txt"));
 execFileSync(path.join(sdk,"lib/py3-windows-x86_64/python.exe"),[path.join(sdk,"renpy.py"),destination,"gui_images"],{cwd:sdk,stdio:"inherit",windowsHide:true});
 await writeFile(path.join(destination,"release-identity.json"),JSON.stringify({version:1,identity,manuscriptHash,stable,saveDirectory:`vnmaker-${identity}`},null,2));
-console.log(JSON.stringify({destination,title:script.title,scenes:script.scenes.length,lines:script.scenes.reduce((sum,scene)=>sum+scene.lines.length,0),identity,manuscriptHash,stable},null,2));
+console.log(JSON.stringify({destination,title:prepared.manuscript.title,scenes:prepared.manuscript.scenes.length,lines:prepared.manuscript.scenes.reduce((sum,scene)=>sum+scene.lines.length,0),identity,manuscriptHash,stable},null,2));

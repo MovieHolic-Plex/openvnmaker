@@ -8,10 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "node --test --import tsx test/engine.test.ts test/hello.test.ts test/studio.test.ts test/production.test.ts test/assets.test.ts test/completion.test.ts test/export-bundle.test.ts test/scene-removal.test.ts test/authoring.test.ts test/audio-authoring.test.ts test/state-authoring.test.ts test/native-build-service.test.ts test/native-build-history.test.ts test/native-process.test.ts test/arithmetic.test.ts test/native-identity.test.ts test/native-release-baseline.test.ts test/native-compatibility.test.ts test/runtime-notices.test.ts test/native-font-notices.test.ts test/edition.test.ts"
+    "test": "node --test --import tsx test/apply-proposal.test.ts test/apply-recovery.test.ts test/arithmetic.test.ts test/asset-derivatives.test.ts test/asset-review.test.ts test/assets.test.ts test/audio-authoring.test.ts test/authoring-archive.test.ts test/authoring.test.ts test/candidate-preview.test.ts test/completion.test.ts test/edition.test.ts test/engine.test.ts test/export-bundle.test.ts test/harness-scale.test.ts test/hello.test.ts test/native-build-history.test.ts test/native-build-service.test.ts test/native-compatibility.test.ts test/native-font-notices.test.ts test/native-identity.test.ts test/native-parity.test.ts test/native-process.test.ts test/native-release-baseline.test.ts test/native-release.test.ts test/plan-editor.test.ts test/preview-boot.test.ts test/production.test.ts test/project-repository.test.ts test/release-snapshot.test.ts test/runtime-base.test.ts test/runtime-notices.test.ts test/scene-removal.test.ts test/slots.test.ts test/state-authoring.test.ts test/studio.test.ts test/web-fonts.test.ts test/web-release.test.ts"
   },
   "dependencies": {
     "@vnmaker/content": "workspace:*",
+    "@vnmaker/harness": "workspace:*",
     "@vnmaker/ir": "workspace:*",
     "fflate": "0.8.2",
     "react": "19.2.8",

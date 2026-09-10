@@ -27,6 +27,8 @@ export interface ImageRequestParams {
   readonly model?: string;
   readonly aspectRatio?: string;
   readonly imageSize?: string;
+  readonly requestId?: string;
+  readonly references?: readonly InlineImage[];
 }
 
 export interface InlineImage {
@@ -65,11 +67,18 @@ export function buildImageRequest(params: ImageRequestParams): Record<string, un
         }
       : undefined;
 
+  const parts = [
+    { text: params.prompt },
+    ...(params.references ?? []).map((image) => ({
+      inlineData: { mimeType: image.mimeType, data: image.data },
+    })),
+  ];
+
   return {
     project: params.projectId,
     model,
     request: {
-      contents: [{ role: "user", parts: [{ text: params.prompt }] }],
+      contents: [{ role: "user", parts }],
       systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
       generationConfig: {
         responseModalities: ["IMAGE"],
@@ -79,9 +88,17 @@ export function buildImageRequest(params: ImageRequestParams): Record<string, un
       safetySettings: SAFETY_SETTINGS,
     },
     requestType: "agent",
-    requestId: `vnmaker-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+    requestId: params.requestId ?? `vnmaker-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
     userAgent: "antigravity",
   };
+}
+
+/** 1x1 PNG generated in-process. Not a repo asset and not fetched. */
+export function generateTinyPng(): Uint8Array {
+  return Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
 }
 
 /**

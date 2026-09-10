@@ -23,9 +23,10 @@ export interface HistoryState {
   readonly group?: string | undefined;
   readonly at?: number;
 }
-export type HistoryAction = { type: "edit"; script: VnScript; group?: string; at: number } | { type: "undo" | "redo" } | {type:"reset";script:VnScript};
+export type HistoryAction = { type: "edit"; script: VnScript; group?: string; at: number } | { type: "undo" | "redo" } | {type:"reset";script:VnScript} | { type: "apply"; script: VnScript; receiptId: string };
 export function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
   if(action.type==="reset")return {past:[],present:action.script,future:[]};
+  if(action.type==="apply")return {past:[...state.past.slice(-59),state.present],present:action.script,future:[],group:`apply:${action.receiptId}`,at:0};
   if (action.type === "undo") {
     const previous = state.past.at(-1);
     return previous ? { past: state.past.slice(0, -1), present: previous, future: [state.present, ...state.future] } : state;
