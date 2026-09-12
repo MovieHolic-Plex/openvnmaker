@@ -4,20 +4,20 @@ import { listVersions, saveVersion, type ProjectVersion } from "./versions.js";
 import { scriptFingerprint } from "./production.js";
 import { Icon } from "./Icon.js";
 
-export function VersionHistory({script,onRestore}:{script:VnScript;onRestore:(script:VnScript)=>void}){
+export function VersionHistory({script,projectId,onRestore}:{script:VnScript;projectId:string;onRestore:(script:VnScript)=>void}){
   const[open,setOpen]=useState(false),[rows,setRows]=useState<ProjectVersion[]>([]),[label,setLabel]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const dialog=useRef<HTMLDialogElement>(null);const latest=useRef(script);latest.current=script;const lastAuto=useRef(0);
-  const refresh=()=>listVersions().then(setRows).catch(()=>setError("버전 보관함을 읽지 못했습니다. JSON 백업을 사용하세요."));
-  useEffect(()=>{if(open){dialog.current?.showModal();void refresh();}else dialog.current?.close();},[open]);
-  useEffect(()=>{const timer=window.setTimeout(()=>{if(Date.now()-lastAuto.current<300000)return;void listVersions().then(async versions=>{const current=latest.current;if(versions[0]?.fingerprint===scriptFingerprint(current))return;await saveVersion(current,"자동 체크포인트");lastAuto.current=Date.now();}).catch(()=>setError("자동 버전 백업이 실패했습니다. 현재 원고의 JSON을 내보내 보관하세요."));},15000);return()=>window.clearTimeout(timer);},[script]);
-  async function save(){setBusy(true);setError("");try{await saveVersion(script,label||"이름 없는 버전");setLabel("");await refresh();}catch{setError("버전을 저장하지 못했습니다. 기존 버전은 유지됩니다.");}finally{setBusy(false);}}
+  const refresh=()=>listVersions(projectId).then(setRows).catch(()=>setError("버전 보관함을 읽지 못했습니다. JSON 백업을 사용하세요."));
+  useEffect(()=>{if(open){dialog.current?.showModal();void refresh();}else dialog.current?.close();},[open,projectId]);
+  useEffect(()=>{const timer=window.setTimeout(()=>{if(Date.now()-lastAuto.current<300000)return;void listVersions(projectId).then(async versions=>{const current=latest.current;if(versions[0]?.fingerprint===scriptFingerprint(current))return;await saveVersion(projectId,current,"자동 체크포인트");lastAuto.current=Date.now();}).catch(()=>setError("자동 버전 백업이 실패했습니다. 현재 원고의 JSON을 내보내 보관하세요."));},15000);return()=>window.clearTimeout(timer);},[script,projectId]);
+  async function save(){setBusy(true);setError("");try{await saveVersion(projectId,script,label||"이름 없는 버전");setLabel("");await refresh();}catch{setError("버전을 저장하지 못했습니다. 기존 버전은 유지됩니다.");}finally{setBusy(false);}}
   async function restore(row:ProjectVersion){
     if(busy)return;
     setBusy(true);setError("");
     const before=latest.current;
     try{
       const next=parseScript(row.script);
-      await saveVersion(before,"복원 직전 작업");
+      await saveVersion(projectId,before,"복원 직전 작업");
       if(latest.current!==before){setError("백업하는 동안 원고가 변경되어 복원을 중단했습니다. 현재 작업을 유지합니다.");return;}
       onRestore(structuredClone(next));setOpen(false);
     }catch{setError("복원 전 백업을 만들지 못했거나 버전이 손상됐습니다. 현재 원고를 유지합니다.");}

@@ -3,7 +3,7 @@ import type { GatewayDeps } from "../app.js";
 import { ensureFreshAccess } from "../auth/tokens.js";
 import { generateImage } from "../cca/images.js";
 import { readImage, saveImage, timestampName } from "../images/store.js";
-import { IMAGE_ASPECT_RATIOS, IMAGE_MODEL } from "../config.js";
+import { GENERATE_PROMPT_MAX, IMAGE_ASPECT_RATIOS, IMAGE_MODEL, IMAGE_SIZES } from "../config.js";
 
 interface GenerateBody {
   readonly prompt?: unknown;
@@ -14,6 +14,7 @@ interface GenerateBody {
 }
 
 const ASPECTS = new Set<string>(IMAGE_ASPECT_RATIOS);
+const SIZES = new Set<string>(IMAGE_SIZES);
 
 export function imageRoutes({ store }: GatewayDeps): Hono {
   const routes = new Hono();
@@ -32,9 +33,17 @@ export function imageRoutes({ store }: GatewayDeps): Hono {
 
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     if (prompt === "") return c.json({ error: "prompt 가 필요하다" }, 400);
+    if (prompt.length > GENERATE_PROMPT_MAX) return c.json({ error: "prompt 가 너무 길다" }, 400);
 
     if (body.aspectRatio !== undefined && !ASPECTS.has(String(body.aspectRatio))) {
       return c.json({ error: `aspectRatio 는 ${IMAGE_ASPECT_RATIOS.join(", ")} 중 하나여야 한다` }, 400);
+    }
+    if (body.imageSize !== undefined && !SIZES.has(String(body.imageSize))) {
+      return c.json({ error: `imageSize 는 ${IMAGE_SIZES.join(", ")} 중 하나여야 한다` }, 400);
+    }
+    // 모델 패스스루를 열어두면 임의 모델 id 로 같은 쿼터 통을 소진할 수 있다.
+    if (body.model !== undefined && body.model !== IMAGE_MODEL) {
+      return c.json({ error: `model 은 ${IMAGE_MODEL} 만 된다` }, 400);
     }
 
     let access: string;
@@ -83,11 +92,16 @@ export function imageRoutes({ store }: GatewayDeps): Hono {
 
   /** 기본 모델과 허용 비율. UI 가 하드코딩하지 않도록 게이트웨이가 알려준다. */
   routes.get("/image/config", (c) =>
-    c.json({ model: IMAGE_MODEL, aspectRatios: IMAGE_ASPECT_RATIOS, quotaShared: true, unofficial: true }),
+    c.json({ model: IMAGE_MODEL, aspectRatios: IMAGE_ASPECT_RATIOS, imageSizes: IMAGE_SIZES, quotaShared: true, unofficial: true }),
   );
 
   /** 저장된 이미지 서빙. 고정 디렉터리 안에서만 찾는다. */
   routes.get("/image/file/:name", async (c) => {
+    // <img> 태그는 헤더를 못 달아 스튜디오 헤더로는 못 막는다 — 사이트 간 임베드만 거른다.
+    // 이름이 타임스탬프라 추측 가능하니 외부 사이트에서 박는 것 자체를 차단한다.
+    if (c.req.header("sec-fetch-site") === "cross-site") {
+      return c.json({ error: "같은 컴퓨터의 편집기에서만 이미지를 열 수 있다" }, 403);
+    }
     const file = await readImage(c.req.param("name"));
     if (!file) return c.json({ error: "없는 이미지다" }, 404);
     // Buffer 를 그대로 넘기면 Hono 의 Uint8Array<ArrayBuffer> 타입과 안 맞는다.

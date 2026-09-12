@@ -14,7 +14,12 @@ export function ProjectRecovery({id,onRestore}:{id:string;onRestore:(script:VnSc
     try{
       const raw=localStorage.getItem(PROJECT_KEY);
       // Preserve the damaged bytes before allowing autosave to replace the recovery key.
-      if(raw!==null)localStorage.setItem(`vnmaker.recovery-preserved.${crypto.randomUUID()}`,raw);
+      if(raw!==null){
+        localStorage.setItem(`vnmaker.recovery-preserved.${Date.now()}.${crypto.randomUUID()}`,raw);
+        // 복구할 때마다 키가 누적돼 localStorage 한도를 잡아먹는다 — 최신 3개만 둔다.
+        const kept=Object.keys(localStorage).filter(key=>key.startsWith("vnmaker.recovery-preserved.")).sort();
+        for(const stale of kept.slice(0,Math.max(0,kept.length-3)))localStorage.removeItem(stale);
+      }
       onRestore(candidate.script);
     }catch{setStatus("손상 원문의 보존에 실패해 복구를 중단했습니다. 원문과 외부 백업을 내려받아 보관하세요.");}
   }

@@ -83,7 +83,7 @@ test("로그인 없이 image/generate 는 401", async () => {
   const app = createApp({ store: createMemoryStore(null) });
   const res = await app.request("/api/image/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ prompt: "p" }),
   });
   assert.equal(res.status, 401);
@@ -95,7 +95,7 @@ test("prompt 가 없으면 400 이고 업스트림을 부르지 않는다", asyn
   });
   const res = await app.request("/api/image/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ prompt: "   " }),
   });
   assert.equal(res.status, 400);
@@ -107,7 +107,7 @@ test("허용하지 않는 aspectRatio 는 400", async () => {
   });
   const res = await app.request("/api/image/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ prompt: "p", aspectRatio: "21:9" }),
   });
   assert.equal(res.status, 400);

@@ -86,7 +86,7 @@ try {
   const started = Date.now();
   const res = await fetch(`${BASE}/api/image/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ prompt, aspectRatio: "16:9", name: "qa-campus-16x9" }),
     signal: AbortSignal.timeout(240_000),
   });

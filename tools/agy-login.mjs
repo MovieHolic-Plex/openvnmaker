@@ -23,9 +23,9 @@
  */
 
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename, unlink, chmod } from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import { join, dirname } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -132,7 +132,15 @@ async function writeCreds(creds) {
   const store = await readStore();
   store[PROVIDER] = creds;
   await mkdir(dirname(AUTH_FILE), { recursive: true });
-  await writeFile(AUTH_FILE, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
+  // tmp+rename — 쓰기 도중 죽어도 기존 auth.json 이 온전히 남는다.
+  const tmp = `${AUTH_FILE}.${randomBytes(8).toString("hex")}.tmp`;
+  try {
+    await writeFile(tmp, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
+    await rename(tmp, AUTH_FILE);
+  } catch (err) {
+    await unlink(tmp).catch(() => {});
+    throw err;
+  }
   try {
     await chmod(AUTH_FILE, 0o600);
   } catch {
@@ -152,13 +160,15 @@ async function loadCreds() {
 
 /* ── 1) 루프백 콜백 서버 ────────────────────────────────────── */
 
+const escapeHtml = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 const DONE_HTML = (ok, detail) => `<!DOCTYPE html><meta charset="utf-8">
 <title>vnmaker</title>
 <body style="font:16px/1.6 system-ui;background:#12110e;color:#efe6d4;display:grid;place-items:center;height:100vh;margin:0">
 <div style="text-align:center">
   <div style="font-size:15px;letter-spacing:.18em;color:${ok ? "#c9a227" : "#c45c4a"}">${ok ? "CONNECTED" : "FAILED"}</div>
   <h1 style="font-weight:600;margin:.4em 0">${ok ? "연결됐다. 터미널로 돌아가라." : "인증 실패"}</h1>
-  <p style="color:rgba(239,230,212,.6)">${detail}</p>
+  <p style="color:rgba(239,230,212,.6)">${escapeHtml(detail)}</p>
 </div>`;
 
 /**
@@ -204,7 +214,7 @@ function waitForCallback(expectedState) {
 
       // state가 우리 것인 error는 즉시 실패로 올린다(사용자가 동의 거부한 경우).
       // state 없는 error는 로컬 프로세스가 위조할 수 있으므로 무시한다.
-      if (ok) finish(resolve, { code, redirectUri: server.redirectUri });
+      if (ok) finish(resolve, { code, redirectUri: server.redirectUri, codeVerifier: server.codeVerifier });
       else if (error && state === expectedState) finish(reject, new Error(detail));
     });
 
@@ -217,12 +227,17 @@ function waitForCallback(expectedState) {
     server.once("listening", () => {
       const { port } = server.address();
       const redirectUri = `http://${CALLBACK_HOST}:${port}${CALLBACK_PATH}`;
+      // PKCE — client_secret 이 공개 내장값이라 verifier 가 실질적인 소유 증명이다.
+      server.codeVerifier = randomBytes(32).toString("base64url");
+      const codeChallenge = createHash("sha256").update(server.codeVerifier).digest("base64url");
       const authUrl = `${AUTH_URL}?${new URLSearchParams({
         client_id: CLIENT_ID,
         response_type: "code",
         redirect_uri: redirectUri,
         scope: SCOPES.join(" "),
         state: expectedState,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
         access_type: "offline",
         prompt: "consent",
       })}`;
@@ -246,13 +261,18 @@ function waitForCallback(expectedState) {
 function openBrowser(url) {
   if (process.env.VNMAKER_NO_BROWSER) return;
   try {
+    let child;
     if (platform() === "win32") {
-      spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
+      // cmd 의 start 는 & 를 명령 구분자로 본다 — URL 은 반드시 따옴표로 감싼다.
+      child = spawn("cmd", ["/c", "start", "", `"${url}"`], { detached: true, stdio: "ignore" });
     } else if (platform() === "darwin") {
-      spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
+      child = spawn("open", [url], { detached: true, stdio: "ignore" });
     } else {
-      spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
+      child = spawn("xdg-open", [url], { detached: true, stdio: "ignore" });
     }
+    // 실행 파일이 없으면 비동기 error 이벤트가 난다 — 잡지 않으면 프로세스가 죽는다.
+    child.on("error", () => {});
+    child.unref();
   } catch {
     /* URL을 이미 출력했으므로 무시 */
   }
@@ -260,7 +280,7 @@ function openBrowser(url) {
 
 /* ── 2) 토큰 교환 ───────────────────────────────────────────── */
 
-async function exchangeCode(code, redirectUri) {
+async function exchangeCode(code, redirectUri, codeVerifier) {
   const data = await jsonFetch("token 교환", TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -268,6 +288,7 @@ async function exchangeCode(code, redirectUri) {
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
       code,
+      code_verifier: codeVerifier,
       grant_type: "authorization_code",
       redirect_uri: redirectUri,
     }),
@@ -388,10 +409,10 @@ async function cmdLogin() {
   log("Antigravity OAuth 로그인 (oh-my-pi 이식본)");
   const state = randomBytes(16).toString("hex");
 
-  const { code, redirectUri } = await waitForCallback(state);
+  const { code, redirectUri, codeVerifier } = await waitForCallback(state);
 
   log("\n· authorization code 수신 → 토큰 교환");
-  const token = await exchangeCode(code, redirectUri);
+  const token = await exchangeCode(code, redirectUri, codeVerifier);
 
   const email = await getEmail(token.access_token);
   if (email) log(`· 계정: ${email}`);

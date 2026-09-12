@@ -29,6 +29,10 @@ export function generateRoutes({ store }: GatewayDeps): Hono {
 
     const prompt = typeof body.prompt === "string" && body.prompt.trim() !== "" ? body.prompt.trim() : HELLO_PROMPT;
     if (prompt.length > GENERATE_PROMPT_MAX) return c.json({ error: "prompt 가 너무 길다" }, 400);
+    // 모델 패스스루를 열어두면 임의 모델 id 로 같은 쿼터 통을 소진할 수 있다.
+    if (body.model !== undefined && body.model !== TEXT_MODEL) {
+      return c.json({ error: `model 은 ${TEXT_MODEL} 만 된다` }, 400);
+    }
 
     let access: string;
     let projectId: string;

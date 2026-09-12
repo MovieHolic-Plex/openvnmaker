@@ -7,18 +7,27 @@ export function projectRoutes(deps: GatewayDeps): Hono {
   const routes = new Hono();
 
   routes.get("/project", async (c) => {
-    const nodes = await project.listNodes();
-    const edges = await project.readEdges();
-    return c.json({
-      nodes: nodes.map((node) => ({ id: node.id, ...(node.label === undefined ? {} : { label: node.label }) })),
-      edges,
-    });
+    try {
+      const nodes = await project.listNodes();
+      const edges = await project.readEdges();
+      return c.json({
+        nodes: nodes.map((node) => ({ id: node.id, ...(node.label === undefined ? {} : { label: node.label }) })),
+        edges,
+      });
+    } catch (err) {
+      // 손상 파일은 없는 것으로 삼키지 않는다 — 눈에 보이는 500 으로 올린다.
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
   });
 
   routes.get("/project/nodes/:id", async (c) => {
-    const node = await project.readNode(c.req.param("id"));
-    if (!node) return c.json({ error: "노드가 없다" }, 404);
-    return c.json({ node, path: `story/nodes/${node.id}.json` });
+    try {
+      const node = await project.readNode(c.req.param("id"));
+      if (!node) return c.json({ error: "노드가 없다" }, 404);
+      return c.json({ node, path: `story/nodes/${node.id}.json` });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
   });
 
   /**

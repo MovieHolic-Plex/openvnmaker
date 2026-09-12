@@ -1,3 +1,6 @@
+/** 게이트웨이가 mutation 에 요구하는 편집기 표시 — 없으면 403. */
+const STUDIO_HEADER = { "X-VNMaker-Studio": "1" } as const;
+
 export interface AuthStatus {
   readonly reachable: boolean;
   readonly authenticated: boolean;
@@ -24,7 +27,7 @@ async function readJson(res: Response): Promise<Record<string, unknown>> {
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
   try {
-    const res = await fetch("/api/auth/status", { signal: AbortSignal.timeout(8_000) });
+    const res = await fetch("/api/auth/status", { headers: STUDIO_HEADER, signal: AbortSignal.timeout(8_000) });
     const body = await readJson(res);
     if (!res.ok) {
       return { reachable: true, authenticated: false, email: null, projectId: null, error: String(body["error"] ?? res.status) };
@@ -49,7 +52,7 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
 }
 
 export async function startLogin(): Promise<AuthStatus> {
-  const res = await fetch("/api/auth/login", { method: "POST", signal: AbortSignal.timeout(300_000) });
+  const res = await fetch("/api/auth/login", { method: "POST", headers: STUDIO_HEADER, signal: AbortSignal.timeout(300_000) });
   const body = await readJson(res);
   if (!res.ok) throw new Error(String(body["error"] ?? `login ${res.status}`));
   return fetchAuthStatus();
@@ -58,7 +61,7 @@ export async function startLogin(): Promise<AuthStatus> {
 export async function generateLine(prompt?: string, signal?: AbortSignal): Promise<GenerateResponse> {
   const res = await fetch("/api/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...STUDIO_HEADER, "Content-Type": "application/json" },
     body: JSON.stringify(prompt === undefined ? {} : { prompt }),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(600_000)]) : AbortSignal.timeout(600_000),
   });
@@ -77,7 +80,7 @@ export async function generateLine(prompt?: string, signal?: AbortSignal): Promi
 export async function saveNode(node: unknown): Promise<string> {
   const res = await fetch("/api/project/nodes", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...STUDIO_HEADER, "Content-Type": "application/json" },
     body: JSON.stringify(node),
     signal: AbortSignal.timeout(8_000),
   });
@@ -91,9 +94,15 @@ export interface AgentDiff {
   readonly summary: string;
 }
 
+export interface AgentFailure {
+  readonly tool: string;
+  readonly error: string;
+}
+
 export interface AgentResponse {
   readonly text: string;
   readonly diffs: readonly AgentDiff[];
+  readonly failures: readonly AgentFailure[];
   readonly playFrom: string | null;
   readonly node: unknown;
 }
@@ -101,7 +110,7 @@ export interface AgentResponse {
 export async function runAgent(message: string, nodeId?: string): Promise<AgentResponse> {
   const res = await fetch("/api/agent/run", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...STUDIO_HEADER, "Content-Type": "application/json" },
     body: JSON.stringify({ message, ...(nodeId === undefined ? {} : { nodeId }) }),
     signal: AbortSignal.timeout(600_000),
   });
@@ -116,9 +125,19 @@ export async function runAgent(message: string, nodeId?: string): Promise<AgentR
         return tool === "" ? [] : [{ tool, summary }];
       })
     : [];
+  const failures = Array.isArray(body["failures"])
+    ? body["failures"].flatMap((item) => {
+        if (item === null || typeof item !== "object") return [];
+        const row = item as Record<string, unknown>;
+        const tool = typeof row["tool"] === "string" ? row["tool"] : "";
+        const error = typeof row["error"] === "string" ? row["error"] : "";
+        return tool === "" ? [] : [{ tool, error }];
+      })
+    : [];
   return {
     text: typeof body["text"] === "string" ? body["text"] : "",
     diffs,
+    failures,
     playFrom: typeof body["playFrom"] === "string" ? body["playFrom"] : null,
     node: body["node"] ?? null,
   };
@@ -132,7 +151,7 @@ export interface GenerateImageResult {
 export async function generateImage(prompt: string, aspectRatio = "16:9", signal?: AbortSignal): Promise<GenerateImageResult> {
   const res = await fetch("/api/image/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...STUDIO_HEADER, "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, aspectRatio }),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(600_000)]) : AbortSignal.timeout(600_000),
   });

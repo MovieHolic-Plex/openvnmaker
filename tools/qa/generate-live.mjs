@@ -61,7 +61,7 @@ try {
   const started = Date.now();
   const res = await fetch(`${BASE}/api/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({}),
     signal: AbortSignal.timeout(120_000),
   });

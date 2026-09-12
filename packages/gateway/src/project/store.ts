@@ -1,9 +1,14 @@
 /**
  * 로컬 프로젝트 파일. 모델에게 자유 경로를 주지 않는다 — 노드 id 만 받는다.
  * 기본 루트는 ~/.vnmaker/projects/default.
+ *
+ * 손상 규칙: 파일이 없으면 null/[] 이지만, 있으면서 깨졌으면 오류로 올린다.
+ * null 로 삼키면 다음 쓰기가 빈 상태 위에 실행돼 기존 데이터를 조용히 날린다.
  */
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { parseBeats } from "@vnmaker/ir";
+import { writeFileAtomic } from "../atomic.js";
 import { PROJECT_DIR } from "../config.js";
 
 const NODE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -26,6 +31,11 @@ export interface ProjectStore {
   listNodes(): Promise<readonly ProjectNode[]>;
   readEdges(): Promise<readonly ProjectEdge[]>;
   writeEdges(edges: readonly ProjectEdge[]): Promise<{ path: string }>;
+  /**
+   * 엣지 read→mutate→write 를 저장소 안에서 직렬화한다.
+   * 동시 connect 가 한쪽 엣지를 지우지 않게 이 경로로만 수정한다.
+   */
+  updateEdges(mutate: (edges: readonly ProjectEdge[]) => readonly ProjectEdge[]): Promise<{ path: string; edges: readonly ProjectEdge[] }>;
 }
 
 export function assertSafeNodeId(id: string): string {
@@ -49,6 +59,12 @@ function asNode(value: unknown): ProjectNode {
   };
 }
 
+/** 쓰기 경로 전용 검증 — 비트 하나하나가 알려진 op 여야 디스크에 남긴다. */
+function asWritableNode(value: unknown): ProjectNode {
+  const node = asNode(value);
+  return { ...node, beats: parseBeats(node.beats) };
+}
+
 function asEdge(value: unknown): ProjectEdge {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("엣지가 객체가 아니다");
@@ -63,12 +79,15 @@ function asEdge(value: unknown): ProjectEdge {
   };
 }
 
+const isMissing = (error: unknown): boolean => (error as NodeJS.ErrnoException).code === "ENOENT";
+
 export function createMemoryProjectStore(seed: readonly ProjectNode[] = []): ProjectStore {
   const nodes = new Map<string, ProjectNode>(seed.map((node) => [node.id, node]));
   let edges: ProjectEdge[] = [];
+  let edgeQueue: Promise<unknown> = Promise.resolve();
   return {
     async writeNode(node) {
-      const parsed = asNode(node);
+      const parsed = asWritableNode(node);
       nodes.set(parsed.id, parsed);
       return { path: `story/nodes/${parsed.id}.json` };
     },
@@ -89,77 +108,113 @@ export function createMemoryProjectStore(seed: readonly ProjectNode[] = []): Pro
       edges = next.map(asEdge);
       return { path: "story/edges.json" };
     },
+    async updateEdges(mutate) {
+      const task = edgeQueue.then(async () => {
+        edges = mutate(edges).map(asEdge);
+        return { path: "story/edges.json", edges };
+      });
+      edgeQueue = task.then(
+        () => undefined,
+        () => undefined,
+      );
+      return task;
+    },
   };
 }
 
 export function createFileProjectStore(root: string = PROJECT_DIR): ProjectStore {
+  const nodesDir = join(root, "story", "nodes");
+  const edgesFile = join(root, "story", "edges.json");
+  let edgeQueue: Promise<unknown> = Promise.resolve();
+
+  const readEdgesFile = async (): Promise<readonly ProjectEdge[]> => {
+    let raw: string;
+    try {
+      raw = await readFile(edgesFile, "utf8");
+    } catch (error) {
+      if (isMissing(error)) return [];
+      throw error;
+    }
+    try {
+      const parsed = JSON.parse(raw) as { edges?: unknown };
+      if (!Array.isArray(parsed.edges)) throw new Error("edges 필드가 배열이 아니다");
+      return parsed.edges.map(asEdge);
+    } catch (error) {
+      throw new Error(`edges.json 이 손상됐다 — 빈 그래프로 덮어쓰지 않는다: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const writeEdgesFile = async (edges: readonly ProjectEdge[]): Promise<{ path: string }> => {
+    await writeFileAtomic(edgesFile, `${JSON.stringify({ edges }, null, 2)}\n`);
+    return { path: "story/edges.json" };
+  };
+
   return {
     async writeNode(node) {
-      const parsed = asNode(node);
+      const parsed = asWritableNode(node);
       const rel = `story/nodes/${parsed.id}.json`;
-      const dir = join(root, "story", "nodes");
-      await mkdir(dir, { recursive: true });
-      await writeFile(join(root, rel), `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+      await writeFileAtomic(join(root, rel), `${JSON.stringify(parsed, null, 2)}\n`);
       try {
         await readFile(join(root, "vnmaker.json"), "utf8");
       } catch {
-        await writeFile(
+        await writeFileAtomic(
           join(root, "vnmaker.json"),
           `${JSON.stringify({ version: 1, title: parsed.label ?? parsed.id, locale: "ko" }, null, 2)}\n`,
-          "utf8",
         );
       }
       return { path: rel };
     },
     async readNode(id) {
+      let safe: string;
+      try {
+        safe = assertSafeNodeId(id);
+      } catch {
+        return null; // 형식이 안 맞는 id 는 없는 노드다 — 손상이 아니다
+      }
       let raw: string;
       try {
-        raw = await readFile(join(root, "story", "nodes", `${assertSafeNodeId(id)}.json`), "utf8");
-      } catch {
-        return null;
+        raw = await readFile(join(nodesDir, `${safe}.json`), "utf8");
+      } catch (error) {
+        if (isMissing(error)) return null;
+        throw error;
       }
       try {
         return asNode(JSON.parse(raw) as unknown);
-      } catch {
-        return null;
+      } catch (error) {
+        throw new Error(`노드 파일이 손상됐다 (${safe}): ${error instanceof Error ? error.message : String(error)}`);
       }
     },
     async listNodes() {
       let names: string[];
       try {
-        names = await readdir(join(root, "story", "nodes"));
-      } catch {
-        return [];
+        names = await readdir(nodesDir);
+      } catch (error) {
+        if (isMissing(error)) return [];
+        throw error;
       }
       const nodes: ProjectNode[] = [];
       for (const name of names) {
         if (!name.endsWith(".json")) continue;
         const id = name.slice(0, -5);
+        if (!NODE_ID.test(id)) continue;
         const node = await this.readNode(id);
         if (node) nodes.push(node);
       }
       return nodes;
     },
-    async readEdges() {
-      let raw: string;
-      try {
-        raw = await readFile(join(root, "story", "edges.json"), "utf8");
-      } catch {
-        return [];
-      }
-      try {
-        const parsed = JSON.parse(raw) as { edges?: unknown };
-        if (!Array.isArray(parsed.edges)) return [];
-        return parsed.edges.map(asEdge);
-      } catch {
-        return [];
-      }
-    },
-    async writeEdges(next) {
-      const edges = next.map(asEdge);
-      await mkdir(join(root, "story"), { recursive: true });
-      await writeFile(join(root, "story", "edges.json"), `${JSON.stringify({ edges }, null, 2)}\n`, "utf8");
-      return { path: "story/edges.json" };
+    readEdges: readEdgesFile,
+    writeEdges: (next) => writeEdgesFile(next.map(asEdge)),
+    async updateEdges(mutate) {
+      const task = edgeQueue.then(async () => {
+        const edges = mutate(await readEdgesFile()).map(asEdge);
+        const { path } = await writeEdgesFile(edges);
+        return { path, edges };
+      });
+      edgeQueue = task.then(
+        () => undefined,
+        () => undefined,
+      );
+      return task;
     },
   };
 }

@@ -302,11 +302,7 @@ export function compileNode(node: StoryNode, characters: readonly Character[]): 
   };
 }
 
-function compileGraphNode(
-  node: StoryNode,
-  edgeTo: string | undefined,
-  flags: Record<string, string | number | boolean>,
-): CompiledScene {
+function compileGraphNode(node: StoryNode, edgeTo: string | undefined): CompiledScene {
   let background = "title";
   let bgm: string | undefined;
   let chapter: string | undefined;
@@ -357,10 +353,14 @@ function compileGraphNode(
       }
       case "menu": {
         for (const choice of beat.choices) {
+          // when 은 표현식 문자열이고 cond 의미는 아직 미정 — 조용히 꿰는 대신 거부한다.
+          // (파서와 네이티브 exporter 모두 cond 를 거부하므로 여기서내도 쓸 수 없다.)
+          if (choice.when !== undefined) {
+            throw new Error(`menu.when 의 조건 표현 의미가 정해지지 않았다 — 노드 ${node.id}`);
+          }
           choices.push({
             text: choice.text,
             next: choice.to,
-            ...(choice.when === undefined ? {} : { cond: choice.when }),
             ...(choice.set === undefined ? {} : { set: { ...choice.set } }),
           });
         }
@@ -370,8 +370,9 @@ function compileGraphNode(
         if (jumpTo === undefined) jumpTo = beat.to;
         break;
       case "set":
-        Object.assign(flags, beat.vars);
-        break;
+        // set 은 노드 실행 시점 적용이어야 한다 — 컴파일 타임 전역 폴딩은 도달 여부와 무관하게
+        // 플래그를 박아 의미를 깬다. 실행 시점 의미가 정해질 때까지 거부한다.
+        throw new Error(`set 비트의 컴파일 의미가 정해지지 않았다 — 노드 ${node.id}`);
       case "play":
         if (beat.kind === "bgm") bgm = beat.sound;
         else pendingSfx = beat.sound;
@@ -389,7 +390,15 @@ function compileGraphNode(
     character: dir.character as CharacterId,
     ...(dir.expression === undefined ? {} : { expression: dir.expression as Expression }),
   }));
+  // jump 와 엣지가 서로 다른 곳을 가리키면 어느 쪽이 진짜 다음인지 미정 — 조용히 버리지 않는다.
+  if (jumpTo !== undefined && edgeTo !== undefined && jumpTo !== edgeTo) {
+    throw new Error(`노드 ${node.id} 의 jump(${jumpTo})와 엣지(${edgeTo})가 서로 다른 다음을 가리킨다`);
+  }
   const next = jumpTo ?? edgeTo;
+  // 선택지와 나가는 엣지/jump 가 공존하면 어느 쪽이 다음을 정하는지 미정 — 조용히 버리지 않는다.
+  if (choices.length > 0 && next !== undefined) {
+    throw new Error(`노드 ${node.id} 에 선택지와 다음 엣지가 함께 있다 — 분기 표현이 정해지지 않았다`);
+  }
 
   return {
     id: node.id,
@@ -418,10 +427,30 @@ export function compileGraph(
   }
   const edgeNext = new Map<string, string>();
   for (const edge of edges) {
-    if (!edgeNext.has(edge.from)) edgeNext.set(edge.from, edge.to);
+    // 다중 출발 엣지와 엣지 조건의 표현은 아직 미정 — 첫 엣지만 살리는 건 의미 파괴다.
+    if (!seen.has(edge.from) || !seen.has(edge.to)) {
+      throw new Error(`엣지가 없는 노드를 가리킨다: ${edge.from} → ${edge.to}`);
+    }
+    if (edge.when !== undefined) {
+      throw new Error(`엣지 조건(when)의 컴파일 의미가 정해지지 않았다: ${edge.from} → ${edge.to}`);
+    }
+    if (edgeNext.has(edge.from)) {
+      throw new Error(`노드 ${edge.from} 에서 나가는 엣지가 여러 개다 — 분기 표현이 정해지지 않았다`);
+    }
+    edgeNext.set(edge.from, edge.to);
   }
-  const flags: Record<string, string | number | boolean> = {};
-  const scenes = nodes.map((node) => compileGraphNode(node, edgeNext.get(node.id), flags));
+  const scenes = nodes.map((node) => compileGraphNode(node, edgeNext.get(node.id)));
+  // 엣지뿐 아니라 jump·menu 선택지의 도착지도 실재해야 한다 — dangling 참조는 여기서 잡는다.
+  for (const scene of scenes) {
+    if (scene.next !== undefined && !seen.has(scene.next)) {
+      throw new Error(`노드 ${scene.id} 의 next 가 없는 노드를 가리킨다: ${scene.next}`);
+    }
+    for (const choice of scene.choices ?? []) {
+      if (!seen.has(choice.next)) {
+        throw new Error(`노드 ${scene.id} 의 선택지가 없는 노드를 가리킨다: ${choice.next}`);
+      }
+    }
+  }
   const first = nodes[0];
   if (first === undefined) throw new Error("노드가 없다");
   return {
@@ -430,7 +459,6 @@ export function compileGraph(
     start: first.id,
     characters,
     scenes,
-    ...(Object.keys(flags).length === 0 ? {} : { flags }),
   };
 }
 

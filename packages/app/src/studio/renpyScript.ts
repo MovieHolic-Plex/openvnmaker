@@ -33,11 +33,25 @@ export function generateRenpyScript(source:VnScript):string {
       out.push(`${indent}${who}${renpyText(line.text)}`);
     });
     if(scene.choices?.length){
+      // 잠긴 선택지를 Ren'Py 가 비활성으로 그릴 수 없어 if False 로 숨기면 브라우저(비활성 표시)와
+      // 달라진다 — 보이게 두고, 고르면 잠김 안내 후 메뉴로 되돌아오는 관용구로 맞춘다.
+      const hasLocked=scene.choices.some(choice=>choice.disable);
+      const menuLabel=`${label(scene.id)}_menu`;
+      if(hasLocked)out.push(`label ${menuLabel}:`);
       out.push("    menu:");
       scene.choices.forEach((choice,choiceIndex)=>{
-        out.push(`        ${renpyText(choice.text)}${choice.disable?" if False":choice.add?` if vn_choice_allowed(vn_scene(${sceneIndex})["choices"][${choiceIndex}])`:choice.when?` if vn_condition(vn_scene(${sceneIndex})["choices"][${choiceIndex}].get("when", {}))`:""}:`);
+        const row=`vn_scene(${sceneIndex})["choices"][${choiceIndex}]`;
+        if(choice.disable){
+          // when 이 충족될 때만 보인다(브라우저와 동일) — 효과는 절대 적용되지 않는다.
+          const cond=choice.when?` if vn_condition(${row}.get("when", {}))`:"";
+          out.push(`        ${renpyText(choice.text)}${cond}:`);
+          out.push(`            ${renpyText("아직 선택할 수 없는 길이다.")}`);
+          out.push(`            jump ${menuLabel}`);
+          return;
+        }
+        out.push(`        ${renpyText(choice.text)}${choice.add?` if vn_choice_allowed(${row})`:choice.when?` if vn_condition(${row}.get("when", {}))`:""}:`);
         // json.loads returns a regular dict. Rebinding preserves the old snapshot for rollback.
-        if(choice.add)out.push(`            $ vn_flags = vn_apply_flags(vn_scene(${sceneIndex})["choices"][${choiceIndex}])`);
+        if(choice.add)out.push(`            $ vn_flags = vn_apply_flags(${row})`);
         else if(choice.set)out.push(`            $ vn_flags = dict(vn_flags, **${pythonJson(choice.set)})`);
         if(choice.affection)out.push(`            $ vn_affection += ${choice.affection}`);
         out.push(`            jump ${label(choice.next)}`);
@@ -105,10 +119,14 @@ init python:
         return True
 
     def vn_patch(directions):
+        # 같은 dict 를 제자리에서 고치면 롤백이 되돌릴 옛 스냅샷이 없다 — 새 dict 를 묶어준다.
+        global vn_slots
+        updated = dict(vn_slots)
         for direction in directions:
             slot = direction["slot"]
-            previous = vn_slots.get(slot, {})
-            vn_slots[slot] = dict(previous, **direction) if previous.get("character") == direction.get("character") else dict(direction)
+            previous = updated.get(slot, {})
+            updated[slot] = dict(previous, **direction) if previous.get("character") == direction.get("character") else dict(direction)
+        vn_slots = updated
 
     def vn_effect_valid(choice):
         for key, delta in choice.get("add", {}).items():
@@ -182,7 +200,7 @@ init python:
         vn_draw()
 
     def vn_cue(scene_index, line_index):
-        global vn_background, vn_cg, vn_framing
+        global vn_background, vn_cg, vn_framing, vn_slots
         line = vn_scene(scene_index)["lines"][line_index]
         if "backgroundUrl" in line:
             vn_background = line["backgroundUrl"]
@@ -192,9 +210,12 @@ init python:
             vn_framing = line["framing"]
         vn_patch(line.get("sprites", []))
         if line.get("expression"):
-            for slot, actor in list(vn_slots.items()):
+            # vn_patch 와 같은 이유 — 제자리 변경 대신 새 dict 로 묶어 롤백을 살린다.
+            replaced = dict(vn_slots)
+            for slot, actor in replaced.items():
                 if actor.get("character") == line.get("speaker"):
-                    vn_slots[slot] = dict(actor, expression=line["expression"])
+                    replaced[slot] = dict(actor, expression=line["expression"])
+            vn_slots = replaced
         if "bgm" in line:
             vn_music(line["bgm"])
         if line.get("sfx"):

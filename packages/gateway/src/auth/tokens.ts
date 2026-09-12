@@ -13,7 +13,7 @@ function expiryFrom(expiresIn: number): number {
   return Date.now() + expiresIn * 1000 - 5 * 60 * 1000;
 }
 
-export async function exchangeCode(code: string, redirectUri: string): Promise<TokenResponse> {
+export async function exchangeCode(code: string, redirectUri: string, codeVerifier: string): Promise<TokenResponse> {
   const data = await jsonFetch<TokenResponse>("token 교환", TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -21,6 +21,7 @@ export async function exchangeCode(code: string, redirectUri: string): Promise<T
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
       code,
+      code_verifier: codeVerifier,
       grant_type: "authorization_code",
       redirect_uri: redirectUri,
     }),
@@ -58,20 +59,36 @@ export interface RefreshResult {
   readonly credentials: Credentials;
 }
 
-/** 만료됐으면 갱신해 저장하고, 유효하면 그대로 돌려준다. */
-export async function ensureFreshAccess(store: CredentialStore): Promise<RefreshResult | null> {
-  const current = await store.read();
-  if (!current) return null;
-  if (Date.now() < current.expires) return { refreshed: false, credentials: current };
-  const data = await refreshAccessToken(current.refresh);
-  const next: Credentials = {
-    ...current,
-    refresh: data.refresh_token ?? current.refresh,
-    access: data.access_token,
-    expires: expiryFrom(data.expires_in),
-  };
-  await store.write(next);
-  return { refreshed: true, credentials: next };
+/**
+ * 만료됐으면 갱신해 저장하고, 유효하면 그대로 돌려준다.
+ * 갱신은 프로세스 안에서 한 번에 하나만 날린다 — 만료 직후 동시 요청이
+ * 다중 refresh 로 refresh token 회전을 클러버하지 않게 single-flight 로 묶는다.
+ */
+const inflights = new WeakMap<CredentialStore, Promise<RefreshResult | null>>();
+
+export function ensureFreshAccess(store: CredentialStore): Promise<RefreshResult | null> {
+  const existing = inflights.get(store);
+  if (existing) return existing;
+  const task = (async (): Promise<RefreshResult | null> => {
+    try {
+      const current = await store.read();
+      if (!current) return null;
+      if (Date.now() < current.expires) return { refreshed: false, credentials: current };
+      const data = await refreshAccessToken(current.refresh);
+      const next: Credentials = {
+        ...current,
+        refresh: data.refresh_token ?? current.refresh,
+        access: data.access_token,
+        expires: expiryFrom(data.expires_in),
+      };
+      await store.write(next);
+      return { refreshed: true, credentials: next };
+    } finally {
+      inflights.delete(store);
+    }
+  })();
+  inflights.set(store, task);
+  return task;
 }
 
 export function credentialsFromToken(

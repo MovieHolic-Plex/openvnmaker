@@ -141,10 +141,13 @@ export async function executeTool(project: ProjectStore, name: string, args: Rec
       const from = asString(args["from"]);
       const to = asString(args["to"]);
       const when = asString(args["when"]);
-      const current = (await project.readEdges()) as StoryEdge[];
-      const next = connectEdges(current, { from, to, ...(when === "" ? {} : { when }) });
-      const saved = await project.writeEdges(next);
-      return { ok: true, tool: name, data: { path: saved.path, edges: next }, diff: `${from} → ${to}` };
+      if (from === "" || to === "") return { ok: false, tool: name, error: "from/to 가 필요하다" };
+      // dangling 엣지는 컴파일 시 missing scene 이 된다 — 양 끝 노드가 있어야 잇는다.
+      for (const id of [from, to]) {
+        if ((await project.readNode(id)) === null) return { ok: false, tool: name, error: `없는 노드다: ${id}` };
+      }
+      const saved = await project.updateEdges((current) => connectEdges(current, { from, to, ...(when === "" ? {} : { when }) }));
+      return { ok: true, tool: name, data: { path: saved.path, edges: saved.edges }, diff: `${from} → ${to}` };
     }
 
     const nodeId = asString(args["nodeId"] ?? args["id"]);

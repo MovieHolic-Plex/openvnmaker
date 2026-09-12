@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { writeFileAtomic } from "../atomic.js";
 import { AUTH_FILE, PROVIDER } from "../config.js";
 
 export interface Credentials {
@@ -55,8 +55,7 @@ export function createFileStore(path: string = AUTH_FILE): CredentialStore {
         store = {};
       }
       store[PROVIDER] = creds;
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
+      await writeFileAtomic(path, `${JSON.stringify(store, null, 2)}\n`, 0o600);
     },
   };
 }

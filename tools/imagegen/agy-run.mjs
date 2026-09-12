@@ -39,7 +39,7 @@ async function generate(item) {
   const prompt = `${item.prompt} ${STYLE_LOCK}`;
   const res = await fetch(`${base}/api/image/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({
       prompt,
       aspectRatio: item.aspect,

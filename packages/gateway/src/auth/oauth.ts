@@ -1,8 +1,7 @@
-import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { platform } from "node:os";
+import open from "open";
 import {
   AUTH_URL,
   CALLBACK_HOST,
@@ -16,7 +15,16 @@ import {
 export interface CallbackResult {
   readonly code: string;
   readonly redirectUri: string;
+  /** PKCE verifier. 코드 교환 때 그대로 보낸다. */
+  readonly codeVerifier: string;
 }
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 const donePage = (ok: boolean, detail: string): string => `<!DOCTYPE html><meta charset="utf-8">
 <title>vnmaker</title>
@@ -24,27 +32,33 @@ const donePage = (ok: boolean, detail: string): string => `<!DOCTYPE html><meta 
 <div style="text-align:center">
   <div style="font-size:15px;letter-spacing:.18em;color:${ok ? "#c9a227" : "#c45c4a"}">${ok ? "CONNECTED" : "FAILED"}</div>
   <h1 style="font-weight:600;margin:.4em 0">${ok ? "연결됐다. vnmaker 로 돌아가라." : "인증 실패"}</h1>
-  <p style="color:rgba(239,230,212,.6)">${detail}</p>
+  <p style="color:rgba(239,230,212,.6)">${escapeHtml(detail)}</p>
 </div>`;
 
-function openBrowser(url: string): void {
-  if (process.env.VNMAKER_NO_BROWSER) return;
+/**
+ * 브라우저를 연다. 열기에 성공하면 resolve, 못 열었거나 VNMAKER_NO_BROWSER 면 false.
+ * open 패키지가 플랫폼 인용을 책임진다 — Windows 는 PowerShell Start-Process + base64
+ * 인코딩이라 URL 안의 & 에 명령이 끊기지 않고, xdg-open 이 없으면 reject 로 온다.
+ */
+async function openBrowser(url: string): Promise<boolean> {
+  if (process.env.VNMAKER_NO_BROWSER) return false;
   try {
-    if (platform() === "win32") spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
-    else if (platform() === "darwin") spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
-    else spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
+    await open(url);
+    return true;
   } catch {
-    /* URL 은 이미 로그로 남겼다 */
+    return false;
   }
 }
 
-export function authorizeUrl(redirectUri: string, state: string): string {
+export function authorizeUrl(redirectUri: string, state: string, codeChallenge: string): string {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     response_type: "code",
     redirect_uri: redirectUri,
     scope: SCOPES.join(" "),
     state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
     access_type: "offline",
     prompt: "consent",
   });
@@ -52,12 +66,15 @@ export function authorizeUrl(redirectUri: string, state: string): string {
 }
 
 /**
- * 루프백 콜백을 기다린다. PKCE 는 쓰지 않는다 — state 16B 로 CSRF 만 막고
- * 데스크톱 클라이언트에 박힌 client_secret 으로 코드를 교환한다.
+ * 루프백 콜백을 기다린다. state 16B 로 CSRF 를 막고 PKCE(S256) 로 코드 가로채기를 막는다 —
+ * client_secret 은 공개 내장값이라 verifier 가 실질적인 소유 증명이다.
  * 51121 이 점유돼 있으면 임의 포트로 물러난다(구글은 루프백 포트를 검사하지 않는다).
+ * onUrl 은 (url, opened) 로 부른다 — 브라우저가 안 열렸을 때만 URL 을 로그에 남기면 된다.
  */
-export function waitForCallback(onUrl?: (url: string) => void): Promise<CallbackResult> {
+export function waitForCallback(onUrl?: (url: string, opened: boolean) => void): Promise<CallbackResult> {
   const expectedState = randomBytes(16).toString("hex");
+  const codeVerifier = randomBytes(32).toString("base64url");
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
   return new Promise<CallbackResult>((resolve, reject) => {
     let settled = false;
     let redirectUri = "";
@@ -86,7 +103,7 @@ export function waitForCallback(onUrl?: (url: string) => void): Promise<Callback
       const { ok, detail } = detailOf();
       res.writeHead(ok ? 200 : 500, { "Content-Type": "text/html; charset=utf-8" });
       res.end(donePage(ok, detail));
-      if (ok && code) finish(resolve as never, { code, redirectUri });
+      if (ok && code) finish(resolve as never, { code, redirectUri, codeVerifier });
       else if (error && state === expectedState) finish(reject as never, new Error(detail));
     });
 
@@ -101,9 +118,8 @@ export function waitForCallback(onUrl?: (url: string) => void): Promise<Callback
     server.once("listening", () => {
       const { port } = server.address() as AddressInfo;
       redirectUri = `http://${CALLBACK_HOST}:${port}${CALLBACK_PATH}`;
-      const url = authorizeUrl(redirectUri, expectedState);
-      onUrl?.(url);
-      openBrowser(url);
+      const url = authorizeUrl(redirectUri, expectedState, codeChallenge);
+      void openBrowser(url).then((opened) => onUrl?.(url, opened));
     });
 
     server.listen(CALLBACK_PORT, CALLBACK_HOST);

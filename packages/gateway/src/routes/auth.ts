@@ -40,10 +40,12 @@ export function authRoutes({ store }: GatewayDeps): Hono {
   routes.post("/login", async (c) => {
     try {
       const previous = await store.read();
-      const { code, redirectUri } = await waitForCallback((url) => {
-        console.log(`[auth] 동의 URL: ${url}`);
+      const { code, redirectUri, codeVerifier } = await waitForCallback((url, opened) => {
+        // 동의 URL 에는 state 가 박혀 있다 — 브라우저가 안 열려 수동 복사가 필요할 때만 남긴다.
+        if (opened) console.log("[auth] 브라우저에서 Google 동의 화면을 열었다");
+        else console.log(`[auth] 브라우저를 열지 못했다. 이 URL 을 직접 열어라:\n${url}`);
       });
-      const token = await exchangeCode(code, redirectUri);
+      const token = await exchangeCode(code, redirectUri, codeVerifier);
       const email = await fetchEmail(token.access_token);
       const projectId = await discoverProject(token.access_token);
       const creds = credentialsFromToken(token, projectId, email, previous?.refresh);

@@ -38,12 +38,29 @@ test("upsert_beats 다음에 read_node 가 새 대사를 준다", async () => {
   assert.equal(JSON.stringify(read.data).includes("차갑다"), true);
 });
 
+const cafe = {
+  id: "cafe-02",
+  beats: [
+    { op: "scene" as const, bg: "cafe" },
+    { op: "say" as const, who: null, text: "카페는 시끄럽다." },
+  ],
+};
+
 test("connect 는 그래프에 엣지를 남긴다", async () => {
-  const project = createMemoryProjectStore([hello]);
+  const project = createMemoryProjectStore([hello, cafe]);
   const result = await executeTool(project, "connect", { from: "hello", to: "cafe-02" });
   assert.equal(result.ok, true);
   const graph = await executeTool(project, "list_graph", {});
   assert.equal(JSON.stringify(graph.data).includes("cafe-02"), true);
+});
+
+test("connect 는 없는 노드를 잇지 않는다", async () => {
+  const project = createMemoryProjectStore([hello]);
+  const result = await executeTool(project, "connect", { from: "hello", to: "ghost" });
+  assert.equal(result.ok, false);
+  assert.match(result.error ?? "", /없는 노드/);
+  const edges = await project.readEdges();
+  assert.equal(edges.length, 0);
 });
 
 test("가짜 모델이 upsert_beats 를 부르면 디스크와 PLAY 커서가 바뀐다", async () => {
@@ -73,7 +90,7 @@ test("로그인 없이 agent/run 은 401", async () => {
   const app = createApp({ store: createMemoryStore(null), project: createMemoryProjectStore() });
   const res = await app.request("/api/agent/run", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ message: "더 차갑게" }),
   });
   assert.equal(res.status, 401);
@@ -87,7 +104,7 @@ test("빈 지시는 400", async () => {
   });
   const res = await app.request("/api/agent/run", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ message: "   " }),
   });
   assert.equal(res.status, 400);
@@ -107,7 +124,7 @@ test("주입한 모델로 agent/run 이 노드를 고친다", async () => {
   });
   const res = await app.request("/api/agent/run", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ message: "더 차갑게", nodeId: "hello" }),
   });
   assert.equal(res.status, 200);

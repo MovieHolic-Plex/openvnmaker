@@ -68,6 +68,8 @@ export const HELLO_PROMPT =
   "한글 40자에서 80자. 따옴표·제목·설명 없이 본문만. 성인 대학생 세계이고 교복과 미성년은 등장시키지 마라.";
 export const IMAGE_DIR = process.env.VNMAKER_IMAGE_DIR ?? join(homedir(), ".vnmaker", "images");
 export const IMAGE_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;
+/** imageConfig.imageSize 허용값. 임의 문자열 패스스루는 업스트림 400 이나 쿼터 낭비만 부른다. */
+export const IMAGE_SIZES = ["1K", "2K", "4K"] as const;
 
 export const CALLBACK_TIMEOUT_MS = 300_000;
 export const ONBOARD_TIMEOUT_MS = 30_000;
@@ -81,6 +83,11 @@ export const AUTH_FILE = join(homedir(), ".vnmaker", "auth.json");
 /** W1–2 기본 프로젝트. 한 줄 받기 가 여기 story/nodes/hello.json 을 남긴다. */
 export const PROJECT_DIR = process.env.VNMAKER_PROJECT_DIR ?? join(homedir(), ".vnmaker", "projects", "default");
 export const GATEWAY_VERSION = "0.1.0";
+/**
+ * /api JSON 바디 상한. 로컬 프로세스가 GB 급 POST 로 게이트웨이를 OOM 시키지 못하게 한다.
+ * vite 미들웨어(버퍼링)와 hono(bodyLimit)가 같은 값을 쓴다.
+ */
+export const API_BODY_MAX = 4 * 1024 * 1024;
 
 /**
  * 백엔드가 클라이언트 버전으로 모델 게이팅을 한다. version 만 게이트이고 cl 은 검증하지 않는다.

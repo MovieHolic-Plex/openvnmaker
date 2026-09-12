@@ -48,6 +48,7 @@ export function agentRoutes(deps: GatewayDeps): Hono {
       return c.json({
         text: result.text,
         diffs: result.diffs,
+        failures: result.failures,
         playFrom: result.playFrom,
         node: result.node,
         calls: result.calls,

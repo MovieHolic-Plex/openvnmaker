@@ -12,14 +12,13 @@ function buildGraph(): { nodes: StoryNode[]; edges: StoryEdge[] } {
         { op: "scene", bg: "campus-gate", bgm: "daily", chapter: "갈림길" },
         { op: "show", who: "yuna", slot: "left", expression: "smile" },
         { op: "say", who: "yuna", text: "오늘 방과 후, 어디로 갈까?", expression: "smile" },
-        { op: "set", vars: { metYuna: true } },
         { op: "play", kind: "sfx", sound: "door-open" },
         { op: "say", who: "me", text: "나는 잠시 고민했다." },
         {
           op: "menu",
           choices: [
             { text: "미술실로 간다", to: "park-02", set: { tookLeft: true } },
-            { text: "옥상으로 간다", to: "roof-03", when: "metYuna" },
+            { text: "옥상으로 간다", to: "roof-03" },
           ],
         },
       ],
@@ -47,10 +46,8 @@ function buildGraph(): { nodes: StoryNode[]; edges: StoryEdge[] } {
       ],
     }),
   ];
-  const edges: StoryEdge[] = [
-    { from: "intro-01", to: "park-02" },
-    { from: "park-02", to: "roof-03" },
-  ];
+  // intro-01 은 menu 가 분기를 정한다 — 엣지를 더하면 어느 쪽이 이을지 모호해져 거부된다.
+  const edges: StoryEdge[] = [{ from: "park-02", to: "roof-03" }];
   return { nodes, edges };
 }
 
@@ -95,7 +92,7 @@ test("menu->jump->ending 그래프를 멀티씬 VnScript 로 컴파일한다", (
   assert.deepEqual(intro.choices?.[0]?.set, { tookLeft: true });
   assert.equal(intro.choices?.[0]?.cond, undefined);
   assert.equal(intro.choices?.[1]?.next, "roof-03");
-  assert.equal(intro.choices?.[1]?.cond, "metYuna");
+  assert.equal(intro.choices?.[1]?.cond, undefined);
   assert.equal(intro.next, undefined);
   assert.equal(intro.ending, undefined);
   assert.deepEqual(
@@ -108,7 +105,8 @@ test("menu->jump->ending 그래프를 멀티씬 VnScript 로 컴파일한다", (
   assert.equal(intro.lines[0]?.sfx, undefined);
   assert.equal(intro.lines[1]?.speaker, "me");
   assert.equal(intro.lines[1]?.sfx, "door-open");
-  assert.deepEqual(script.flags, { metYuna: true });
+  // set 비트는 컴파일 타임 전역 폴딩이 의미를 깨서 거부된다 — flags 는 더 이상 나오지 않는다.
+  assert.equal(script.flags, undefined);
 
   const park = script.scenes[1];
   assert.ok(park);
@@ -152,4 +150,51 @@ test("엣지 없이도 jump 로 next 를 잇는다", () => {
   assert.ok(end);
   const script = compileGraph([mid, end], []);
   assert.equal(script.scenes[0]?.next, "roof-03");
+});
+
+/* 의미가 정해지지 않은 그래프 기능은 조용히 깨는 대신 거부한다 (2026-09 리뷰 #8). */
+
+const sayOnly = (id: string): StoryNode => ({
+  id,
+  beats: [{ op: "say", who: null, text: `${id} 대사` }],
+});
+
+test("노드에서 나가는 엣지가 여러 개면 거부한다 — 첫 엣지만 살리는 건 의미 파괴", () => {
+  assert.throws(
+    () => compileGraph([sayOnly("a"), sayOnly("b"), sayOnly("c")], [{ from: "a", to: "b" }, { from: "a", to: "c" }]),
+    /여러 개/,
+  );
+});
+
+test("엣지 when 조건은 의미 미정이라 거부한다", () => {
+  assert.throws(
+    () => compileGraph([sayOnly("a"), sayOnly("b")], [{ from: "a", to: "b", when: "metYuna" }]),
+    /when/,
+  );
+});
+
+test("엣지가 없는 노드를 가리키면 거부한다", () => {
+  assert.throws(
+    () => compileGraph([sayOnly("a")], [{ from: "a", to: "ghost" }]),
+    /없는 노드/,
+  );
+});
+
+test("menu.when 은 cond 의미가 미정이라 거부한다", () => {
+  const node: StoryNode = {
+    id: "a",
+    beats: [{ op: "menu", choices: [{ text: "간다", to: "b", when: "metYuna" }] }],
+  };
+  assert.throws(() => compileGraph([node, sayOnly("b")], []), /menu\.when/);
+});
+
+test("set 비트는 실행 시점 의미가 미정이라 거부한다 — 전역 폴딩 금지", () => {
+  const node: StoryNode = {
+    id: "a",
+    beats: [
+      { op: "say", who: null, text: "대사" },
+      { op: "set", vars: { metYuna: true } },
+    ],
+  };
+  assert.throws(() => compileGraph([node], []), /set 비트/);
 });

@@ -49,7 +49,7 @@ test("POST /api/project/nodes 왕복", async () => {
   const app = createApp({ store: createMemoryStore(null), project: createMemoryProjectStore() });
   const res = await app.request("/api/project/nodes", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify(node),
   });
   assert.equal(res.status, 200);
@@ -65,7 +65,7 @@ test("깨진 노드 JSON 은 400", async () => {
   const app = createApp({ store: createMemoryStore(null), project: createMemoryProjectStore() });
   const res = await app.request("/api/project/nodes", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ id: "HELLO", beats: [] }),
   });
   assert.equal(res.status, 400);

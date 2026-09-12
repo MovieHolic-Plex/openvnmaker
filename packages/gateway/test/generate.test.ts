@@ -86,7 +86,7 @@ test("로그인 없이 generate 는 401", async () => {
   const app = createApp({ store: createMemoryStore(null) });
   const res = await app.request("/api/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ prompt: "p" }),
   });
   assert.equal(res.status, 401);
@@ -96,7 +96,7 @@ test("빈 prompt 여도 로그인만 없으면 401 이다 (기본 프롬프트�
   const app = createApp({ store: createMemoryStore(null) });
   const res = await app.request("/api/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({}),
   });
   assert.equal(res.status, 401);
@@ -108,7 +108,7 @@ test("prompt 가 한도를 넘으면 400", async () => {
   });
   const res = await app.request("/api/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ prompt: "가".repeat(16_001) }),
   });
   assert.equal(res.status, 400);
