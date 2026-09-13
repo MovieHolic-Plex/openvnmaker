@@ -42,6 +42,53 @@ test("끊긴 분기가 있으면 최대 시간과 작품 완결 여부를 알 �
   assert.throws(() => estimateScriptDuration(base, 0), /양수/);
 });
 
+test("조건 대사가 있는 분기에서도 상태 확장이 글자 수와 경로 범위를 바꾸지 않는다", () => {
+  const story: VnScript = {
+    title: "조건 분량", subtitle: "", start: "a", flags: { trust: 0 }, characters: [],
+    scenes: [
+      { id: "a", background: "title", lines: [{ speaker: null, text: "가나다" }], choices: [{ text: "믿는다", next: "b", add: { trust: 1 } }, { text: "돌아간다", next: "c" }] },
+      { id: "b", background: "title", lines: [{ speaker: null, text: "라마바사" }, { speaker: null, text: "조건 대사입니다", when: { compare: [{ flag: "trust", op: "gte", value: 1 }] } }], ending: "믿음" },
+      { id: "c", background: "title", lines: [{ speaker: null, text: "사아자차" }, { speaker: null, text: "기본 대사", when: { none: ["trust"] } }], ending: "귀가" },
+    ],
+  };
+  const result = estimateScriptDuration(story, 1);
+  // a(3) + c(4+4) = 11자 / a(3) + b(4+7) = 14자, 전체 대사 22자
+  assert.equal(result.minMinutes, 11);
+  assert.equal(result.maxMinutes, 14);
+  assert.equal(result.totalCharacters, 22);
+  assert.equal(result.endingCount, 2);
+  assert.equal(result.incomplete, false);
+});
+
+function conditionalFixture(scenes: number, linesPerScene: number, everyNthIsChoice: number): VnScript {
+  const ids = Array.from({ length: scenes }, (_, i) => `q${String(i).padStart(3, "0")}`);
+  const rows: Scene[] = ids.map((id, i) => {
+    const lines = Array.from({ length: linesPerScene }, (_, j) => ({
+      speaker: null as null,
+      text: `기록 ${i}-${j}번째 문장에서 인물은 창가에 남은 흔적을 다시 확인한다`,
+      ...(j % 4 === 3 ? { when: { compare: [{ flag: "trust", op: "gte" as const, value: j % 5 }] } } : {}),
+    }));
+    const isChoice = i % everyNthIsChoice === everyNthIsChoice - 1 && i < scenes - 1;
+    return {
+      id, background: "title", lines,
+      ...(isChoice
+        ? { choices: [{ text: "신뢰한다", next: ids[i + 1]!, add: { trust: 1 } }, { text: "보류한다", next: ids[i + 1]!, add: { trust: -1 } }] }
+        : i === scenes - 1 ? { ending: "끝" } : { next: ids[i + 1]! }),
+    };
+  });
+  return { title: "조건 성능", subtitle: "", start: ids[0]!, flags: { trust: 0 }, characters: [], scenes: rows };
+}
+
+test("조건 분기 장편에서도 분량 추정이 한 호흡에 끝난다", () => {
+  // 분기점 50개 x 신뢰도 증감 - 10,000 상태 확장 상한에 닿는 실제 장편 형태다.
+  const story = conditionalFixture(200, 30, 4);
+  const started = performance.now();
+  const result = estimateScriptDuration(story, 320);
+  const elapsed = performance.now() - started;
+  assert.ok(result.minMinutes !== null, "경로가 계산되어야 한다");
+  assert.ok(elapsed < 250, `분량 추정이 ${Math.round(elapsed)}ms 걸렸다 (기준 250ms)`);
+});
+
 test("90분 장편 설계는 두 엔딩의 합산 95분 대신 실제 90분 경로를 검증한다", () => {
   const outline = parseOutline(outlineFixture(), 90);
   const plan = createPlan(outline, base, "90분 이야기", 90);

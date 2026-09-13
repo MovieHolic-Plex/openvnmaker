@@ -80,6 +80,8 @@ export function estimateScriptDuration(script: VnScript, charsPerMinute = DEFAUL
   // them. Memoizing scene + flags avoids expanding every repeated merge path.
   if (script.scenes.some(scene => scene.lines.some(line => line.when) || scene.choices?.some(choice=>choice.when||choice.disable||choice.add)) && !result.hasCycle) {
     const memo = new Map<string, { min: number; max: number } | null>();
+    // 상태마다 같은 대사 글자 수를 다시 세면 장편에서 초 단위로 느려진다 — 대사별로 한 번만 센다.
+    const lineWeights = new Map(script.scenes.map(scene => [scene.id, scene.lines.map(line => countCharacters(line.text))]));
     const byId = new Map(script.scenes.map(scene => [scene.id, scene]));
     let states = 0, incomplete = result.incomplete;
     const range = (id: string, flags: StoryFlags): { min: number; max: number } | null => {
@@ -88,7 +90,8 @@ export function estimateScriptDuration(script: VnScript, charsPerMinute = DEFAUL
       if (++states > 10000) { incomplete = true; return null; }
       const scene = byId.get(id);
       if (!scene) { incomplete = true; return null; }
-      const own = scene.lines.filter(line => lineAllowed(line, flags)).reduce((sum,line)=>sum+countCharacters(line.text),0);
+      const counts = lineWeights.get(scene.id)!;
+      const own = scene.lines.reduce((sum, line, index) => lineAllowed(line, flags) ? sum + counts[index]! : sum, 0);
       const tails = scene.choices?.length ? scene.choices.filter(choice=>choiceAllowed(choice,flags)).map(choice=>range(choice.next,applyChoiceFlags(flags,choice))) : scene.ending ? [{min:0,max:0}] : scene.next ? [range(scene.next,flags)] : [];
       if (!tails.length || tails.some(tail=>tail===null)) incomplete = true;
       const valid = tails.filter((tail): tail is {min:number;max:number}=>tail!==null);
