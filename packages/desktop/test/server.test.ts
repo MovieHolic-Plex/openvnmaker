@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { connect } from "node:net";
 import { parseRange, resolveWithinRoot, startDesktopServer, type DesktopServer, type HonoLike } from "../src/server.js";
 
@@ -41,10 +41,12 @@ async function serve(extra: Partial<Parameters<typeof startDesktopServer>[0]> = 
 }
 
 test("resolveWithinRoot 는 루트 밖 경로와 널바이트를 막는다", () => {
-  assert.equal(resolveWithinRoot("/srv/web", "/"), "/srv/web/index.html");
-  assert.equal(resolveWithinRoot("/srv/web", "/assets/a.png"), "/srv/web/assets/a.png");
-  assert.equal(resolveWithinRoot("/srv/web", "/../../etc/passwd"), null);
-  assert.equal(resolveWithinRoot("/srv/web", "/a\0b"), null);
+  // 경로 구분자와 드라이브 문자가 OS 마다 다르다. 기대값도 같은 API 로 만들어야 윈도우에서 깨지지 않는다.
+  const root = resolve("/srv/web");
+  assert.equal(resolveWithinRoot(root, "/"), join(root, "index.html"));
+  assert.equal(resolveWithinRoot(root, "/assets/a.png"), join(root, "assets", "a.png"));
+  assert.equal(resolveWithinRoot(root, "/../../etc/passwd"), null);
+  assert.equal(resolveWithinRoot(root, "/a\0b"), null);
 });
 
 test("parseRange 는 열린 범위와 접미 범위를 파일 크기에 맞춘다", () => {
