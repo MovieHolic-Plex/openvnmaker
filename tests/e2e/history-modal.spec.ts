@@ -2,6 +2,7 @@ import {test,expect} from "@playwright/test";
 
 test("long dialogue history stays in a keyboard-readable modal and restores play position",async({page},info)=>{
   test.setTimeout(30000);
+  await page.addInitScript(()=>{localStorage.setItem("vnmaker:settings",JSON.stringify({skipUnread:true}));});
   await page.addInitScript(()=>sessionStorage.setItem("vnmaker.previewScript",JSON.stringify({title:"긴 대사록",subtitle:"",start:"s",characters:[{id:"actor",name:"이서하",bio:"",color:"#b5d5ff"}],scenes:[{id:"s",chapter:"첫 번째 장",background:"title",lines:Array.from({length:60},(_,i)=>({speaker:i%2?"actor":null,text:`기록 ${i+1}: 그날의 대화를 기억한다.`})),next:"end"},{id:"end",chapter:"마지막 장",background:"title",lines:[{speaker:null,text:"읽던 자리"}],ending:"끝"}]})));
   await page.goto("/?preview=1");await page.getByTestId("skip-button").click();await expect(page.getByTestId("dialogue-text")).toHaveText("읽던 자리");
   const opener=page.getByTestId("history-button");await opener.focus();await page.keyboard.press("Enter");const panel=page.getByTestId("history-panel");
@@ -28,6 +29,7 @@ test("history before advancing shows an empty state without exposing future line
 
 test("chapter labels and selected choices survive a manual save and reload",async({page},info)=>{
   test.setTimeout(30000);
+  await page.addInitScript(()=>{localStorage.setItem("vnmaker:settings",JSON.stringify({skipUnread:true}));});
   await page.addInitScript(()=>sessionStorage.setItem("vnmaker.previewScript",JSON.stringify({title:"장별 기록",subtitle:"",start:"a",characters:[],scenes:[{id:"a",chapter:"첫 번째 장",background:"title",lines:[{speaker:null,text:"처음 남긴 말"},{speaker:null,text:"두 번째 말"}],choices:[{text:"기억을 따라간다",next:"b"}]},{id:"b",chapter:"두 번째 장",background:"title",lines:[{speaker:null,text:"다음 장의 말"}],next:"c"},{id:"c",chapter:"아직 읽지 않은 장",background:"title",lines:[{speaker:null,text:"멈춘 자리"}],ending:"끝"}]})));
   await page.goto("/?preview=1");await page.getByTestId("skip-button").click();await page.getByTestId("choice-0").click();await page.getByTestId("skip-button").click();
   await page.getByTestId("save-button").click();await page.getByTestId("slot-save-0").click();await page.reload();
@@ -40,7 +42,7 @@ test("chapter labels and selected choices survive a manual save and reload",asyn
 
 test("loading after a manuscript update identifies the snapshot and retains its original choice and history",async({page},info)=>{
   const original={title:"출시본",subtitle:"",start:"a",flags:{trust:0},characters:[],scenes:[{id:"a",chapter:"기억",background:"title",lines:[{speaker:null,text:"저장에 남길 첫 문장"},{speaker:null,text:"이전 판본의 선택 직전"}],choices:[{text:"출시 당시의 선택",next:"b",set:{trust:1}}]},{id:"b",background:"title",lines:[{speaker:null,text:"출시 당시의 결말"}],ending:"원래 결말"}]};
-  await page.goto("/");await page.evaluate(source=>sessionStorage.setItem("vnmaker.previewScript",JSON.stringify(source)),original);await page.goto("/?preview=1");
+  await page.goto("/");await page.evaluate(source=>{sessionStorage.setItem("vnmaker.previewScript",JSON.stringify(source));localStorage.setItem("vnmaker:settings",JSON.stringify({skipUnread:true}));},original);await page.goto("/?preview=1");
   await page.getByTestId("skip-button").click();await page.getByTestId("save-button").click();await page.getByTestId("slot-save-0").click();
   const revised=structuredClone(original);revised.scenes[0]!.lines.unshift({speaker:null,text:"업데이트에서 삽입한 문장"});revised.scenes[0]!.choices![0]!.text="업데이트된 선택";
   await page.evaluate(source=>sessionStorage.setItem("vnmaker.previewScript",JSON.stringify(source)),revised);await page.reload();

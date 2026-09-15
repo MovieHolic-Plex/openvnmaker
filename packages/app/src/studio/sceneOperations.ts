@@ -1,11 +1,30 @@
 import type { Scene, VnScript } from "@vnmaker/content";
 
+/** 원본 바로 뒤에 온전한 사본을 넣는다. 원본의 선택지·다음 씬·엔딩은 그대로 두고, 사본도 같은 곳으로 이어진다. */
 export function duplicateScene(script: VnScript, sceneId: string, newId: string): VnScript {
   const scene=script.scenes.find(scene=>scene.id===sceneId);
   if(!scene || script.scenes.some(scene=>scene.id===newId)) throw new Error("복제할 장면 ID를 확인하세요.");
   const copy={...structuredClone(scene),id:newId,chapter:`${scene.chapter||scene.id} · 복사`};
-  const {choices:_choices,ending:_ending,...original}=scene;
-  return {...script,scenes:script.scenes.flatMap(row=>row.id===sceneId?[{...original,next:newId},copy]:[row])};
+  return {...script,scenes:script.scenes.flatMap(row=>row.id===sceneId?[row,copy]:[row])};
+}
+
+export const SCENE_ID = /^[a-zA-Z0-9가-힣][a-zA-Z0-9가-힣_-]{0,63}$/;
+/** 씬 ID를 바꾸고 시작 위치·다음 씬·선택지 연결·에셋의 대상 씬을 함께 갱신한다. 대사·선택지 ID는 씬 안에서만 유효하므로 그대로다. */
+export function renameScene(script: VnScript, from: string, to: string): VnScript {
+  const scene=script.scenes.find(scene=>scene.id===from);
+  if(!scene) throw new Error("이름을 바꿀 장면을 찾을 수 없습니다.");
+  if(from===to) return script;
+  if(!SCENE_ID.test(to)) throw new Error("씬 ID는 영문·숫자·한글로 시작하는 64자 이하의 영문·숫자·한글·밑줄·하이픈이어야 합니다.");
+  if(script.scenes.some(scene=>scene.id===to)) throw new Error("이미 사용 중인 씬 ID입니다.");
+  const link=(id:string|undefined)=>id===from?to:id;
+  return {
+    ...script, start: script.start===from?to:script.start,
+    scenes: script.scenes.map(row=>{
+      const next=link(row.next);
+      return {...row, id: row.id===from?to:row.id, ...(next!==undefined?{next}:{}), ...(row.choices?{choices:row.choices.map(choice=>choice.next===from?{...choice,next:to}:choice)}:{})};
+    }),
+    ...(script.assets?{assets:script.assets.map(asset=>asset.sceneId===from?{...asset,sceneId:to}:asset)}:{}),
+  };
 }
 
 /** Changing outline order does not implicitly rewrite a branching story. */

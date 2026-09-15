@@ -16,3 +16,13 @@ export async function saveVersion(projectId:string,script:VnScript,label:string)
   const version={id:crypto.randomUUID(),projectId,createdAt:Date.now(),label:label.trim()||"작업 버전",fingerprint:scriptFingerprint(script),script:structuredClone(script)};
   const db=await database();return new Promise((resolve,reject)=>{const transaction=db.transaction("versions","readwrite");const store=transaction.objectStore("versions");store.put(version);const request=store.getAll();request.onsuccess=()=>{for(const stale of staleVersionIds(request.result as ProjectVersion[],projectId))store.delete(stale);};transaction.oncomplete=()=>{db.close();resolve(version);};transaction.onerror=()=>{db.close();reject(transaction.error);};transaction.onabort=()=>{db.close();reject(transaction.error);};});
 }
+/** 작품을 지울 때 그 작품의 버전 기록도 함께 지운다. */
+export async function deleteProjectVersions(projectId:string):Promise<number>{
+  const db=await database();
+  return new Promise((resolve,reject)=>{const transaction=db.transaction("versions","readwrite");const store=transaction.objectStore("versions");const request=store.getAll();let removed=0;request.onsuccess=()=>{for(const row of ownVersions(request.result as ProjectVersion[],projectId)){store.delete(row.id);removed++;}};transaction.oncomplete=()=>{db.close();resolve(removed);};transaction.onerror=transaction.onabort=()=>{db.close();reject(transaction.error);};});
+}
+/** 모든 작품의 버전 원고. 보관함 파일을 지우기 전에 옛 버전이 그 파일을 쓰는지 볼 때 쓴다. 읽을 수 없는 행은 건너뛴다. */
+export async function listAllVersionScripts():Promise<VnScript[]>{
+  const db=await database();
+  return new Promise((resolve,reject)=>{const request=db.transaction("versions","readonly").objectStore("versions").getAll();request.onsuccess=()=>{const rows:VnScript[]=[];for(const row of request.result as Partial<ProjectVersion>[]){try{rows.push(parseScript(row.script));}catch{/* 손상 버전은 참조를 알 수 없다 — 지우기 판단에서만 빠진다. */}}resolve(rows);};request.onerror=()=>reject(request.error);request.transaction!.oncomplete=()=>db.close();});
+}

@@ -8,6 +8,8 @@ const fixture:VnScript={...script,title:"저장과 선택 검증",start:"start",
   {id:"merge",chapter:"합류한 뒤",background:"title",backgroundUrl:"/assets/art/rain-library.png",lines:[{speaker:"seorin",text:"아까 남긴 선택을 기억해. 이 대사는 그 선택을 했을 때만 보여.",when:{all:["remembered"]}},{speaker:"seorin",text:"새로 시작하자고 했지. 여기는 다른 선택에서 보이는 대사야.",when:{none:["remembered"]}},{speaker:null,text:"두 사람은 같은 길 위에서 서로 다른 이야기를 이어 갔다."}],ending:"기록된 결말"}
 ]};
 
+function sansIds<T>(value: T): T { return JSON.parse(JSON.stringify(value), (key, val) => (val && typeof val === "object" && !Array.isArray(val) && "text" in val && "id" in val ? (() => { const { id, ...rest } = val as Record<string, unknown>; return rest; })() : val)); }
+async function saved(page:Page){await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");}
 async function seedEditor(page:Page){await page.addInitScript(({story,edition})=>{if(localStorage.getItem("completion-seed"))return;localStorage.setItem("completion-seed","1");localStorage.setItem("vnmaker.edition",edition);localStorage.setItem("vnmaker.studio.project.v1",JSON.stringify(story));},{story:fixture,edition:EDITION});}
 test.beforeEach(async({page})=>{await mkdir("evidence/completion",{recursive:true});await page.setViewportSize({width:1440,height:1000});});
 
@@ -31,8 +33,8 @@ test("editing resumes at the same dialogue, view and focus mode; scene operation
   await seedEditor(page);await page.goto("/studio.html");await page.getByTestId("studio-scene-merge").click();await page.getByTestId("studio-line-2").click();await page.getByRole("button",{name:"집중 모드",exact:true}).click();await page.reload();
   await expect(page.getByTestId("studio-line-2")).toHaveClass(/is-selected/);await expect(page.locator(".studio")).toHaveClass(/studio-focus/);await page.getByRole("button",{name:"연출 편집",exact:true}).click();
   await expect(page.getByTestId("studio-line-text")).toHaveValue(fixture.scenes[1]!.lines[2]!.text);
-  await page.getByTestId("scene-duplicate").click();await expect(page.getByTestId("studio-scene-list").locator("li")).toHaveCount(3);const copiedId=await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!);return s.scenes[2].id as string;});
-  await page.getByRole("button",{name:"장면 목록에서 위로 이동"}).click();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!).scenes[1].id)).toBe(copiedId);
+  await page.getByTestId("scene-duplicate").click();await expect(page.getByTestId("studio-scene-list").locator("li")).toHaveCount(3);await saved(page);const copiedId=await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!);return s.scenes[2].id as string;});
+  await page.getByRole("button",{name:"장면 목록에서 위로 이동"}).click();await saved(page);expect(await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!).scenes[1].id)).toBe(copiedId);
   await page.getByTestId("scene-delete").click();await page.getByLabel("삭제 후 연결할 장면").selectOption("merge");await page.getByTestId("scene-delete-confirm").click();await expect(page.getByTestId("studio-scene-list").locator("li")).toHaveCount(2);
   await page.getByTestId("studio-undo").click();await expect(page.getByTestId("studio-scene-list").locator("li")).toHaveCount(3);
 });
@@ -97,12 +99,14 @@ test("a slower earlier import cannot replace the newer imported manuscript or it
   await expect.poll(()=>page.evaluate(()=>(window as Window & {__qaImportGate?:{returned:boolean}}).__qaImportGate?.returned)).toBe(true);
   // Let the rejected older import's promise continuation and any React update finish.
   await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
-  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!))).toEqual(latest);
+  await saved(page);
+  expect(sansIds(await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!)))).toEqual(sansIds(latest));
   await expect(page.getByLabel("작품 제목")).toHaveValue(latest.title);
   await expect(page.getByTestId("studio-line-text")).toHaveValue(latest.scenes[0]!.lines[0]!.text);
   await expect(page.getByRole("status")).toContainText("작품을 가져왔습니다");
   await page.getByTestId("studio-undo").click();
-  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!))).toEqual(fixture);
+  await saved(page);
+  expect(sansIds(await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!)))).toEqual(sansIds(fixture));
 });
 
 test("a pending version restore blocks closing and undo, then resets preview choices after its real backup completes",async({page})=>{
@@ -114,7 +118,7 @@ test("a pending version restore blocks closing and undo, then resets preview cho
   await expect(page.getByTestId("version-row").filter({hasText:"대기 복원 대상"})).toBeVisible();await page.getByLabel("버전 기록 닫기").click();
   await page.getByTestId("studio-line-text").fill(currentText);
   await page.locator(".preview-routes summary").click();await page.getByLabel("미리보기 선택 1").selectOption("0");await page.locator(".preview-routes summary").click();
-  const current=await page.evaluate(()=>localStorage.getItem("vnmaker.studio.project.v1"));
+  await saved(page);const current=await page.evaluate(()=>localStorage.getItem("vnmaker.studio.project.v1"));
   await page.getByTestId("studio-versions").click();
   const target=page.getByTestId("version-row").filter({hasText:"대기 복원 대상"});await expect(target).toBeVisible();
   // Hold a genuine readwrite transaction; the app's backup transaction must queue behind it.

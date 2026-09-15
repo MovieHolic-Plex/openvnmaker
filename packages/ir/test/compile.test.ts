@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { compileNode, helloNode, parseNode } from "../src/index.js";
+import { compileGraph, compileNode, helloNode, parseNode } from "../src/index.js";
 
 test("빈 대사는 노드가 되지 않는다", () => {
   assert.throws(() => helloNode("   "), /빈 대사/);
@@ -40,4 +40,16 @@ test("노드 id 에 경로 조각이 있으면 거절한다", () => {
   assert.throws(() => parseNode({ id: "../etc", beats: [{ op: "scene", bg: "title" }] }), /id/);
   assert.throws(() => parseNode({ id: "a/b", beats: [{ op: "scene", bg: "title" }] }), /id/);
   assert.throws(() => parseNode({ id: "HELLO", beats: [{ op: "scene", bg: "title" }] }), /id/);
+});
+
+test("show 비트의 outfit 이 컴파일된 스프라이트 지시로 전달된다", () => {
+  const node = parseNode({ id: "n1", beats: [
+    { op: "scene", bg: "title" },
+    { op: "show", who: "hero", slot: "center", expression: "neutral", outfit: "casual" },
+    { op: "say", who: "hero", text: "옷을 갈아입었다." },
+    { op: "ending", title: "끝" },
+  ] });
+  const script = compileGraph([node], []);
+  const dir = script.scenes[0]?.sprites?.[0];
+  assert.equal(dir?.outfit, "casual");
 });

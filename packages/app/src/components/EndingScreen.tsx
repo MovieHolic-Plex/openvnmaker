@@ -1,4 +1,5 @@
 import { validBackgroundUrl } from "@vnmaker/content";
+import { assetUrl } from "../assetUrl.js";
 
 interface Props {
   readonly title: string;
@@ -14,7 +15,7 @@ interface Props {
 export function EndingScreen({ title, affection, background = "title", backgroundUrl, cgUrl, showAffection = true, onBack, onCredits }: Props) {
   return (
     <section className="ending-screen" data-testid="ending-screen">
-      <img className="ending-bg" src={validBackgroundUrl(cgUrl) ? cgUrl : validBackgroundUrl(backgroundUrl) ? backgroundUrl : `/assets/bg/${background}.png`} alt="" />
+      <img className="ending-bg" src={assetUrl(validBackgroundUrl(cgUrl) ? cgUrl! : validBackgroundUrl(backgroundUrl) ? backgroundUrl! : `/assets/bg/${background}.png`)} alt="" />
       <div className="ending-wash" />
       <div className="ending-plate">
         <p className="ending-eyebrow">ENDING</p>
@@ -22,7 +23,7 @@ export function EndingScreen({ title, affection, background = "title", backgroun
           {title}
         </h2>
         <div className="title-rule" />
-        {showAffection && <p className="ending-note">서린과의 거리 {affection}</p>}
+        {showAffection && <p className="ending-note">호감도 {affection}</p>}
         <button type="button" className="ink-button" data-testid="back-to-title" onClick={onBack}>
           타이틀로
         </button>

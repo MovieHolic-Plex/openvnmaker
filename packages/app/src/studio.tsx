@@ -1,12 +1,9 @@
-import { initializeEdition, EDITION, EDITION_KEY } from "./storage/edition.js";
 import { ensureAssetServer } from "./storage/projectAssets.js";
 import { createRoot } from "react-dom/client";
 import { StudioApp } from "./StudioApp.js";
 import { EDITOR_LOCK, EditorSession } from "./studio/EditorSession.js";
 import { LibraryRecovery } from "./studio/LibraryRecovery.js";
-import { ACTIVE_PROJECT_KEY, listProjects } from "./studio/projects.js";
-import { PROJECT_KEY, loadProject } from "./studio/project.js";
-import { parseScript } from "@vnmaker/content";
+import { resolveStartupProject } from "./studio/projects.js";
 import "./styles/global.css";
 import "./styles/studio.css";
 import "./styles/studio-modern.css";
@@ -20,34 +17,20 @@ if (!navigator.locks) {
   root.render(<EditorSession />);
   // Do not initialize migrations, read the manuscript or mount autosave until we own the lock.
   void navigator.locks.request(EDITOR_LOCK, async () => {
-    let recoveryInitial:ReturnType<typeof loadProject>|undefined;
-    if(localStorage.getItem(PROJECT_KEY)===null){
-      // localStorage may not have reached disk when the browser process crashed.
-      // Check durable manuscripts before first-run migration can create and autosave a sample.
-      const listing=await listProjects();
-      const rows=listing.projects;
-      if(!rows.length && listing.damagedCount){
-        root.render(<LibraryRecovery count={listing.damagedCount} onRestored={()=>{
-          void ensureAssetServer().catch(()=>{});
-          root.render(<StudioApp />);
-        }} />);
-        // Recovery imports are writes too: retain ownership until document close/reload.
-        await new Promise<void>(()=>{});
-        return;
-      }
-      if(rows.length){
-        const active=localStorage.getItem(ACTIVE_PROJECT_KEY);
-        const candidate=rows.find(row=>row.id===active)??rows[0]!;
-        const script=parseScript(candidate.script);
-        localStorage.setItem(ACTIVE_PROJECT_KEY,candidate.id);
-        localStorage.setItem(EDITION_KEY,EDITION);
-        recoveryInitial={script,error:"빠른 복구 데이터가 없어 작품 보관함의 원고를 찾았습니다. 활성 작품 정보도 없으면 최근 저장 작품을 제시합니다. 제목과 저장 시점을 확인하고 복구하세요."};
-      }
+    const startup = await resolveStartupProject();
+    if (startup.kind === "library-recovery") {
+      root.render(<LibraryRecovery count={startup.damagedCount} onRestored={script => {
+        void ensureAssetServer().catch(() => {});
+        // 복구 직후의 사본 쓰기가 용량 초과로 비어 있을 수 있다 — 방금 복구한 원고를 직접 넘긴다.
+        root.render(<StudioApp recoveryInitial={{ script, error: null }} />);
+      }} />);
+      // Recovery imports are writes too: retain ownership until document close/reload.
+      await new Promise<void>(() => {});
+      return;
     }
-    if(!recoveryInitial)initializeEdition();
-    void ensureAssetServer().catch(()=>{/* Import controls report storage availability. */});
-    root.render(<StudioApp {...(recoveryInitial?{recoveryInitial}:{})} />);
+    void ensureAssetServer().catch(() => {/* Import controls report storage availability. */});
+    root.render(<StudioApp recoveryInitial={startup.initial} />);
     // The browser releases this document's lock on close/reload/crash. Never steal another writer's lock.
-    await new Promise<void>(()=>{});
+    await new Promise<void>(() => {});
   }).catch(() => root.render(<EditorSession error="편집 권한 확보 또는 초기화에 실패했습니다. 현재 탭을 새로고침해 다시 시도하세요." />));
 }

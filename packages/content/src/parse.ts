@@ -1,15 +1,18 @@
 import { BACKGROUNDS, BGM, CHARACTERS, EXPRESSIONS, SFX } from "./manifest.js";
-import type { Line, Scene, VnScript } from "./schema.js";
+import type { Line, Scene, SpriteDirection, VnScript } from "./schema.js";
 import { validCharacterKey } from "./characters.js";
 import { choiceAllowed, choiceEffectError, applyChoiceFlags, lineAllowed } from "./conditions.js";
 import { validAudioUrl } from "./audio.js";
+
+/** Authoring limits shared by the parser and the studio UI. The parser stays the source of truth; the editor uses these to refuse or cap input before it becomes unsaveable. */
+export const LIMITS = { text: 20_000, sceneLines: 2000, scenes: 300, choices: 8, flags: 100, characters: 200 } as const;
 
 function object(value: unknown, name: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${name}: 객체가 필요합니다.`);
   return value as Record<string, unknown>;
 }
 function string(value: unknown, name: string, empty = false): asserts value is string {
-  if (typeof value !== "string" || (!empty && !value.trim()) || value.length > 20_000) throw new Error(`${name}: 올바른 텍스트가 필요합니다.`);
+  if (typeof value !== "string" || (!empty && !value.trim()) || value.length > LIMITS.text) throw new Error(`${name}: 올바른 텍스트가 필요합니다.`);
 }
 function member(value: unknown, values: readonly string[], name: string) {
   if (typeof value !== "string" || !values.includes(value)) throw new Error(`${name}: 지원하지 않는 값입니다.`);
@@ -53,6 +56,7 @@ function sprites(value: unknown) {
     slots.add(sprite["slot"]);
     if (sprite["character"] !== null) characterKey(sprite["character"], "배우");
     if (sprite["expression"] !== undefined) characterKey(sprite["expression"], "배우 표정");
+    if (sprite["outfit"] !== undefined && sprite["outfit"] !== null) characterKey(sprite["outfit"], "배우 의상");
     if (sprite["poseUrl"] !== undefined && sprite["poseUrl"] !== null && !validBackgroundUrl(sprite["poseUrl"])) throw new Error("배우 포즈 주소가 올바르지 않습니다.");
   }
 }
@@ -70,7 +74,7 @@ function narrativeId(value:unknown,seen:Set<string>,kind:string):void {
 }
 
 export function parseLines(value: unknown): Line[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 2000) throw new Error("대사는 1~2,000줄이어야 합니다.");
+  if (!Array.isArray(value) || value.length === 0 || value.length > LIMITS.sceneLines) throw new Error("대사는 1~2,000줄이어야 합니다.");
   const ids=new Set<string>();
   for (const item of value) {
     const row = object(item, "대사");
@@ -81,6 +85,7 @@ export function parseLines(value: unknown): Line[] {
     if (row["sfx"] !== undefined && !validAudioUrl(row["sfx"])) member(row["sfx"], Object.keys(SFX), "효과음");
     if (row["voice"] !== undefined && !validAudioUrl(row["voice"])) throw new Error("보이스 파일 주소가 올바르지 않습니다.");
     if (row["shake"] !== undefined && typeof row["shake"] !== "boolean") throw new Error("흔들림 값이 올바르지 않습니다.");
+    if (row["cgHide"] !== undefined && typeof row["cgHide"] !== "boolean") throw new Error("CG 숨김 값이 올바르지 않습니다.");
     if (row["cgUrl"] !== undefined && row["cgUrl"] !== null && !validBackgroundUrl(row["cgUrl"])) throw new Error("대사 CG 주소가 올바르지 않습니다.");
     if (row["backgroundUrl"] !== undefined && !validBackgroundUrl(row["backgroundUrl"])) throw new Error("대사 배경 주소가 올바르지 않습니다.");
     if (row["sprites"] !== undefined) sprites(row["sprites"]);
@@ -100,13 +105,15 @@ export function parseScene(value: unknown): Scene {
   if (row["bgm"] !== undefined && !validAudioUrl(row["bgm"])) member(row["bgm"], Object.keys(BGM), "배경음악");
   if (row["backgroundUrl"] !== undefined && !validBackgroundUrl(row["backgroundUrl"])) throw new Error("생성 배경 주소가 올바르지 않습니다.");
   if (row["cgUrl"] !== undefined && !validBackgroundUrl(row["cgUrl"])) throw new Error("이벤트 CG 주소가 올바르지 않습니다.");
+  if (row["cg"] !== undefined) string(row["cg"], "이벤트 CG");
+  if (row["cg"] !== undefined && row["cgUrl"] !== undefined) throw new Error("이벤트 CG는 cg(에셋)와 cgUrl(주소) 중 하나만 지정할 수 있습니다.");
   if (row["hideSprites"] !== undefined && typeof row["hideSprites"] !== "boolean") throw new Error("배우 표시 설정이 올바르지 않습니다.");
   if (row["framing"] !== undefined) member(row["framing"], ["wide", "close", "cinematic"], "카메라 프레이밍");
   if (row["artBrief"] !== undefined) string(row["artBrief"], "장면 아트 브리프", true);
   if (row["transition"] !== undefined) member(row["transition"], ["none", "fade", "dissolve", "flash", "fadeToBlack"], "전환");
   if (row["sprites"] !== undefined) sprites(row["sprites"]);
   if (row["choices"] !== undefined) {
-    if (!Array.isArray(row["choices"]) || row["choices"].length > 8) throw new Error("선택지는 최대 8개까지 지원합니다.");
+    if (!Array.isArray(row["choices"]) || row["choices"].length > LIMITS.choices) throw new Error("선택지는 최대 8개까지 지원합니다.");
     const choiceIds=new Set<string>();
     for (const item of row["choices"]) {
       const choice = object(item, "선택지");
@@ -128,6 +135,7 @@ export function parseScript(value: unknown): VnScript {
   const row = object(value, "작품");
   if(row["musicFadeSeconds"]!==undefined&&(typeof row["musicFadeSeconds"]!=="number"||!Number.isFinite(row["musicFadeSeconds"])||row["musicFadeSeconds"]<0||row["musicFadeSeconds"]>10))throw new Error("음악 페이드는 0~10초의 유한한 숫자여야 합니다.");
   string(row["title"], "작품 제목");
+  if (row["titleBgm"] !== undefined && !validAudioUrl(row["titleBgm"])) member(row["titleBgm"], Object.keys(BGM), "타이틀 음악");
   if (row["nativeSaveId"] !== undefined && (typeof row["nativeSaveId"] !== "string" || !/^[a-f0-9]{16}(?:[a-f0-9]{16})?$/.test(row["nativeSaveId"]))) throw new Error("네이티브 배포 ID는 16자리 또는 32자리 소문자 16진수여야 합니다.");
   string(row["subtitle"], "작품 설명", true);
   if (row["credits"] !== undefined) {
@@ -148,11 +156,13 @@ export function parseScript(value: unknown): VnScript {
   }
   if (!Array.isArray(row["characters"]) || row["characters"].length > 200) throw new Error("등장인물은 최대 200명입니다.");
   const characters = new Set();
+  const outfitSets = new Map<string, Set<string>>();
   for (const item of row["characters"]) {
     const character = object(item, "등장인물");
     characterKey(character["id"], "등장인물 ID");
     if (characters.has(character["id"])) throw new Error("등장인물 ID가 중복됩니다.");
     characters.add(character["id"]);
+    outfitSets.set(character["id"] as string, new Set((character["outfits"] as string[] | undefined) ?? []));
     string(character["name"], "등장인물 이름");
     string(character["bio"], "등장인물 설명", true);
     if (character["chromaKey"] !== undefined && character["chromaKey"] !== "#00ff00") throw new Error("지원하지 않는 캐릭터 크로마키입니다.");
@@ -163,17 +173,46 @@ export function parseScript(value: unknown): VnScript {
         if (!validBackgroundUrl(url)) throw new Error("캐릭터 이미지 주소가 올바르지 않습니다.");
       }
     }
+    if (character["outfits"] !== undefined) {
+      const outfits = character["outfits"];
+      if (!Array.isArray(outfits) || outfits.length > 20) throw new Error("의상은 최대 20벌입니다.");
+      const seen = new Set<string>();
+      for (const outfit of outfits) {
+        characterKey(outfit, "의상");
+        if (seen.has(outfit as string)) throw new Error("의상 ID가 중복됩니다.");
+        seen.add(outfit as string);
+      }
+    }
+    if (character["outfitImages"] !== undefined) {
+      const declared = new Set((character["outfits"] as string[] | undefined) ?? []);
+      const table = object(character["outfitImages"], "캐릭터 의상 이미지");
+      for (const [outfit, images] of Object.entries(table)) {
+        if (!declared.has(outfit)) throw new Error(`선언되지 않은 의상 이미지입니다: ${outfit}`);
+        const row = object(images, "의상 이미지");
+        if (Object.keys(row).length > 40) throw new Error("의상당 이미지는 최대 40개입니다.");
+        for (const [expression, url] of Object.entries(row)) {
+          characterKey(expression, "의상 이미지 표정");
+          if (!validBackgroundUrl(url)) throw new Error("의상 이미지 주소가 올바르지 않습니다.");
+        }
+      }
+    }
     if (typeof character["color"] !== "string" || !/^#[a-f0-9]{6}$/i.test(character["color"])) throw new Error("이름표 색상이 올바르지 않습니다.");
   }
-  if (!Array.isArray(row["scenes"]) || row["scenes"].length === 0 || row["scenes"].length > 300) throw new Error("작품에는 1~300개의 씬이 필요합니다.");
+  if (!Array.isArray(row["scenes"]) || row["scenes"].length === 0 || row["scenes"].length > LIMITS.scenes) throw new Error("작품에는 1~300개의 씬이 필요합니다.");
   const ids = new Set();
   for (const item of row["scenes"]) {
     const scene = parseScene(item);
     if (ids.has(scene.id)) throw new Error(`중복된 씬 ID: ${scene.id}`);
     ids.add(scene.id);
-    for (const line of scene.lines) if (line.speaker && line.speaker !== "me" && !characters.has(line.speaker)) throw new Error(`등록되지 않은 화자: ${line.speaker}`);
-    for (const sprite of scene.sprites ?? []) if (sprite.character && !characters.has(sprite.character)) throw new Error(`등록되지 않은 배우: ${sprite.character}`);
-    for (const line of scene.lines) for (const sprite of line.sprites ?? []) if (sprite.character && !characters.has(sprite.character)) throw new Error(`등록되지 않은 배우: ${sprite.character}`);
+    const checkSprite = (sprite: SpriteDirection) => {
+      if (sprite.character && !characters.has(sprite.character)) throw new Error(`등록되지 않은 배우: ${sprite.character}`);
+      if (typeof sprite.outfit === "string" && sprite.character && !outfitSets.get(sprite.character)?.has(sprite.outfit)) throw new Error(`선언되지 않은 의상입니다: ${sprite.outfit}`);
+    };
+    for (const sprite of scene.sprites ?? []) checkSprite(sprite);
+    for (const line of scene.lines) {
+      if (line.speaker && line.speaker !== "me" && !characters.has(line.speaker)) throw new Error(`등록되지 않은 화자: ${line.speaker}`);
+      for (const sprite of line.sprites ?? []) checkSprite(sprite);
+    }
   }
   if (!ids.has(row["start"])) throw new Error("시작 씬을 찾을 수 없습니다.");
   if (row["artDirection"] !== undefined) string(row["artDirection"], "아트 디렉션", true);
@@ -193,6 +232,10 @@ export function parseScript(value: unknown): VnScript {
       if (asset["sceneId"] !== undefined && !ids.has(asset["sceneId"])) throw new Error("에셋의 대상 씬을 찾을 수 없습니다.");
       if (asset["characterId"] !== undefined && !characters.has(asset["characterId"])) throw new Error("에셋의 등장인물을 찾을 수 없습니다.");
       if (asset["expression"] !== undefined) characterKey(asset["expression"], "에셋 표정");
+    }
+    const cgAssets = new Set((row["assets"] as { id: string; kind: string }[]).filter(asset => asset.kind === "cg").map(asset => asset.id));
+    for (const item of row["scenes"] as { id: string; cg?: string }[]) {
+      if (item.cg !== undefined && !cgAssets.has(item.cg)) throw new Error(`씬 ${item.id}: 이벤트 CG 에셋을 찾을 수 없습니다: ${item.cg}`);
     }
   }
   for (const asset of [...(row["assets"] as Record<string, unknown>[] | undefined ?? []), ...(row["audioAssets"] as Record<string, unknown>[] | undefined ?? [])]) {

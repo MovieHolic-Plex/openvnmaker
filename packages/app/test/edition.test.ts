@@ -19,3 +19,9 @@ test("first-run player initialization does not seed a sample over a possible dur
   const {storage,map}=memory();initializeEdition(storage);assert.deepEqual([...map],[[EDITION_KEY,EDITION]]);
   initializeEdition(storage);assert.equal(storage.getItem("vnmaker.studio.project.v1"),null);
 });
+test("a full localStorage cannot stop the player from booting: the edition marker write fails quietly",()=>{
+  const {storage,map}=memory();
+  const full:Storage={...storage,setItem:()=>{throw new DOMException("quota","QuotaExceededError");}};
+  assert.doesNotThrow(()=>initializeEdition(full));
+  assert.equal(map.size,0);
+});

@@ -6,7 +6,7 @@ import path from "node:path";
 test.beforeEach(async({page})=>{await page.setViewportSize({width:1440,height:1000});await mkdir("evidence/production-authoring",{recursive:true});});
 test("new projects, arbitrary actors and uploaded originals survive reload, preview, switching and export",async({page,browser})=>{
   const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
-  const api:string[]=[];page.on("request",request=>{if(new URL(request.url()).pathname.startsWith("/api/"))api.push(request.url());});
+  const api:string[]=[];page.on("request",request=>{const path=new URL(request.url()).pathname;if(path.startsWith("/api/")&&!/^\/api\/(store\/|auth\/status|image\/config|generate\/config)/.test(path))api.push(request.url());});
   await page.goto("/studio.html");await page.getByTestId("project-library").click();await page.getByLabel("새 작품 이름").fill("밤의 증인");await page.getByTestId("project-create").click();
   await expect(page.getByLabel("작품 제목")).toHaveValue("밤의 증인");await expect(page.getByTestId("studio-undo")).toBeDisabled();
   const firstId=await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!).scenes[0].lines[0].id);expect(firstId).toMatch(/^[a-zA-Z0-9-]+$/);

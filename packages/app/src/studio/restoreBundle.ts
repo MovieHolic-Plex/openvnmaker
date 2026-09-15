@@ -59,35 +59,75 @@ export async function readProjectBundle(file: Blob): Promise<{ script: VnScript;
   return {script, files};
 }
 
+export type BundlePathKind = "user" | "exported" | "builtin";
+/**
+ * ZIP 안 경로의 출신. `user` 는 이 편집기 보관함 파일(내용 해시 이름), `exported` 는 내보내기 때 게이트웨이 생성
+ * 이미지를 옮겨 둔 것(작품 소유), 나머지는 편집기에 함께 실린 기본 에셋이다.
+ */
+export const bundlePathKind = (path: string): BundlePathKind => path.startsWith("/assets/user/") ? "user" : path.startsWith("/assets/exported/") ? "exported" : "builtin";
+
+/**
+ * 복원 결과 원고를 만든다. 옮겨진(replacements) 주소만 바꾸고 나머지는 그대로 둔다.
+ * 기본 에셋을 암묵적으로 쓰던 참조(배경 id, 내장 배우 스프라이트)는 그 파일이 옮겨졀 때만 명시적 주소로 바꾼다.
+ * 이전에는 모든 씬에 backgroundUrl 을, 모든 배우에 전 표정 주소를 채워 넣어 원고가 원본과 91개 필드나 달라졌다.
+ */
+export function rebaseRestoredScript(script: VnScript, replacements: ReadonlyMap<string, string>): VnScript {
+  if (!replacements.size) return parseScript(structuredClone(script));
+  const explicit: VnScript = {
+    ...script,
+    characters: script.characters.map(actor => {
+      const moved = Object.fromEntries(characterExpressions(actor).flatMap(expression => {
+        if (actor.expressionImages?.[expression]) return [];
+        const implicit = characterImage(actor, expression);
+        return implicit && replacements.has(implicit) ? [[expression, implicit]] : [];
+      }));
+      return Object.keys(moved).length ? { ...actor, expressionImages: { ...actor.expressionImages, ...moved } } : actor;
+    }),
+    scenes: script.scenes.map(scene => {
+      const implicit = `/assets/bg/${scene.background}.png`;
+      return !scene.backgroundUrl && replacements.has(implicit) ? { ...scene, backgroundUrl: implicit } : scene;
+    }),
+  };
+  return rebaseProjectAssets(explicit, replacements);
+}
+
 /** Validate everything before one atomic media transaction; never overwrite built-in assets. */
 export async function restoreProjectBundle(file: Blob, fetcher: typeof fetch = fetch): Promise<VnScript> {
   const {script, files} = await readProjectBundle(file);
   const assets: StoredAsset[] = [];
   const replacements = new Map<string,string>();
+  const importImage = async (path: string, bytes: Uint8Array) => {
+    const asset = await describeImage(new Blob([bytes as Uint8Array<ArrayBuffer>]));
+    if (path.startsWith("/assets/user/") && asset.path !== path) throw new Error(`원화 파일의 내용과 식별자가 다릅니다: ${path}`);
+    const bitmap = await createImageBitmap(asset.blob).catch(() => { throw new Error(`손상된 원화입니다: ${path}`); });
+    const pixels = bitmap.width * bitmap.height; bitmap.close();
+    if (pixels > 64_000_000) throw new Error(`원화 해상도 제한을 초과했습니다: ${path}`);
+    assets.push({...asset, originalName:path.split("/").at(-1)!, createdAt:Date.now()});
+    if (asset.path !== path) replacements.set(path,asset.path);
+  };
   for (const path of collectProjectAssets(script)) {
     const bytes = files[path.slice(1)]!;
-    if (/\.(png|jpg|jpeg|webp)$/i.test(path)) {
-      const asset = await describeImage(new Blob([bytes as Uint8Array<ArrayBuffer>]));
-      if (path.startsWith("/assets/user/") && asset.path !== path) throw new Error(`원화 파일의 내용과 식별자가 다릅니다: ${path}`);
-      const bitmap = await createImageBitmap(asset.blob).catch(() => { throw new Error(`손상된 원화입니다: ${path}`); });
-      const pixels = bitmap.width * bitmap.height; bitmap.close();
-      if (pixels > 64_000_000) throw new Error(`원화 해상도 제한을 초과했습니다: ${path}`);
-      assets.push({...asset, originalName:path.split("/").at(-1)!, createdAt:Date.now()});
-      replacements.set(path,asset.path);
-    } else if(path.startsWith("/assets/user/")){
+    const image = /\.(png|jpg|jpeg|webp)$/i.test(path);
+    const kind = bundlePathKind(path);
+    if (kind !== "builtin") {
+      if (image) { await importImage(path, bytes); continue; }
       const asset=await describeAudio(new Blob([bytes as Uint8Array<ArrayBuffer>]));
       if(asset.path!==path)throw new Error(`음원 파일의 내용과 식별자가 다릅니다: ${path}`);
       await probeAudio(asset.blob);assets.push({...asset,originalName:path.split("/").at(-1)!,createdAt:Date.now()});
-    } else {
-      // Legacy bundled media has fixed IDs. Fail explicitly if another editor version differs.
-      const response = await fetcher(path, {cache:"no-store", redirect:"error"});
-      if (!response.ok || await hash(new Uint8Array(await response.arrayBuffer())) !== await hash(bytes)) throw new Error(`이 에디터 버전과 기본 에셋이 다릅니다: ${path}. 원본과 같은 버전에서 복원하세요.`);
+      continue;
     }
+    // 기본 에셋: 이 편집기에 같은 파일이 있으면 원고는 그 주소를 그대로 쓴다(보관함 복사본을 만들지 않는다).
+    // 다른 판본이라 파일이 다르거나 없으면, 이미지는 게임에 담긴 파일을 보관함으로 들여와 주소를 옮긴다.
+    let same = false;
+    try {
+      const response = await fetcher(path, {cache:"no-store", redirect:"error"});
+      same = response.ok && await hash(new Uint8Array(await response.arrayBuffer())) === await hash(bytes);
+    } catch { same = false; }
+    if (same) continue;
+    if (image) { await importImage(path, bytes); continue; }
+    throw new Error(`이 에디터 버전과 기본 에셋이 다릅니다: ${path}. 원본과 같은 버전에서 복원하세요.`);
   }
-  const restored = rebaseProjectAssets({...script,
-    characters:script.characters.map(actor=>({...actor,expressionImages:Object.fromEntries(characterExpressions(actor).flatMap(expression=>{const url=characterImage(actor,expression);return url?[[expression,url]]:[];}))})),
-    scenes:script.scenes.map(scene=>({...scene,backgroundUrl:scene.backgroundUrl??`/assets/bg/${scene.background}.png`}))
-  },replacements);
+  const restored = rebaseRestoredScript(script, replacements);
   if (assets.length) { await ensureAssetServer(); await storeAssets(assets); }
   return restored;
 }

@@ -71,6 +71,26 @@ export const IMAGE_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", 
 /** imageConfig.imageSize 허용값. 임의 문자열 패스스루는 업스트림 400 이나 쿼터 낭비만 부른다. */
 export const IMAGE_SIZES = ["1K", "2K", "4K"] as const;
 
+/**
+ * 이미지 백엔드 선택. 기본은 codex — 로컬 `codex exec` 가 내장 image-generation
+ * 스킬로 그린다(사용자 결정 2026-09-12: 그림 품질이 agy 보다 낫다). "agy" 로 돌리면
+ * 예전 Antigravity IMAGE 모달리티 경로가 살아난다. 요청마다 읽어야 테스트가 뒤집을 수 있다.
+ */
+export type ImageBackend = "codex" | "agy";
+export function imageBackend(): ImageBackend {
+  return process.env.VNMAKER_IMAGE_BACKEND === "agy" ? "agy" : "codex";
+}
+
+export const CODEX_BIN = process.env.VNMAKER_CODEX_BIN ?? "codex";
+/** codex 의 홈. auth.json·generated_images·config.toml 이 여기 산다. */
+export const CODEX_HOME_DIR = process.env.CODEX_HOME ?? join(homedir(), ".codex");
+/** codex exec 의 작업 디렉터리. git repo 가 아니므로 --skip-git-repo-check 와 짝이다. */
+export const CODEX_WORK_DIR = process.env.VNMAKER_CODEX_WORK_DIR ?? join(homedir(), ".vnmaker", "codex-work");
+/** 이미지 스킬이 PNG 를 떨구는 곳. 세션 id 디렉터리 아래 exec-*.png 로 쌓인다. */
+export const CODEX_IMAGES_DIR = join(CODEX_HOME_DIR, "generated_images");
+/** 에이전트 기동+생성까지 넉넉히. 사용자 실측은 장당 1~2분대였다. */
+export const CODEX_IMAGE_TIMEOUT_MS = Number(process.env.VNMAKER_CODEX_IMAGE_TIMEOUT_MS ?? 300_000);
+
 export const CALLBACK_TIMEOUT_MS = 300_000;
 export const ONBOARD_TIMEOUT_MS = 30_000;
 export const ONBOARD_POLL_INTERVAL_MS = 1_000;
@@ -88,6 +108,19 @@ export const GATEWAY_VERSION = "0.1.0";
  * vite 미들웨어(버퍼링)와 hono(bodyLimit)가 같은 값을 쓴다.
  */
 export const API_BODY_MAX = 4 * 1024 * 1024;
+
+/**
+ * losia.online 에셋 스토어. 브라우저가 직접 부르면 CORS 에 막히므로 게이트웨이가 대신 부른다.
+ * 요청마다 읽어야 테스트가 업스트림을 뒤집을 수 있다(이미지 백엔드와 같은 이유).
+ */
+export function losiaBaseUrl(): string {
+  return (process.env.VNMAKER_LOSIA_URL ?? "https://losia.online").replace(/\/+$/, "");
+}
+export const LOSIA_TIMEOUT_MS = Number(process.env.VNMAKER_LOSIA_TIMEOUT_MS ?? 20_000);
+/** 카탈로그 한 번에 받는 최대 개수. 앱은 12~24 정도만 쓴다. */
+export const LOSIA_TAKE_MAX = Number(process.env.VNMAKER_LOSIA_TAKE_MAX ?? 60);
+/** 자산 한 파일 상한(계약: 이미지 10MB). 로컬 프록시가 무한정 메모리를 쓰지 않게 한다. */
+export const LOSIA_FILE_MAX_BYTES = Number(process.env.VNMAKER_LOSIA_FILE_MAX ?? 64 * 1024 * 1024);
 
 /**
  * 백엔드가 클라이언트 버전으로 모델 게이팅을 한다. version 만 게이트이고 cl 은 검증하지 않는다.

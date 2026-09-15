@@ -10,8 +10,8 @@ import {estimateScriptDuration} from "../src/studio/production.js";
 test("numeric choices accumulate without modifying earlier states and drive gated routes",()=>{
   parseScript(story);assert.equal(auditScript(story).filter(issue=>issue.severity==="error").length,0);
   for(const [index,expected] of [[0,3],[1,-1]]){
-    let state=reduce(story,initialState(story),{type:"start"});state=reduce(story,state,{type:"skipScene"});const before=state;
-    state=reduce(story,state,{type:"choose",index:index!});assert.deepEqual(before.flags,{trust:2});state=reduce(story,state,{type:"skipScene"});state=reduce(story,state,{type:"choose",index:0});assert.equal(state.flags.trust,expected);assert.equal(choiceAllowed(story.scenes[2]!.choices![0]!,state.flags),expected===3);
+    let state=reduce(story,initialState(story),{type:"start"});state=reduce(story,state,{type:"skipToChoice"});const before=state;
+    state=reduce(story,state,{type:"choose",index:index!});assert.deepEqual(before.flags,{trust:2});state=reduce(story,state,{type:"skipToChoice"});state=reduce(story,state,{type:"choose",index:0});assert.equal(state.flags.trust,expected);assert.equal(choiceAllowed(story.scenes[2]!.choices![0]!,state.flags),expected===3);
   }
   assert.deepEqual(previewFlagsFor(story,{start:0,cost:0}),{trust:3});assert.deepEqual(previewFlagsFor(story,{start:1,cost:0}),{trust:-1});assert.deepEqual(previewFlagsFor(story,{}),{trust:2});assert.equal(estimateScriptDuration(story).incomplete,false);
 });

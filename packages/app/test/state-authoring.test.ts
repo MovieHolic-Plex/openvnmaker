@@ -4,6 +4,7 @@ import {auditScript,choiceAllowed,lineAllowed,parseScript,type VnScript} from "@
 import {reduce} from "../src/engine/reducer.js";
 import {initialState} from "../src/engine/types.js";
 import {generateRenpyScript,RENPY_DIRECTION_RUNTIME} from "../src/studio/renpyScript.js";
+import {RENPY_PLAYER_THEME} from "../src/studio/renpyTheme.js";
 import {estimateScriptDuration} from "../src/studio/production.js";
 import {story} from "./fixtures/state-story.js";
 test("typed conditions are strict and unknown flags cannot satisfy comparisons",()=>{
@@ -16,8 +17,8 @@ test("typed conditions are strict and unknown flags cannot satisfy comparisons",
   assert.throws(()=>parseScript({...story,scenes:[{...story.scenes[0]!,choices:[{text:"bad",next:"gate",when:{compare:[{flag:"trust",op:"gte",value:"three"}]}}]}]}),/数字|숫자/);
 });
 test("unavailable choices cannot be selected even with a direct reducer action; restoring changes their availability",()=>{
-  parseScript(story);let state=reduce(story,initialState(story),{type:"start"});state=reduce(story,state,{type:"skipScene"});state=reduce(story,state,{type:"choose",index:1});
-  assert.equal(state.lineIndex,1);state=reduce(story,state,{type:"skipScene"});assert.equal(choiceAllowed(story.scenes[1]!.choices![0]!,state.flags),false);assert.equal(reduce(story,state,{type:"choose",index:0}),state);
+  parseScript(story);let state=reduce(story,initialState(story),{type:"start"});state=reduce(story,state,{type:"skipToChoice"});state=reduce(story,state,{type:"choose",index:1});
+  assert.equal(state.lineIndex,1);state=reduce(story,state,{type:"skipToChoice"});assert.equal(choiceAllowed(story.scenes[1]!.choices![0]!,state.flags),false);assert.equal(reduce(story,state,{type:"choose",index:0}),state);
   state=reduce(story,state,{type:"restore",sceneId:"gate",lineIndex:1,phase:"choice",affection:0,flags:{trust:3,route:"ally",letter:true}});state=reduce(story,state,{type:"choose",index:0});assert.equal(state.sceneId,"secret");
 });
 test("audit finds reachable conditional dead ends and duration excludes unavailable routes",()=>{
@@ -28,14 +29,16 @@ test("audit finds reachable conditional dead ends and duration excludes unavaila
   assert.equal(estimateScriptDuration(story).incomplete,false);
   assert.match(generateRenpyScript(story),/if vn_condition/);
 });
-test("locked choices stay visible on native too — picked ones narrate and return to the menu",()=>{
+test("locked choices stay visible on native too — as insensitive buttons, like the browser",()=>{
   const locked={...story,scenes:story.scenes.map(scene=>scene.id==="gate"?{...scene,choices:[...scene.choices!,{text:"잠긴 길",next:"secret",disable:true}]}:scene)};
   const generated=generateRenpyScript(locked);
-  // 이전에는 if False 로 완전히 숨겨 브라우저의 비활성 표시와 달랐다.
+  // 이전에는 if False 로 완전히 숨겼고, 그 다음엔 클릭 가능한 항목으로 나와 안내 후 메뉴로 되돌아갔다 — 둘 다 브라우저의 회색 비활성 버튼과 달랐다.
   assert.doesNotMatch(generated,/if False/);
-  assert.match(generated,/label vn_scene_[0-9a-f]+_menu:/);
-  assert.match(generated,/"잠긴 길":/);
-  assert.match(generated,/jump vn_scene_[0-9a-f]+_menu/);
+  assert.doesNotMatch(generated,/아직 선택할 수 없는 길이다/);
+  assert.match(generated,/"잠긴 길" \(vn_locked=True\):\n            pass/);
+  // 잠긴 항목은 효과·이동 코드가 없어야 한다.
+  assert.doesNotMatch(generated,/\(vn_locked=True\):\n            (jump|\$)/);
+  assert.match(RENPY_PLAYER_THEME,/sensitive \(not item\.kwargs\.get\("vn_locked", False\)\)/);
 });
 test("sprite slot changes rebind the dict so native rollback can restore the snapshot",()=>{
   // 제자리 변경(vn_slots[slot] = …)은 롤백이 되돌릴 옛 스냅샷을 지운다.

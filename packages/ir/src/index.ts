@@ -312,7 +312,7 @@ function compileGraphNode(node: StoryNode, edgeTo: string | undefined): Compiled
   let pendingSfx: string | undefined;
   const lines: Line[] = [];
   const choices: CompiledChoice[] = [];
-  const sprites = new Map<string, { slot: SpriteSlot; character: string; expression?: string }>();
+  const sprites = new Map<string, { slot: SpriteSlot; character: string; expression?: string; outfit?: string }>();
 
   for (const beat of node.beats) {
     switch (beat.op) {
@@ -342,6 +342,7 @@ function compileGraphNode(node: StoryNode, edgeTo: string | undefined): Compiled
           slot: beat.slot,
           character: beat.who,
           ...(beat.expression === undefined ? {} : { expression: beat.expression }),
+          ...(beat.outfit === undefined ? {} : { outfit: beat.outfit }),
         });
         break;
       }
@@ -389,6 +390,7 @@ function compileGraphNode(node: StoryNode, edgeTo: string | undefined): Compiled
     slot: dir.slot,
     character: dir.character as CharacterId,
     ...(dir.expression === undefined ? {} : { expression: dir.expression as Expression }),
+    ...(dir.outfit === undefined ? {} : { outfit: dir.outfit }),
   }));
   // jump 와 엣지가 서로 다른 곳을 가리키면 어느 쪽이 진짜 다음인지 미정 — 조용히 버리지 않는다.
   if (jumpTo !== undefined && edgeTo !== undefined && jumpTo !== edgeTo) {

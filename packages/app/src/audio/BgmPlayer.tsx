@@ -8,6 +8,8 @@ interface Props {
   /** 첫 사용자 제스처 이후에만 true. 브라우저 자동재생 정책 때문이다. */
   readonly unlocked: boolean;
   readonly fadeSeconds?: number | undefined;
+  /** 음원 파일을 열지 못했을 때. 조용히 무음이 되지 않도록 화면에 알린다. */
+  readonly onError?: ((track: string) => void) | undefined;
 }
 
 type SlotName = "a" | "b";
@@ -16,8 +18,9 @@ type SlotName = "a" | "b";
  * <audio> 두 개를 번갈아 쓰면서 작품에 지정된 시간으로 크로스페이드한다.
  * 지금 들리는 쪽이 data-testid="bgm-audio" 를 갖는다.
  */
-export function BgmPlayer({ track, volume, unlocked, fadeSeconds=1.2 }: Props) {
+export function BgmPlayer({ track, volume, unlocked, fadeSeconds=1.2, onError }: Props) {
   const fadeRef=useRef(fadeSeconds);fadeRef.current=fadeSeconds;
+  const errorRef=useRef(onError);errorRef.current=onError;
   const volumeRef=useRef(volume);
   volumeRef.current=Math.min(1,Math.max(0,volume));
   const aRef = useRef<HTMLAudioElement | null>(null);
@@ -85,8 +88,8 @@ export function BgmPlayer({ track, volume, unlocked, fadeSeconds=1.2 }: Props) {
 
   return (
     <>
-      <audio ref={aRef} data-testid={idOf("a")} loop preload="auto" {...(slots.a ? { src: bgmSrc(slots.a) } : {})} />
-      <audio ref={bRef} data-testid={idOf("b")} loop preload="auto" {...(slots.b ? { src: bgmSrc(slots.b) } : {})} />
+      <audio ref={aRef} data-testid={idOf("a")} loop preload="auto" onError={()=>{if(slots.a)errorRef.current?.(slots.a);}} {...(slots.a ? { src: bgmSrc(slots.a) } : {})} />
+      <audio ref={bRef} data-testid={idOf("b")} loop preload="auto" onError={()=>{if(slots.b)errorRef.current?.(slots.b);}} {...(slots.b ? { src: bgmSrc(slots.b) } : {})} />
     </>
   );
 }

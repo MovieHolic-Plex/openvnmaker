@@ -81,3 +81,23 @@ export async function importImages(files: readonly File[]): Promise<StoredAsset[
   await storeAssets(assets);
   return assets;
 }
+
+/** 보관함 파일을 지운다. 참조 여부는 호출자(assetCleanup)가 확인한다. */
+export async function deleteAssets(paths: readonly string[]): Promise<void> {
+  if(!paths.length)return;
+  const db=await database();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(ASSET_STORE,"readwrite");
+    for(const path of paths) tx.objectStore(ASSET_STORE).delete(path);
+    tx.oncomplete=()=>{db.close();resolve();};
+    tx.onabort=tx.onerror=()=>{db.close();reject(new Error("보관함 파일을 지우지 못했습니다."));};
+  });
+}
+export async function listAssetPaths(): Promise<string[]> {
+  const db=await database();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(ASSET_STORE,"readonly"),request=tx.objectStore(ASSET_STORE).getAllKeys();
+    tx.oncomplete=()=>{db.close();resolve(request.result.map(String));};
+    tx.onabort=tx.onerror=()=>{db.close();reject(tx.error??new Error("보관함 파일 목록을 읽지 못했습니다."));};
+  });
+}

@@ -1,4 +1,4 @@
-import { choiceAllowed, lineAllowed, type Choice, type StoryFlags } from "@vnmaker/content";
+import { choiceAllowed, choiceEffectError, lineAllowed, type Choice, type StoryFlags } from "@vnmaker/content";
 import { useState } from "react";
 
 interface Props {
@@ -8,12 +8,21 @@ interface Props {
   readonly onHover: () => void;
 }
 
+/** 버튼이 비활성인 이유. 저장 데이터가 원고와 어긋나 「눌러도 반응 없는」 버튼이 되지 않도록 화면에 적는다. */
+function disabledReason(choice: Choice, flags: StoryFlags): string | null {
+  if (choice.disable) return "아직 선택할 수 없는 길입니다.";
+  if (choice.cond) return "이 선택지는 이 플레이어에서 평가할 수 없는 조건을 씁니다.";
+  return choiceEffectError(choice, flags) ?? null;
+}
+
 export function ChoiceMenu({ choices, flags = {}, onPick, onHover }: Props) {
   const available = choices.flatMap((choice, index) => choiceAllowed(choice, flags) ? [index] : []);
   const [focused, setFocused] = useState(available[0] ?? -1);
   const tabStop = available.includes(focused) ? focused : available[0];
+  const visible = choices.filter(choice => lineAllowed(choice, flags)).length;
   return (
     <div className="choice-scrim" data-testid="choice-scrim">
+      <p className="sr-only" aria-live="polite">선택지 {visible}개. 화살표나 숫자 키로 고를 수 있습니다.</p>
       <div className="choice-menu" data-testid="choice-menu" role="menu" aria-label="선택지" onKeyDown={event => {
         if (event.isDefaultPrevented() || event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
         const position = available.indexOf(focused);
@@ -31,8 +40,10 @@ export function ChoiceMenu({ choices, flags = {}, onPick, onHover }: Props) {
         if (next !== undefined) {event.preventDefault(); event.currentTarget.querySelector<HTMLButtonElement>(`[data-testid="choice-${next}"]`)?.focus();}
       }}>
         {choices.map((choice, index) => {
-          if(!lineAllowed(choice,flags)||choice.cond)return null;
-          const disabled = choice.disable === true;
+          if(!lineAllowed(choice,flags))return null;
+          // 표시 조건은 통과했지만 고를 수 없는 선택지(잠금·조건식·증감 오류)는 비활성으로 그린다.
+          const disabled = !available.includes(index);
+          const reason = disabled ? disabledReason(choice, flags) : null;
           return (
             <button
               key={index}
@@ -43,6 +54,7 @@ export function ChoiceMenu({ choices, flags = {}, onPick, onHover }: Props) {
               disabled={disabled}
               aria-disabled={disabled}
               aria-keyshortcuts={disabled ? undefined : String(index + 1)}
+              title={reason ?? undefined}
               tabIndex={index === tabStop ? 0 : -1}
               autoFocus={index === available[0]}
               style={{ animationDelay: `${Math.min(index, 8) * 90}ms` }}
@@ -55,7 +67,7 @@ export function ChoiceMenu({ choices, flags = {}, onPick, onHover }: Props) {
               <span className="choice-mark" aria-hidden="true">
                 ◈
               </span>
-              <span className="choice-label">{choice.text}</span>
+              <span className="choice-label">{choice.text}{reason && <small className="choice-reason">{reason}</small>}</span>
               <span className="choice-key" aria-hidden="true">
                 {index + 1}
               </span>

@@ -1,9 +1,10 @@
 import type {VnScript} from "@vnmaker/content";
+import {assetUrl} from "../assetUrl.js";
 import {manuscriptKey} from "../storage/manuscriptKey.js";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { HistoryEntry } from "../engine/types.js";
 import type { Settings } from "../storage/persist.js";
-import { formatSlotDate, type SlotSave } from "../storage/persist.js";
+import { formatSlotDate, type GalleryUnlocks, type SlotSave } from "../storage/persist.js";
 
 export type BacklogEntry = HistoryEntry;
 
@@ -94,8 +95,10 @@ interface SlotPickerProps {
   readonly mode: SlotPickerMode;
   readonly slots: readonly (SlotSave | null)[];
   readonly autoSlot: SlotSave | null;
+  readonly quickSlot?: SlotSave | null | undefined;
   readonly onPick: (index: number) => void;
   readonly onPickAuto: () => void;
+  readonly onPickQuick?: (() => void) | undefined;
   readonly onClose: () => void;
   readonly error?: string | null;
 }
@@ -106,9 +109,19 @@ function slotSummary(slot: SlotSave): string {
   return `${head} · ${formatSlotDate(slot.savedAt)} · ${tail}`;
 }
 
-export function SlotPicker({ mode, slots, autoSlot, onPick, onPickAuto, onClose, error, currentScript }: SlotPickerProps) {
-  const currentKey=currentScript?manuscriptKey(currentScript):null;
-  const versionNote=(slot:SlotSave|null)=>slot && currentKey && (!slot.script ? "원고가 포함되지 않은 이전 저장" : manuscriptKey(slot.script)!==currentKey ? "현재 재생 원고와 다른 저장본 · 저장 당시 원고로 이어집니다" : null);
+export function SlotPicker({ mode, slots, autoSlot, quickSlot = null, onPick, onPickAuto, onPickQuick, onClose, error, currentScript }: SlotPickerProps) {
+  // 원고 비교 키는 원고 전체를 직렬화한다 — 타이프라이터가 프레임마다 다시 그려도 슬롯 목록이 바뀌지 않았으면 다시 계산하지 않는다.
+  const currentKey=useMemo(()=>currentScript?manuscriptKey(currentScript):null,[currentScript]);
+  const notes=useMemo(()=>{
+    const keyOf=new Map<VnScript,string>();
+    const note=(slot:SlotSave|null)=>{
+      if(!slot||!currentKey)return null;
+      if(!slot.script)return "원고가 포함되지 않은 이전 저장";
+      let key=keyOf.get(slot.script);if(key===undefined){key=manuscriptKey(slot.script);keyOf.set(slot.script,key);}
+      return key!==currentKey?"현재 재생 원고와 다른 저장본 · 저장 당시 원고로 이어집니다":null;
+    };
+    return {slots:slots.map(note),auto:note(autoSlot),quick:note(quickSlot)};
+  },[slots,autoSlot,quickSlot,currentKey]);
   const dialog=useRef<HTMLDialogElement>(null);
   useEffect(()=>{dialog.current?.showModal();const node=dialog.current;return()=>node?.close();},[]);
   return (
@@ -122,9 +135,9 @@ export function SlotPicker({ mode, slots, autoSlot, onPick, onPickAuto, onClose,
       <ul className="slot-picker-list">
         {slots.map((slot, index) => (
           <li key={`slot-${index}`} className="slot-row" data-testid={`slot-row-${index}`}>
-            {slot?.thumbnail ? <img src={slot.thumbnail} alt="" /> : <div className="slot-placeholder">{String(index+1).padStart(2,"0")}</div>}
+            {slot?.thumbnail ? <img src={assetUrl(slot.thumbnail)} alt="" /> : <div className="slot-placeholder">{String(index+1).padStart(2,"0")}</div>}
             <span className="slot-name">슬롯 {index + 1}</span>
-            <span className="slot-summary">{slot === null ? "비어 있음" : slotSummary(slot)}</span>{versionNote(slot)&&<small className="slot-version-note">{versionNote(slot)}</small>}
+            <span className="slot-summary">{slot === null ? "비어 있음" : slotSummary(slot)}</span>{notes.slots[index]&&<small className="slot-version-note">{notes.slots[index]}</small>}
             {mode === "save" ? (
               <button type="button" data-testid={`slot-save-${index}`} onClick={() => onPick(index)}>
                 {slot === null ? "저장" : "덮어쓰기"}
@@ -143,9 +156,9 @@ export function SlotPicker({ mode, slots, autoSlot, onPick, onPickAuto, onClose,
         ))}
         {mode === "load" && (
           <li className="slot-row" data-testid="slot-row-auto">
-            {autoSlot?.thumbnail && <img src={autoSlot.thumbnail} alt="" />}
+            {autoSlot?.thumbnail && <img src={assetUrl(autoSlot.thumbnail)} alt="" />}
             <span className="slot-name">자동 저장</span>
-            <span className="slot-summary">{autoSlot === null ? "비어 있음" : slotSummary(autoSlot)}</span>{versionNote(autoSlot)&&<small className="slot-version-note">{versionNote(autoSlot)}</small>}
+            <span className="slot-summary">{autoSlot === null ? "비어 있음" : slotSummary(autoSlot)}</span>{notes.auto&&<small className="slot-version-note">{notes.auto}</small>}
             <button
               type="button"
               data-testid="slot-load-auto"
@@ -156,7 +169,65 @@ export function SlotPicker({ mode, slots, autoSlot, onPick, onPickAuto, onClose,
             </button>
           </li>
         )}
+        {mode === "load" && onPickQuick && quickSlot && (
+          <li className="slot-row" data-testid="slot-row-quick">
+            {quickSlot.thumbnail && <img src={assetUrl(quickSlot.thumbnail)} alt="" />}
+            <span className="slot-name">퀵 세이브 <small>F5 / F9</small></span>
+            <span className="slot-summary">{slotSummary(quickSlot)}</span>{notes.quick&&<small className="slot-version-note">{notes.quick}</small>}
+            <button type="button" data-testid="slot-load-quick" onClick={onPickQuick}>불러오기</button>
+          </li>
+        )}
       </ul>
+    </dialog>
+  );
+}
+
+/** 작품에 존재하는 전체 이벤트 CG 주소 풀 — 해금률의 분모. */
+function collectCgPool(script: VnScript): string[] {
+  const pool = new Set<string>();
+  for (const asset of script.assets ?? []) if (asset.kind === "cg") pool.add(asset.url);
+  for (const scene of script.scenes) {
+    if (scene.cgUrl) pool.add(scene.cgUrl);
+    if (scene.cg) {
+      const asset = script.assets?.find((row) => row.id === scene.cg);
+      if (asset) pool.add(asset.url);
+    }
+    for (const line of scene.lines) if (typeof line.cgUrl === "string") pool.add(line.cgUrl);
+  }
+  return [...pool];
+}
+
+interface GalleryProps {
+  readonly script: VnScript;
+  readonly gallery: GalleryUnlocks;
+  readonly onClose: () => void;
+}
+
+export function GalleryPanel({ script, gallery, onClose }: GalleryProps) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const node = dialog.current; node?.showModal(); return () => { node?.close(); }; }, []);
+  const cgs = collectCgPool(script);
+  const endings = [...new Set(script.scenes.flatMap((scene) => scene.ending ? [scene.ending] : []))];
+  return (
+    <dialog ref={dialog} className="gallery-dialog" aria-label="갤러리" data-testid="gallery-panel" onCancel={event => { event.preventDefault(); onClose(); }} onClick={(e) => e.stopPropagation()}>
+      <header className="backlog-head">
+        <div><p>ARCHIVE</p><h3>갤러리 <span>CG {gallery.cgs.length}/{cgs.length} · 결말 {gallery.endings.length}/{endings.length}</span></h3></div>
+        <button type="button" data-testid="gallery-close" onClick={onClose}>닫기</button>
+      </header>
+      <div className="gallery-scroll">
+        <h4 className="gallery-section">이벤트 CG</h4>
+        {cgs.length === 0 && <p className="panel-empty">이 작품에는 이벤트 CG가 없다.</p>}
+        <ul className="gallery-grid">
+          {cgs.map((url, index) => {
+            const unlocked = gallery.cgs.includes(url);
+            return <li key={url} className={unlocked ? "" : "is-locked"}>{unlocked ? <img src={assetUrl(url)} alt={`이벤트 CG ${index + 1}`} /> : <span>?</span>}</li>;
+          })}
+        </ul>
+        <h4 className="gallery-section">결말</h4>
+        <ul className="gallery-endings">
+          {endings.map((ending) => <li key={ending} className={gallery.endings.includes(ending) ? "" : "is-locked"}>{gallery.endings.includes(ending) ? ending : "???"}</li>)}
+        </ul>
+      </div>
     </dialog>
   );
 }
@@ -217,6 +288,25 @@ export function SettingsPanel({ settings, onChange, onClose, onCredits }: Settin
           data-testid="text-speed"
           onChange={(e) => onChange({ ...settings, textSpeed: Number(e.target.value) })}
         />
+      </label>
+      <label>
+        오토 속도 <output>{settings.autoSpeed ?? 45}ms</output>
+        <input
+          type="range" min="10" max="150" step="5" value={settings.autoSpeed ?? 45}
+          data-testid="auto-speed"
+          aria-description="글자당 대기 시간. 낮을수록 빨리 넘어갑니다."
+          onChange={(e) => onChange({ ...settings, autoSpeed: Number(e.target.value) })}
+        />
+      </label>
+      <label className="settings-toggle">
+        <span>음소거</span>
+        <input type="checkbox" data-testid="mute-toggle" checked={settings.muted === true} onChange={(e) => onChange({ ...settings, muted: e.target.checked })} />
+        <small>음량 값은 유지되고 소리만 끕니다.</small>
+      </label>
+      <label className="settings-toggle">
+        <span>읽지 않은 대사도 스킵</span>
+        <input type="checkbox" data-testid="skip-unread-toggle" checked={settings.skipUnread === true} onChange={(e) => onChange({ ...settings, skipUnread: e.target.checked })} />
+        <small>기본은 이미 읽은 대사만 건너뜁니다.</small>
       </label>
     </dialog>
   );

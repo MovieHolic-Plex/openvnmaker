@@ -22,7 +22,7 @@ export function collectProjectAssets(script: VnScript): string[] {
   };
   for (const asset of script.assets ?? []) image(asset.url);
   for (const asset of script.audioAssets ?? []) paths.add(asset.url);
-  for (const actor of script.characters) for (const url of Object.values(actor.expressionImages ?? {})) image(url);
+  for (const actor of script.characters) { for (const url of Object.values(actor.expressionImages ?? {})) image(url); for (const set of Object.values(actor.outfitImages ?? {})) for (const url of Object.values(set ?? {})) image(url); }
   for (const scene of script.scenes) {
     image(scene.backgroundUrl ?? `/assets/bg/${scene.background}.png`); image(scene.cgUrl); placement(scene.sprites);
     if (scene.bgm) paths.add(audioPath(scene.bgm,"bgm"));
@@ -45,7 +45,7 @@ export function rebaseProjectAssets(script: VnScript, replacements: ReadonlyMap<
     ...script,
     ...(script.audioAssets?{audioAssets:script.audioAssets.map(asset=>({...asset,url:replace(asset.url)}))}:{}),
     ...(script.assets ? { assets: script.assets.map(asset => ({ ...asset, url: replace(asset.url) })) } : {}),
-    characters: script.characters.map(character => ({ ...character, ...(character.expressionImages ? { expressionImages: Object.fromEntries(Object.entries(character.expressionImages).map(([expression, url]) => [expression, url ? replace(url) : url])) } : {}) })),
+    characters: script.characters.map(character => ({ ...character, ...(character.expressionImages ? { expressionImages: Object.fromEntries(Object.entries(character.expressionImages).map(([expression, url]) => [expression, url ? replace(url) : url])) } : {}), ...(character.outfitImages ? { outfitImages: Object.fromEntries(Object.entries(character.outfitImages).map(([outfit, set]) => [outfit, Object.fromEntries(Object.entries(set ?? {}).map(([expression, url]) => [expression, url ? replace(url) : url]))])) } : {}) })),
     scenes: script.scenes.map(scene => ({
       ...scene, ...(scene.bgm?{bgm:replace(scene.bgm)}:{}), ...(scene.backgroundUrl ? { backgroundUrl: replace(scene.backgroundUrl) } : {}), ...(scene.cgUrl ? { cgUrl: replace(scene.cgUrl) } : {}), ...(scene.sprites ? { sprites: sprites(scene.sprites) } : {}),
       lines: scene.lines.map(line => ({ ...line, ...(line.bgm?{bgm:replace(line.bgm)}:{}), ...(line.sfx?{sfx:replace(line.sfx)}:{}), ...(line.voice?{voice:replace(line.voice)}:{}), ...(line.backgroundUrl ? { backgroundUrl: replace(line.backgroundUrl) } : {}), ...(line.cgUrl ? { cgUrl: replace(line.cgUrl) } : {}), ...(line.sprites ? { sprites: sprites(line.sprites) } : {}) })),
@@ -68,6 +68,13 @@ function runtimeManifest(value: unknown): RuntimeManifest {
   if (files.size !== m.files.length || !files.has(m.entry) || m.stylesheets.some(path => !files.has(path))) throw new Error("배포 플레이어 파일이 누락되었습니다.");
   return m;
 }
+
+/**
+ * index.html 을 더블클릭(file://)하면 브라우저가 모듈 스크립트를 CORS 로 막아 플레이어가 아예 실행되지 않는다 —
+ * 플레이어 안의 "정적 서버에서 열어달라" 안내도 그 뒤에 있어 절대 보이지 않았다. 모듈 앞에 놓인 이 고전 스크립트는
+ * file:// 에서도 실행되므로 README 안내를 화면에 바로 띄운다. 외부 주소는 참조하지 않는다(오프라인·외부 요청 없음 계약).
+ */
+const FILE_PROTOCOL_GUIDANCE = `if(location.protocol==="file:"){document.addEventListener("DOMContentLoaded",function(){var root=document.getElementById("root");if(!root)return;root.style.cssText="padding:12vh 8vw;color:#eee;background:#15131d;min-height:100vh;font:18px/1.8 system-ui,sans-serif";var title=document.createElement("h1");title.textContent="\uC774 \uD3F4\uB354\uB97C \uC815\uC801 \uC6F9 \uC11C\uBC84\uC5D0\uC11C \uC5F4\uC5B4\uC8FC\uC138\uC694";var detail=document.createElement("p");detail.textContent="index.html\uC744 \uD30C\uC77C\uB85C \uBC14\uB85C \uC5F4\uBA74(file://) \uBE0C\uB77C\uC6B0\uC800 \uBCF4\uC548 \uC815\uCC45 \uB54C\uBB38\uC5D0 \uC791\uD488\uC744 \uC77D\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.";var steps=document.createElement("pre");steps.style.cssText="white-space:pre-wrap;color:#cfd6e6";steps.textContent="1. ZIP\uC744 \uD480\uC5B4 \uB454 \uD3F4\uB354\uC5D0\uC11C \uC815\uC801 \uC6F9 \uC11C\uBC84\uB97C \uC2E4\uD589\uD569\uB2C8\uB2E4. Python\uC774 \uC788\uB2E4\uBA74: python -m http.server 8080\\n2. \uBE0C\uB77C\uC6B0\uC800\uC5D0\uC11C http://localhost:8080 \uC744 \uC5FD\uB2C8\uB2E4.\\n3. \uC790\uC138\uD55C \uC548\uB0B4\uB294 README.txt\uC5D0 \uC788\uC2B5\uB2C8\uB2E4.";root.appendChild(title);root.appendChild(detail);root.appendChild(steps);});}`;
 
 export async function buildExportBundle(source: VnScript, options: ExportOptions = {}): Promise<{ blob: Blob; filename: string; fileCount: number; projectNamespace: string }> {
   const script = parseScript(structuredClone(source));
@@ -122,10 +129,10 @@ export async function buildExportBundle(source: VnScript, options: ExportOptions
   entries.push({ path: "MEDIA_CREDITS.json", bytes: encode(credits.json) }, { path: "MEDIA_CREDITS.txt", bytes: encode(credits.text) });
   const manuscript = encode(JSON.stringify(exported, null, 2));
   const projectNamespace = `bundle-${(await sha256(manuscript)).slice(0, 16)}`;
-  const html = `<!doctype html>\n<html lang="ko"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#15131d"/><title>${escapeHtml(script.title)}</title>${runtime.stylesheets.map(path => `<link rel="stylesheet" href="./${path}"/>`).join("")}</head><body><div id="root"></div><script type="module" src="./${runtime.entry}"></script></body></html>\n`;
+  const html = `<!doctype html>\n<html lang="ko"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#15131d"/><title>${escapeHtml(script.title)}</title>${runtime.stylesheets.map(path => `<link rel="stylesheet" href="./${path}"/>`).join("")}</head><body><div id="root"></div><script>${FILE_PROTOCOL_GUIDANCE}</script><script type="module" src="./${runtime.entry}"></script></body></html>\n`;
   entries.push({ path: "index.html", bytes: encode(html) }, { path: "project.json", bytes: manuscript });
   entries.push({ path: "bundle.json", bytes: encode(JSON.stringify({ version: 1, title: script.title, projectNamespace, createdAt: new Date().toISOString(), files: [...entries].sort((a, b) => a.path.localeCompare(b.path)).map(entry => ({ path: entry.path, bytes: entry.bytes.length })) }, null, 2)) });
-  entries.push({ path: "README.txt", bytes: encode(`${script.title}\n\n이 ZIP은 현재 편집한 원고, 등록 이미지와 모든 연출 파일, 독립 플레이어를 포함합니다.\n\n실행\n1. ZIP을 새 폴더에 모두 풀어주세요.\n2. 그 폴더에서 정적 웹 서버를 실행합니다. Python이 있다면: python -m http.server 8080\n3. 브라우저에서 http://localhost:8080 을 엽니다.\n\n배포\n정적 호스팅 사이트의 루트에 이 폴더 전체를 올려주세요. 하위 경로 배포 대신 별도 사이트/서브도메인을 사용하세요.\nindex.html을 file://로 더블클릭하면 브라우저 보안 정책 때문에 원고를 읽을 수 없습니다. 서버 API·앱 로그인·AI 호출은 필요하지 않습니다.\n\n원고와 저장\nproject.json은 내보내기를 누른 순간의 편집 원고입니다. 원본 편집 프로젝트는 변경하지 않습니다. 이 파일은 VN Maker에서 JSON으로 다시 가져올 수 있습니다.\n저장은 이 작품 버전의 ${projectNamespace} 영역을 사용합니다. 다른 작품 및 이전 원고 버전의 저장 기록은 읽지 않습니다. 브라우저와 사이트 주소별로 저장됩니다.\n원고를 수정한 뒤에는 에디터에서 새 ZIP을 만들어주세요. ZIP 안에서 project.json만 바꾸면 버전 구분 정보는 갱신되지 않습니다.\n`) });
+  entries.push({ path: "README.txt", bytes: encode(`${script.title}\n\n이 ZIP은 현재 편집한 원고, 등록 이미지와 모든 연출 파일, 독립 플레이어를 포함합니다.\n\n실행\n1. ZIP을 새 폴더에 모두 풀어주세요.\n2. 그 폴더에서 정적 웹 서버를 실행합니다. Python이 있다면: python -m http.server 8080\n3. 브라우저에서 http://localhost:8080 을 엽니다.\n\n배포\n정적 호스팅에 이 폴더 전체를 통째로 올려주세요. 도메인 루트가 아닌 하위 경로(예: example.com/games/작품/)에 올려도 됩니다.\nindex.html을 file://로 더블클릭하면 브라우저 보안 정책 때문에 원고를 읽을 수 없습니다. 서버 API·앱 로그인·AI 호출은 필요하지 않습니다.\n\n원고와 저장\nproject.json은 내보내기를 누른 순간의 편집 원고입니다. 원본 편집 프로젝트는 변경하지 않습니다. 이 파일은 VN Maker에서 JSON으로 다시 가져올 수 있습니다.\n저장은 이 작품 버전의 ${projectNamespace} 영역을 사용합니다. 다른 작품 및 이전 원고 버전의 저장 기록은 읽지 않습니다. 브라우저와 사이트 주소별로 저장됩니다.\n원고를 수정한 뒤에는 에디터에서 새 ZIP을 만들어주세요. ZIP 안에서 project.json만 바꾸면 버전 구분 정보는 갱신되지 않습니다.\n`) });
   options.onProgress?.({ phase: "zip", complete: entries.length, total: entries.length });
   options.signal?.throwIfAborted();
   const blob = createZip(entries.sort((a, b) => a.path.localeCompare(b.path)));

@@ -1,5 +1,15 @@
 import { applyChoiceFlags, choiceAllowed, lineAllowed, type Scene, type StoryFlags, type VnScript } from "@vnmaker/content";
-import { findScene, type HistoryEntry, type VnAction, type VnState } from "./types.js";
+import { findScene, readKey, type HistoryEntry, type PastSnapshot, type RollbackEntry, type VnAction, type VnState } from "./types.js";
+
+const PAST_LIMIT = 300;
+
+function snapshotOf(state: VnState): PastSnapshot {
+  return { sceneId: state.sceneId, lineIndex: state.lineIndex, affection: state.affection, flags: state.flags, phase: state.phase, endingTitle: state.endingTitle, history: state.history };
+}
+
+function pushPast(state: VnState): VnState {
+  return { ...state, past: [...state.past.slice(-(PAST_LIMIT - 1)), snapshotOf(state)] };
+}
 
 function lineOf(scene: Scene, index: number): HistoryEntry | null {
   const line = scene.lines[index];
@@ -45,49 +55,95 @@ function leaveScene(script: VnScript, state: VnState, scene: Scene, visited: str
   return { ...state, error: `씬 ${scene.id} 에 next 도 choices 도 ending 도 없다` };
 }
 
+/** 한 줄 진행 — past 를 쌓지 않는 내부 단계. skipToChoice 의 루프에서도 쓴다. */
+function advanceOnce(script: VnScript, state: VnState): VnState {
+  const scene = findScene(script, state.sceneId);
+  if (!scene) return { ...state, error: `알 수 없는 씬 id: ${state.sceneId}` };
+  const shown = lineOf(scene, state.lineIndex);
+  const history = shown ? [...state.history, shown] : state.history;
+  const lineIndex = nextVisible(scene, state.lineIndex + 1, state.flags);
+  if (lineIndex >= 0) {
+    return { ...state, lineIndex, history };
+  }
+  return leaveScene(script, { ...state, history }, scene);
+}
+
+/** 세이브의 압축 롤백 기록을 past 스택으로 되살린다. 없는 씬이나 범위 밖 인덱스는 버린다. */
+function rebuildPast(script: VnScript, entries: readonly RollbackEntry[] | undefined, history: readonly HistoryEntry[]): PastSnapshot[] {
+  const past: PastSnapshot[] = [];
+  for (const entry of entries ?? []) {
+    const scene = findScene(script, entry.sceneId);
+    if (!scene) continue;
+    const lineIndex = Math.min(scene.lines.length - 1, Math.max(0, Math.floor(entry.lineIndex)));
+    past.push({ sceneId: entry.sceneId, lineIndex, affection: entry.affection, flags: { ...script.flags, ...entry.flags }, phase: entry.phase === "choice" && scene.choices?.length ? "choice" : "scene", endingTitle: null, history: history.slice(0, Math.max(0, Math.min(history.length, entry.historyLength))) });
+  }
+  return past;
+}
+
+/** 세이브에 담을 압축 롤백 기록. 최근 항목만 남긴다. */
+export function rollbackLog(state: VnState, limit: number): RollbackEntry[] {
+  return state.past.slice(-limit).map(entry => ({ sceneId: entry.sceneId, lineIndex: entry.lineIndex, affection: entry.affection, flags: entry.flags, phase: entry.phase, historyLength: entry.history.length }));
+}
+
 export function reduce(script: VnScript, state: VnState, action: VnAction): VnState {
   switch (action.type) {
     case "start":
-      return enterScene(script, { ...state, flags: { ...script.flags }, affection: 0, history: [], endingTitle: null }, script.start);
+      return enterScene(script, { ...state, flags: { ...script.flags }, affection: 0, history: [], past: [], endingTitle: null }, script.start);
 
     case "restore": {
       const scene = findScene(script, action.sceneId);
       if (!scene) return { ...state, error: `알 수 없는 씬 id: ${action.sceneId}` };
       const flags = { ...script.flags, ...action.flags };
-      const restored = enterScene(script, { ...state, flags, affection: action.affection, history: action.history ?? [], endingTitle: null }, action.sceneId);
+      const history = action.history ?? [];
+      const restored = enterScene(script, { ...state, flags, affection: action.affection, history, past: rebuildPast(script, action.rollback, history), endingTitle: null }, action.sceneId);
       const requested = Math.min(scene.lines.length - 1, Math.max(0, Math.floor(action.lineIndex)));
       const lineIndex = nextVisible(scene, requested, flags);
-      if (action.phase === "choice" && scene.choices?.length) return { ...restored, phase: "choice", lineIndex: Math.max(0, requested) };
+      if (action.phase === "choice" && scene.choices?.length) {
+        // 저장 뒤 원고나 조건이 바뀌어 고를 수 있는 선택지가 하나도 없으면 leaveScene 과 같은 복구 가능한 오류로 남긴다.
+        // 조용히 선택 단계에 들어가면 버튼 없는 선택 화면에서 빠져나올 수 없다.
+        if (!scene.choices.some(choice => choiceAllowed(choice, flags))) return { ...restored, error: `씬 ${scene.id}: 저장된 위치에서 선택할 수 있는 선택지가 없습니다. 저장 당시와 원고나 선택 기억이 달라졌을 수 있습니다.` };
+        return { ...restored, phase: "choice", lineIndex: Math.max(0, requested) };
+      }
       if (action.phase === "ending" && scene.ending) return { ...restored, phase: "ending", endingTitle: scene.ending, lineIndex: Math.max(0, requested) };
       return lineIndex < 0 ? leaveScene(script, restored, scene) : { ...restored, lineIndex };
     }
 
     case "backToTitle":
-      return { ...state, phase: "title", endingTitle: null, error: null };
+      return { ...state, phase: "title", endingTitle: null, past: [], error: null };
+
+    case "back": {
+      const prev = state.past.at(-1);
+      if (prev === undefined || state.phase === "title") return state;
+      // 씬이 바뀌는 되돌리기면 전환 애니메이션을 다시 태운다.
+      return { ...prev, past: state.past.slice(0, -1), sceneEpoch: prev.sceneId === state.sceneId ? state.sceneEpoch : state.sceneEpoch + 1, error: null };
+    }
 
     case "advance": {
       if (state.phase !== "scene") return state;
-      const scene = findScene(script, state.sceneId);
-      if (!scene) return { ...state, error: `알 수 없는 씬 id: ${state.sceneId}` };
-      const shown = lineOf(scene, state.lineIndex);
-      const history = shown ? [...state.history, shown] : state.history;
-      const lineIndex = nextVisible(scene, state.lineIndex + 1, state.flags);
-      if (lineIndex >= 0) {
-        return { ...state, lineIndex, history };
-      }
-      return leaveScene(script, { ...state, history }, scene);
+      return advanceOnce(script, pushPast(state));
     }
 
-    case "skipScene": {
+    case "skipToChoice": {
+      // 현재 씬 안에서만 건너뛴다. 씬이 끝나면 선택지·다음 씬 첫 줄에서 멈추고, 엔딩은 마지막 줄에서 멈춰 독자가 직접 넘기게 한다.
+      // 순환하는 next 도 한 씬만 이동하므로 기록이 폭주하지 않는다.
       if (state.phase !== "scene") return state;
       const scene = findScene(script, state.sceneId);
       if (!scene) return { ...state, error: `알 수 없는 씬 id: ${state.sceneId}` };
-      const rest: HistoryEntry[] = [];
-      for (let i = state.lineIndex; i < scene.lines.length; i += 1) {
-        const entry = lineOf(scene, i);
-        if (entry && lineAllowed(scene.lines[i]!, state.flags)) rest.push(entry);
+      let next = pushPast(state);
+      let moved = false;
+      for (let guard = 0; guard <= scene.lines.length; guard += 1) {
+        const upcoming = nextVisible(scene, next.lineIndex + 1, next.flags);
+        if (upcoming >= 0) {
+          // 읽지 않은 대사 앞에서 멈춘다(「읽은 텍스트만 스킵」).
+          if (action.readKeys && !action.readKeys.has(readKey(scene.id, upcoming, scene.lines[upcoming]))) break;
+          next = advanceOnce(script, next); moved = true;
+          continue;
+        }
+        if (scene.ending && !scene.choices?.length) break;
+        next = advanceOnce(script, next); moved = true;
+        break;
       }
-      return leaveScene(script, { ...state, lineIndex: scene.lines.length - 1, history: [...state.history, ...rest] }, scene);
+      return moved ? next : state;
     }
 
     case "choose": {
@@ -99,7 +155,7 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
       const picked: HistoryEntry = { speaker: null, text: `▷ ${choice.text}`, sceneId: scene!.id, chapter: scene!.chapter || scene!.id };
       return enterScene(
         script,
-        { ...state, flags: applyChoiceFlags(state.flags,choice), affection: state.affection + (choice.affection ?? 0), history: [...state.history, picked] },
+        { ...pushPast(state), flags: applyChoiceFlags(state.flags,choice), affection: state.affection + (choice.affection ?? 0), history: [...state.history, picked] },
         choice.next,
       );
     }

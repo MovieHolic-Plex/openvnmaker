@@ -1,5 +1,13 @@
 import type { Choice, Line, StoryFlags } from "./schema.js";
 
+/**
+ * 표시 조건 평가. 웹 플레이어와 Ren'Py 출력(renpyScript.ts 의 `vn_condition`)이 같은 규칙을 따른다.
+ * - `all`: 모든 플래그가 참이어야 한다. 숫자 0, 빈 문자열, false, 미존재는 거짓으로 본다.
+ * - `none`: 모든 플래그가 거짓(또는 미존재)이어야 한다.
+ * - `compare`: 플래그가 **없으면 어떤 연산자든 false** 다 — `ne` 도 예외가 아니다. "값이 다르다"가 아니라
+ *   "값이 있고 다르다"를 뜻한다. `eq`/`ne` 는 타입까지 엄격히 비교하고(1 과 "1" 은 다르다),
+ *   크기 비교는 양쪽이 모두 숫자일 때만 참이 될 수 있다.
+ */
 export function lineAllowed(line: Pick<Line, "when">, flags: StoryFlags = {}): boolean {
   return (line.when?.all ?? []).every(key => Boolean(Object.hasOwn(flags,key) && flags[key])) && (line.when?.none ?? []).every(key => !Object.hasOwn(flags,key) || !flags[key]) && (line.when?.compare ?? []).every(({flag,op,value}) => {
     if (!Object.hasOwn(flags,flag)) return false;

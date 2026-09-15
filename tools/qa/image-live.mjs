@@ -29,7 +29,9 @@ if (!existsSync(ENTRY)) {
   console.error(`빌드 산출물이 없다: ${ENTRY}\n먼저 pnpm --filter @vnmaker/gateway build 를 돌려라.`);
   process.exit(1);
 }
-if (!existsSync(join(homedir(), ".vnmaker", "auth.json"))) {
+// 이미지 백엔드가 codex 면 OAuth 자격증명은 안 쓴다 — codex 가 자기 로그인을 들고 있다.
+const wantsCodex = (process.env.VNMAKER_IMAGE_BACKEND ?? "codex") === "codex";
+if (!wantsCodex && !existsSync(join(homedir(), ".vnmaker", "auth.json"))) {
   console.error("자격증명이 없다. 먼저 로그인해라: node tools/agy-login.mjs login");
   process.exit(1);
 }
@@ -88,7 +90,7 @@ try {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
     body: JSON.stringify({ prompt, aspectRatio: "16:9", name: "qa-campus-16x9" }),
-    signal: AbortSignal.timeout(240_000),
+    signal: AbortSignal.timeout(wantsCodex ? 360_000 : 240_000),
   });
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   const text = await res.text();
@@ -122,8 +124,9 @@ try {
         else console.log(`GET ${image.url} → ${servedBytes.byteLength} 바이트 일치`);
       }
     }
-    if (body.quotaShared !== true || body.unofficial !== true) {
-      failures.push("응답에 quotaShared/unofficial 경고가 빠졌다");
+    // codex 백엔드는 unofficial:false 가 맞다 — 로컬 CLI 라 "비공식 업스트림" 경고가 아니다.
+    if (body.quotaShared !== true || typeof body.unofficial !== "boolean") {
+      failures.push("응답에 quotaShared/unofficial 표기가 빠졌다");
     }
   }
 

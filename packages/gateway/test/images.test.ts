@@ -5,6 +5,9 @@ import { extensionFor, sanitizeName } from "../src/images/store.js";
 import { createApp } from "../src/app.js";
 import { createMemoryStore } from "../src/auth/credentials.js";
 
+// 이 파일은 agy 경로를 검증한다 — 기본 백엔드(codex)와 분리해서 본다.
+process.env.VNMAKER_IMAGE_BACKEND = "agy";
+
 test("봉투는 project, responseModalities:[IMAGE], requestType:agent 을 갖는다", () => {
   const body = buildImageRequest({ prompt: "여름 캠퍼스 수채화", projectId: "aicode-consumers", model: "m" }) as Record<
     string,
@@ -125,4 +128,26 @@ test("없는 이미지 파일은 404", async () => {
   const app = createApp({ store: createMemoryStore(null) });
   const res = await app.request("/api/image/file/nope-does-not-exist.png");
   assert.equal(res.status, 404);
+});
+
+test("이미지 요청은 body.backend 로 codex/agy 를 고른다", async () => {
+  let ran = false;
+  const app = createApp({
+    store: createMemoryStore({ refresh: "r", access: "a", expires: Date.now() + 600_000, projectId: "p" }),
+    codexImage: async () => { ran = true; return { images: [{ data: Buffer.from("x"), mimeType: "image/png" }], text: [], model: "codex", host: "local" }; },
+  });
+  // 기본(agy, 이 파일은 VNMAKER_IMAGE_BACKEND=agy) 이지만 backend:"codex" 를 주면 codex 로 간다.
+  const res = await app.request("/api/image/generate", { method: "POST", headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" }, body: JSON.stringify({ prompt: "p", backend: "codex" }) });
+  assert.equal(res.status, 200);
+  assert.equal(ran, true);
+  const json = await res.json() as { backend: string };
+  assert.equal(json.backend, "codex");
+});
+
+test("/api/image/config 는 두 백엔드를 모두 알린다", async () => {
+  const app = createApp({ store: createMemoryStore(null) });
+  const res = await app.request("/api/image/config", { headers: { "X-VNMaker-Studio": "1" } });
+  assert.equal(res.status, 200);
+  const json = await res.json() as { backends: { id: string }[] };
+  assert.deepEqual(json.backends.map(b => b.id).sort(), ["agy", "codex"]);
 });

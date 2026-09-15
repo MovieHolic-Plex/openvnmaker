@@ -17,6 +17,9 @@ import { createFileProjectStore, createMemoryProjectStore } from "../src/project
 
 const STUDIO = { "Content-Type": "application/json", "X-VNMaker-Studio": "1" } as const;
 
+// 이 파일의 이미지 검증은 agy 경로의 모델 허용 목록을 본다 — codex 기본 백엔드와 분리.
+process.env.VNMAKER_IMAGE_BACKEND = "agy";
+
 const hello = {
   id: "hello",
   label: "한 줄",

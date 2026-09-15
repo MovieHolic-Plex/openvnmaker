@@ -5,8 +5,8 @@ import { fetchAuthStatus, generateImage, generateLine, startLogin, type AuthStat
 import { Icon } from "./Icon.js";
 import { AI_MODES, makePrompt, parseProposal, sceneTitle, type AiMode, type Proposal } from "./project.js";
 
-interface Props { script: VnScript; scene: Scene; lineIndex: number; onApply: (script: VnScript, sceneId: string, lineIndex: number) => void }
-export function AiPanel({ script, scene, lineIndex, onApply }: Props) {
+interface Props { active?: boolean; script: VnScript; scene: Scene; lineIndex: number; onApply: (script: VnScript, sceneId: string, lineIndex: number) => void }
+export function AiPanel({ active = true, script, scene, lineIndex, onApply }: Props) {
   const [mode, setMode] = useState<AiMode>("continue");
   const [instruction, setInstruction] = useState("");
   const [auth, setAuth] = useState<AuthStatus | null>(null);
@@ -22,11 +22,15 @@ export function AiPanel({ script, scene, lineIndex, onApply }: Props) {
     if (proposal && proposalRef.current?.getClientRects().length) proposalRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [proposal]);
   useEffect(() => {
+    // AI 탭을 실제로 열었을 때만 상태를 조회한다 — 수동 편집은 내부 요청을 만들지 않는다.
+    if (!active) return;
     void fetchAuthStatus().then(setAuth);
     void fetch("/api/generate/config").then(res => res.json()).then((data: { model?: string }) => setModel(data.model ?? "")).catch(() => {});
     return () => abortRef.current?.abort();
-  }, []);
-  const stale = proposal !== null && JSON.stringify(proposal.base) !== JSON.stringify(script);
+  }, [active]);
+  // 원고 객체는 편집마다 새로 만들어지고 실행 취소는 같은 객체를 돌려주므로 참조 비교로 충분하다.
+  // 매 렌더마다 원고 전체를 두 번 문자열화하면 장편에서 키 입력마다 수십 ms 가 든다.
+  const stale = proposal !== null && proposal.base !== script;
   async function connect() {
     setConnecting(true); setError(null);
     try { setAuth(await startLogin()); }

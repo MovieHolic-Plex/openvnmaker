@@ -84,6 +84,16 @@
 - 참조 구현: `C:\Users\ubbio\Documents\_vendor\oh-my-pi` — **읽기 전용. 수정 금지.**
 - 비공식 어댑터다. "Google 공식 연동"으로 포장하지 마라.
 
+## losia.online 스토어 연동 (2026-09-13)
+
+편집기(스튜디오)와 플레이어를 losia.online 에셋 스토어에 연결했다. 상세는 [docs/integration/losia-store.md](docs/integration/losia-store.md).
+
+- 게이트웨이 프록시 `packages/gateway/src/routes/store.ts` — 카탈로그/매니페스트/파일 중계. `embedded` 등급 파일 요청은 서버에서 403. 스토어 주소는 `VNMAKER_LOSIA_URL`(기본 `https://losia.online`).
+- 스튜디오 아트 디렉션의 `losia 스토어` 패널(`StorePanel.tsx`)에서 검색·설치. 설치한 파일은 IndexedDB 보관함(`/assets/user/<sha256>.<ext>`)에 들어가 프로젝트 Artwork/AudioAsset 으로 등록되므로 플레이어와 게임 ZIP 이 기존 자산과 같은 경로로 쓴다.
+- 역할/표정/라이선스 매핑은 `packages/app/src/studio/storeInstall.ts`(순수 계산). 한글 표정 이름은 별칭표로 영문 키에 옮긴다.
+- 검증: `pnpm --filter @vnmaker/{gateway,app} test`, `npx playwright test tests/e2e/store-install.spec.ts`, `node tools/qa/store-live.mjs`(실제 losia.online, 스크린샷 `evidence/store-live/`).
+- 아직 없음: 게시(vnmaker → losia, `POST /api/assets` + 개인 토큰 `la_…`)와 그 UI.
+
 ## 권고 작업 순서
 
 1. `oauth.ts:33` — 한 줄짜리인데 Windows 로그인이 깨져 있다. 수정 + 수동 확인.

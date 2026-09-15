@@ -32,10 +32,58 @@ test("각 씬은 충분한 실제 원고와 고유한 대사를 포함한다",()
 test("새 원화가 모든 장면에 배치되고 외부서버 없이 파일로 존재한다",()=>{
   const root=fileURLToPath(new URL("../../app/public/",import.meta.url)); const urls=new Set<string>();
   for(const scene of script.scenes){ assert.ok(scene.backgroundUrl?.startsWith("/assets/art/"),scene.id); urls.add(scene.backgroundUrl!); if(scene.cgUrl)urls.add(scene.cgUrl); for(const line of scene.lines){if(line.backgroundUrl)urls.add(line.backgroundUrl);if(line.cgUrl)urls.add(line.cgUrl);} }
-  for(const character of script.characters) for(const expression of ["neutral","smile","sad","surprised"] as const){const url=character.expressionImages?.[expression]; assert.ok(url?.startsWith("/assets/art/"),character.id+expression);urls.add(url!);}
+  const staged=new Set(script.scenes.flatMap(scene=>[...(scene.sprites??[]),...scene.lines.flatMap(line=>line.sprites??[])].map(sprite=>sprite.character).filter(Boolean)));
+  for(const character of script.characters.filter(character=>staged.has(character.id))) for(const expression of ["neutral","smile","sad","surprised"] as const){const url=character.expressionImages?.[expression]; assert.ok(url?.startsWith("/assets/art/"),character.id+expression);urls.add(url!);}
   for(const asset of script.assets??[]) urls.add(asset.url);
   for(const url of urls){assert.ok(url.startsWith("/assets/art/"),url);assert.ok(existsSync(resolve(root,"."+url)),url);}
   assert.equal(urls.size,35); assert.equal(script.assetLibraryMode,"project");
   const expressions = new Set(script.scenes.flatMap(scene=>scene.lines.filter(line=>line.expression).map(line=>`${line.speaker}-${line.expression}`)));
   assert.equal(expressions.size,12,"모든 배우 표정이 실제 대사에서 사용된다");
+});
+
+test("scene.cg 는 kind cg 에셋 id 를 참조해야 한다", () => {
+  const base = { title: "t", subtitle: "", start: "a", characters: [], scenes: [{ id: "a", background: "title", lines: [{ speaker: null, text: "x" }], ending: "e" }] };
+  const withAssets = { ...base, assets: [{ id: "event-1", name: "이벤트", kind: "cg", url: "/assets/art/e1.png" }] };
+  assert.ok(parseScript({ ...withAssets, scenes: [{ ...base.scenes[0], cg: "event-1" }] }));
+  assert.throws(() => parseScript({ ...withAssets, scenes: [{ ...base.scenes[0], cg: "missing" }] }), /CG 에셋/);
+  const bgOnly = { ...base, assets: [{ id: "bg-1", name: "배경", kind: "background", url: "/assets/art/b1.png" }] };
+  assert.throws(() => parseScript({ ...bgOnly, scenes: [{ ...base.scenes[0], cg: "bg-1" }] }), /CG 에셋/);
+  assert.throws(() => parseScript({ ...withAssets, scenes: [{ ...base.scenes[0], cg: "event-1", cgUrl: "/assets/art/x.png" }] }), /하나만/);
+});
+
+test("line.cgHide 는 boolean 만 받는다", () => {
+  const scene = { id: "a", background: "title", lines: [{ speaker: null, text: "x", cgHide: true }], ending: "e" };
+  assert.ok(parseScript({ title: "t", subtitle: "", start: "a", characters: [], scenes: [scene] }));
+  assert.throws(() => parseScript({ title: "t", subtitle: "", start: "a", characters: [], scenes: [{ ...scene, lines: [{ speaker: null, text: "x", cgHide: "yes" }] }] }), /CG 숨김/);
+});
+
+test("의상은 선언된 목록 안에서만 쓸 수 있다", () => {
+  const character = { id: "hero", name: "히어로", color: "#aabbcc", bio: "", outfits: ["school", "casual"], outfitImages: { school: { neutral: "/assets/art/hero-school.png" } } };
+  const scene = { id: "a", background: "title", lines: [{ speaker: null, text: "x" }], sprites: [{ slot: "center", character: "hero", outfit: "casual" }], ending: "e" };
+  assert.ok(parseScript({ title: "t", subtitle: "", start: "a", characters: [character], scenes: [scene] }));
+  // 선언되지 않은 의상 지정 → 거부
+  assert.throws(() => parseScript({ title: "t", subtitle: "", start: "a", characters: [character], scenes: [{ ...scene, sprites: [{ slot: "center", character: "hero", outfit: "armor" }] }] }), /선언되지 않은 의상/);
+  // outfits 없이 outfitImages → 거부
+  assert.throws(() => parseScript({ title: "t", subtitle: "", start: "a", characters: [{ ...character, outfits: undefined }], scenes: [scene] }), /선언되지 않은 의상 이미지/);
+  // outfit:null 은 기본 복장 복귀 — 허용
+  assert.ok(parseScript({ title: "t", subtitle: "", start: "a", characters: [character], scenes: [{ ...scene, sprites: [{ slot: "center", character: "hero", outfit: null }] }] }));
+});
+
+test("titleBgm 은 내장 곡 id 또는 프로젝트 음원 주소만 받는다 (2026-09-14, 타이틀 음악 설정)", () => {
+  const base = { title: "t", subtitle: "", start: "a", characters: [], scenes: [{ id: "a", background: "title", lines: [{ speaker: null, text: "x" }], ending: "e" }] };
+  assert.ok(parseScript(base));
+  assert.equal(parseScript({ ...base, titleBgm: "rain" }).titleBgm, "rain");
+  assert.ok(parseScript({ ...base, titleBgm: `/assets/user/${"a".repeat(64)}.mp3` }));
+  assert.throws(() => parseScript({ ...base, titleBgm: "not-a-track" }), /타이틀 음악/);
+  assert.throws(() => parseScript({ ...base, titleBgm: "https://evil.example/x.mp3" }), /타이틀 음악/);
+  assert.throws(() => parseScript({ ...base, titleBgm: 3 }), /타이틀 음악/);
+});
+
+test("compare 조건은 플래그가 없으면 ne 를 포함해 모두 거짓이고, all 은 0·빈 문자열을 거짓으로 본다 (Ren'Py vn_condition 과 동일)", () => {
+  assert.equal(lineAllowed({ when: { compare: [{ flag: "x", op: "ne", value: 1 }] } }, {}), false);
+  assert.equal(lineAllowed({ when: { compare: [{ flag: "x", op: "ne", value: 1 }] } }, { x: 2 }), true);
+  assert.equal(lineAllowed({ when: { compare: [{ flag: "x", op: "ne", value: 1 }] } }, { x: "1" }), true, "타입이 다르면 다른 값이다");
+  assert.equal(lineAllowed({ when: { all: ["n"] } }, { n: 0 }), false);
+  assert.equal(lineAllowed({ when: { all: ["s"] } }, { s: "" }), false);
+  assert.equal(lineAllowed({ when: { none: ["n"] } }, { n: 0 }), true);
 });

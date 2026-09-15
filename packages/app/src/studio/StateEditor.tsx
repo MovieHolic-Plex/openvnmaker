@@ -1,5 +1,6 @@
-import {useEffect,useState} from "react";
+import {useEffect,useMemo,useState} from "react";
 import type {Choice,FlagComparison,LineCondition,StoryFlags,VnScript} from "@vnmaker/content";
+import {renameFlag} from "./stateOperations.js";
 import "./state-editor.css";
 
 type Value=string|number|boolean;
@@ -9,14 +10,28 @@ function ValueField({label,value,onChange}:{label:string;value:Value;onChange:(v
   if(typeof value==="boolean")return <select aria-label={label} value={String(value)} onChange={event=>onChange(event.target.value==="true")}><option value="false">꺼짐</option><option value="true">켜짐</option></select>;
   return <input aria-label={label} type={typeof value==="number"?"number":"text"} maxLength={200} value={draft} onChange={event=>{setDraft(event.target.value);if(typeof value==="string")onChange(event.target.value);}} onBlur={()=>{if(typeof value==="number"){const number=Number(draft);if(draft.trim()&&Number.isFinite(number))onChange(number);else setDraft(String(value));}}} onKeyDown={event=>{if(event.key==="Enter")event.currentTarget.blur();}}/>;
 }
-const references=(script:VnScript,key:string)=>script.scenes.some(scene=>scene.lines.some(line=>uses(line.when,key))||scene.choices?.some(choice=>Object.hasOwn(choice.set??{},key)||Object.hasOwn(choice.add??{},key)||uses(choice.when,key)));
-const uses=(condition:LineCondition|undefined,key:string)=>condition?.all?.includes(key)||condition?.none?.includes(key)||condition?.compare?.some(rule=>rule.flag===key);
+const uses=(condition:LineCondition|undefined,into:Set<string>)=>{condition?.all?.forEach(key=>into.add(key));condition?.none?.forEach(key=>into.add(key));condition?.compare?.forEach(rule=>into.add(rule.flag));};
+/** 원고를 한 번 훑어 참조 중인 변수 집합을 만든다. 변수마다 전체를 다시 훑으면 장편에서 키 입력마다 수십 ms 가 든다. */
+export function referencedFlags(script:VnScript):Set<string>{
+  const into=new Set<string>();
+  for(const scene of script.scenes){for(const line of scene.lines)uses(line.when,into);for(const choice of scene.choices??[]){uses(choice.when,into);for(const key of Object.keys(choice.set??{}))into.add(key);for(const key of Object.keys(choice.add??{}))into.add(key);}}
+  return into;
+}
 
-export function StateEditor({script,onChange}:{script:VnScript;onChange:(script:VnScript)=>void}){
+function RenameField({label,value,onRename}:{label:string;value:string;onRename:(next:string)=>string|null}){
+  const [draft,setDraft]=useState(value),[error,setError]=useState("");
+  useEffect(()=>{setDraft(value);setError("");},[value]);
+  function commit(){const next=draft.trim();if(!next||next===value){setDraft(value);setError("");return;}const issue=onRename(next);if(issue){setError(issue);}}
+  return <span className="rename-field"><input aria-label={label} value={draft} maxLength={64} onChange={event=>{setDraft(event.target.value);setError("");}} onBlur={commit} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();commit();}if(event.key==="Escape"){setDraft(value);setError("");}}}/>{error&&<small role="alert">{error}</small>}</span>;
+}
+
+export function StateEditor({script,onChange}:{script:VnScript;onChange:(script:VnScript)=>boolean|void}){
   const [name,setName]=useState(""),[kind,setKind]=useState("boolean"),[error,setError]=useState("");
   const flags=script.flags??{};
-  return <details className="line-direction state-editor"><summary>작품 상태 변수 <span>{Object.keys(flags).length}</span></summary><p className="field-help">새 게임의 초기값입니다. 선택지에서 값을 바꾸고 대사·선택지 조건에 사용할 수 있습니다.</p>
-    {Object.entries(flags).map(([key,value])=><div className="state-row" key={key}><label>{key}<ValueField label={`${key} 초기값`} value={value} onChange={next=>onChange({...script,flags:{...flags,[key]:next}})}/></label><button type="button" className="text-button" disabled={references(script,key)} title={references(script,key)?"사용 중인 조건과 선택 결과를 먼저 제거하세요.":"변수 삭제"} aria-label={`${key} 변수 삭제`} onClick={()=>{const next={...flags};delete next[key];onChange({...script,flags:next});}}>삭제</button></div>)}
+  const referenced=useMemo(()=>referencedFlags(script),[script]);
+  function rename(from:string,to:string):string|null{try{const result=onChange(renameFlag(script,from,to));return result===false?"변경을 적용하지 못했습니다.":null;}catch(error){return error instanceof Error?error.message:String(error);}}
+  return <details className="line-direction state-editor"><summary>작품 상태 변수 <span>{Object.keys(flags).length}</span></summary><p className="field-help">새 게임의 초기값입니다. 선택지에서 값을 바꾸고 대사·선택지 조건에 사용할 수 있습니다. 이름을 바꾸면 조건과 선택 결과의 참조도 함께 바뀝니다.</p>
+    {Object.entries(flags).map(([key,value])=><div className="state-row" key={key}><label><RenameField label={`${key} 이름 변경`} value={key} onRename={next=>rename(key,next)}/><ValueField label={`${key} 초기값`} value={value} onChange={next=>onChange({...script,flags:{...flags,[key]:next}})}/></label><button type="button" className="text-button" disabled={referenced.has(key)} title={referenced.has(key)?"사용 중인 조건과 선택 결과를 먼저 제거하세요.":"변수 삭제"} aria-label={`${key} 변수 삭제`} onClick={()=>{const next={...flags};delete next[key];onChange({...script,flags:next});}}>삭제</button></div>)}
     <label className="studio-field">새 변수 이름<input aria-label="새 변수 이름" value={name} maxLength={64} placeholder="예: trust, found_letter" onChange={event=>setName(event.target.value)}/></label>
     <div className="state-row"><select aria-label="새 변수 유형" value={kind} onChange={event=>setKind(event.target.value)}><option value="boolean">켜짐 / 꺼짐</option><option value="number">숫자</option><option value="string">문자</option></select><button type="button" className="studio-button" disabled={Object.keys(flags).length>=100} onClick={()=>{const key=name.trim();if(!/^[a-z][a-z0-9_-]{0,63}$/i.test(key)||["constructor","prototype","__proto__"].includes(key)||Object.hasOwn(flags,key)){setError("중복되지 않는 영문 이름을 입력하세요. 숫자·밑줄·하이픈도 사용할 수 있습니다.");return;}onChange({...script,flags:{...flags,[key]:kind==="number"?0:kind==="string"?"":false}});setName("");setError("");}}>변수 추가</button></div>{error&&<p role="alert">{error}</p>}
   </details>;

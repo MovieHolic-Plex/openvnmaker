@@ -11,6 +11,7 @@ test("original music, effects and voice survive authoring, ranges, ZIP and a cle
   await page.getByLabel("작품 음악 페이드 (초)").fill("0.2");
   const originals={bgm:wav(8,110),sfx:wav(.2,440),voice:wav(4,220)};
   for(const kind of ["bgm","sfx","voice"] as const){await page.getByLabel("가져올 음원 종류").selectOption(kind);await page.getByTestId("audio-import-files").setInputFiles({name:`my-${kind}.wav`,mimeType:"audio/wav",buffer:Buffer.from(originals[kind])});await expect(page.locator(".audio-library article").filter({hasText:`my-${kind}.wav`})).toBeVisible();}
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   const assets=await page.evaluate(()=>JSON.parse(localStorage.getItem("vnmaker.studio.project.v1")!).audioAssets as {url:string;kind:"bgm"|"sfx"|"voice"}[]);
   const url=(kind:string)=>assets.find(asset=>asset.kind===kind)!.url;
   await page.getByLabel("장면 배경음악",{exact:true}).selectOption(url("bgm"));await page.getByLabel("대사 효과음",{exact:true}).selectOption(url("sfx"));await page.getByLabel("대사 보이스",{exact:true}).selectOption(url("voice"));await page.screenshot({path:"evidence/audio-authoring/library-desktop.png"});

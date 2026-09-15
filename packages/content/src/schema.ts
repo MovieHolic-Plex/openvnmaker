@@ -25,6 +25,8 @@ export interface SpriteDirection {
   readonly slot: SpriteSlot;
   readonly character: CharacterId | null;
   readonly expression?: Expression;
+  /** Declared outfit id (character.outfits); null returns this actor to the default look. */
+  readonly outfit?: string | null;
   /** A different pose; null returns this actor to the expression artwork. */
   readonly poseUrl?: string | null;
 }
@@ -47,7 +49,7 @@ export interface Line {
   readonly voice?: string;
   /** 이 줄에서 화면을 흔든다. */
   readonly shake?: boolean;
-  /** 이 줄에서 CG 를 숨긴다. */
+  /** 이 줄에서만 CG 를 숨긴다(다음 줄에 복귀). 영구 해제는 cgUrl:null 을 쓴다. */
   readonly cgHide?: boolean;
   /** Omit to keep the current image; null returns to the scene background. */
   readonly cgUrl?: string | null;
@@ -93,7 +95,7 @@ export interface Scene {
   readonly framing?: "wide" | "close" | "cinematic";
   readonly artBrief?: string;
   readonly bgm?: string;
-  /** 이 씬에서 전체화면으로 표시할 CG id. */
+  /** 이 씬에서 전체화면으로 표시할 CG 에셋 id(assets 항목). cgUrl 과 함께 쓸 수 없다. */
   readonly cg?: string;
   readonly transition?: Transition;
   readonly sprites?: readonly SpriteDirection[];
@@ -113,6 +115,8 @@ export interface Character {
   /** 갈아입힐 수 있는 의상 id 목록. */
   readonly outfits?: string[];
   readonly expressionImages?: Partial<Readonly<Record<Expression, string>>>;
+  /** 의상별 이미지: outfit id → 표정 → 주소. 키는 outfits 에 선언된 id 여야 한다. */
+  readonly outfitImages?: Partial<Readonly<Record<string, Partial<Readonly<Record<Expression, string>>>>>>;
   /** Runtime keyed-image compositing; source art remains an unmodified bitmap. */
   readonly chromaKey?: "#00ff00";
 }
@@ -132,6 +136,8 @@ export interface VnScript {
   readonly artDirection?: string;
   /** Project-wide music start/change/stop fade duration; seconds, 0..10. */
   readonly musicFadeSeconds?: number;
+  /** 타이틀 화면 음악 — 내장 곡 id 또는 프로젝트 음원 주소. 없으면 "main-theme". */
+  readonly titleBgm?: string;
   readonly assets?: readonly Artwork[];
   readonly audioAssets?: readonly AudioAsset[];
   readonly assetLibraryMode?: "project" | "all";

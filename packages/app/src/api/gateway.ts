@@ -148,11 +148,14 @@ export interface GenerateImageResult {
   readonly name: string;
 }
 
-export async function generateImage(prompt: string, aspectRatio = "16:9", signal?: AbortSignal): Promise<GenerateImageResult> {
+export type ImageBackend = "codex" | "agy";
+export interface ImageBackendInfo { readonly id: ImageBackend; readonly model: string; readonly available: boolean; readonly authRequired: boolean; readonly unofficial: boolean; }
+
+export async function generateImage(prompt: string, aspectRatio = "16:9", signal?: AbortSignal, backend?: ImageBackend): Promise<GenerateImageResult> {
   const res = await fetch("/api/image/generate", {
     method: "POST",
     headers: { ...STUDIO_HEADER, "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, aspectRatio }),
+    body: JSON.stringify({ prompt, aspectRatio, ...(backend ? { backend } : {}) }),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(600_000)]) : AbortSignal.timeout(600_000),
   });
   const body = await readJson(res);
@@ -165,4 +168,33 @@ export async function generateImage(prompt: string, aspectRatio = "16:9", signal
   const url = typeof row["url"] === "string" ? row["url"] : "";
   if (url === "") throw new Error("이미지가 없다");
   return { url, name: typeof row["name"] === "string" ? row["name"] : "" };
+}
+
+export type ReviewSeverity = "high" | "medium" | "low";
+export interface ReviewFinding {
+  readonly severity: ReviewSeverity;
+  readonly category: string;
+  readonly summary: string;
+  readonly sceneId?: string;
+  readonly suggestion?: string;
+}
+export interface ReviewResult {
+  readonly findings: readonly ReviewFinding[];
+  readonly model: string;
+  readonly unofficial: boolean;
+}
+
+/** agy(Gemini) 텍스트 모델로 원고 서사를 점검한다. 구조 검사(auditScript)와 별개다. */
+export async function reviewStory(manuscript: unknown, focus?: string, signal?: AbortSignal): Promise<ReviewResult> {
+  const res = await fetch("/api/review", {
+    method: "POST",
+    headers: { ...STUDIO_HEADER, "Content-Type": "application/json" },
+    body: JSON.stringify({ manuscript, ...(focus ? { focus } : {}) }),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(180_000)]) : AbortSignal.timeout(180_000),
+  });
+  const body = await readJson(res);
+  if (res.status === 401) throw new Error("로그인이 필요합니다. AI 어시스턴트에서 로그인하세요.");
+  if (!res.ok) throw new Error(String(body["error"] ?? `review ${res.status}`));
+  const findings = Array.isArray(body["findings"]) ? body["findings"] as ReviewFinding[] : [];
+  return { findings, model: typeof body["model"] === "string" ? body["model"] : "", unofficial: body["unofficial"] === true };
 }

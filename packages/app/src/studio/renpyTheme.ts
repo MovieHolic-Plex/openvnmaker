@@ -67,7 +67,8 @@ screen choice(items):
                     vbox:
                         spacing 12
                         for index, item in enumerate(items):
-                            textbutton item.caption id ("vn_choice_%d" % index) action item.action xfill True default_focus (index == 0)
+                            # vn_locked 는 원고의 disable 선택지. 웹 플레이어와 같이 보이되 고를 수 없는 버튼으로 그린다.
+                            textbutton item.caption id ("vn_choice_%d" % index) action item.action sensitive (not item.kwargs.get("vn_locked", False)) xfill True default_focus (index == 0 and not item.kwargs.get("vn_locked", False))
                 text "방향키로 이동 / Enter로 선택" size 16 color "#a9bac9"
 
 style vn_choice_vbox is vbox:

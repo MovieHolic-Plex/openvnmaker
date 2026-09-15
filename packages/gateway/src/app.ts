@@ -8,14 +8,25 @@ import { imageRoutes } from "./routes/images.js";
 import { generateRoutes } from "./routes/generate.js";
 import { projectRoutes } from "./routes/project.js";
 import { agentRoutes } from "./routes/agent.js";
+import { storeRoutes } from "./routes/store.js";
+import { reviewRoutes } from "./routes/review.js";
+import type { generateText } from "./cca/generate.js";
 import type { CredentialStore } from "./auth/credentials.js";
 import { createFileProjectStore, type ProjectStore } from "./project/store.js";
 import type { AgentModel } from "./agent/run.js";
+import type { CodexImageParams } from "./codex/images.js";
+import type { ImageResult } from "./cca/images.js";
 
 export interface GatewayDeps {
   readonly store: CredentialStore;
   readonly project?: ProjectStore;
   readonly agentModel?: AgentModel;
+  /** 테스트가 codex 프로세스를 띄우지 않고 이미지 경로를 검증하는 주입구. */
+  readonly codexImage?: (params: CodexImageParams) => Promise<ImageResult>;
+  /** 테스트가 losia.online 없이 스토어 프록시를 검증하는 주입구. */
+  readonly losiaFetch?: typeof fetch;
+  /** 테스트가 agy 없이 스토리 점검 라우트를 검증하는 주입구. */
+  readonly reviewModel?: typeof generateText;
 }
 
 /**
@@ -27,6 +38,9 @@ export function createApp(deps: GatewayDeps): Hono {
     store: deps.store,
     project,
     ...(deps.agentModel ? { agentModel: deps.agentModel } : {}),
+    ...(deps.codexImage ? { codexImage: deps.codexImage } : {}),
+    ...(deps.losiaFetch ? { losiaFetch: deps.losiaFetch } : {}),
+    ...(deps.reviewModel ? { reviewModel: deps.reviewModel } : {}),
   };
   const app = new Hono();
 
@@ -63,6 +77,8 @@ export function createApp(deps: GatewayDeps): Hono {
   app.route("/api", generateRoutes(wired));
   app.route("/api", projectRoutes(wired));
   app.route("/api", agentRoutes(wired));
+  app.route("/api", storeRoutes(wired));
+  app.route("/api", reviewRoutes(wired));
 
   return app;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { assetUrl } from "../assetUrl.js";
 interface Props { src:string; alt:string; chromaKey?:string|undefined; className?:string; testId?:string; title?:string; }
 let compositor: { canvas: HTMLCanvasElement; gl: WebGLRenderingContext } | undefined;
 function getCompositor() {
@@ -23,7 +24,9 @@ function getCompositor() {
 /** Source bitmaps stay unchanged. One shared GPU compositor renders keyed game
  * art into display canvases; thumbnails do not allocate a WebGL context each. */
 export function ArtImage({src,alt,chromaKey,className,testId,title}:Props){
+  const resolved=assetUrl(src);
   const canvas=useRef<HTMLCanvasElement>(null);const[failed,setFailed]=useState(false);
+  useEffect(()=>{setFailed(false);},[src]);
   useEffect(()=>{
     if(!chromaKey || !canvas.current)return;
     let alive=true;const node=canvas.current;const image=new Image();
@@ -48,11 +51,15 @@ export function ArtImage({src,alt,chromaKey,className,testId,title}:Props){
       if(frame!==undefined)return;
       frame=requestAnimationFrame(()=>{frame=undefined;if(image.complete&&image.naturalWidth)draw();});
     };
-    image.onload=queueDraw;image.onerror=()=>{if(alive)setFailed(true);};image.src=src;
+    image.onload=queueDraw;image.onerror=()=>{if(alive)setFailed(true);};image.src=resolved;
     // Canvas dimensions affect layout; write them outside ResizeObserver delivery.
     const observer=new ResizeObserver(queueDraw);observer.observe(node);
     return()=>{alive=false;observer.disconnect();if(frame!==undefined)cancelAnimationFrame(frame);};
   },[src,chromaKey]);
-  if(!chromaKey)return <img src={src} alt={alt} className={className} data-testid={testId} title={title} loading="lazy"/>;
-  return <canvas ref={canvas} className={className} data-testid={testId} data-src={src} data-art-error={failed||undefined} role="img" aria-label={alt||"캐릭터 원화"} title={failed?"원화를 표시하지 못했습니다.":title}/>;
+  // 파일이 없거나 깨진 원화는 빈 틀을 남기지 않고 자리만 비운다. 절대 배치라 다른 배우의 위치는 바뀌지 않는다.
+  if(!chromaKey){
+    if(failed)return <span className={className} data-testid={testId} data-src={resolved} data-art-error="true" hidden title="원화를 표시하지 못했습니다."/>;
+    return <img src={resolved} alt={alt} className={className} data-testid={testId} title={title} loading="lazy" onError={()=>setFailed(true)}/>;
+  }
+  return <canvas ref={canvas} className={className} data-testid={testId} data-src={resolved} data-art-error={failed||undefined} hidden={failed||undefined} role="img" aria-label={alt||"캐릭터 원화"} title={failed?"원화를 표시하지 못했습니다.":title}/>;
 }

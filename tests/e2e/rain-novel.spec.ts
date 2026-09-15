@@ -51,6 +51,8 @@ test("old projects/checkpoints/saves are removed once; new edits survive reload;
 
 for (let route = 0; route < 8; route++) test(`complete published path ${route + 1} plays through three choices to correct ending`, async ({ page }) => {
   await mkdir("evidence/rain-novel", { recursive: true });
+  // 스킵은 기본적으로 읽은 대사만 건너뛰고 씬 경계·엔딩 앞에서 멈춘다. 이 검증은 스킵을 빨리 감기로 쓰므로 「모두 스킵」을 켠다.
+  await page.addInitScript(() => localStorage.setItem("vnmaker:settings", JSON.stringify({ skipUnread: true })));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: script.title, exact: true })).toBeVisible();
@@ -81,6 +83,11 @@ for (let route = 0; route < 8; route++) test(`complete published path ${route + 
       const chosen = (route >> bit) & 1;
       expectedFlags = { ...expectedFlags, ...scene.choices![chosen]!.set };
       await page.getByTestId(`choice-${chosen}`).click();
+    } else if (scene.ending) {
+      // 엔딩 씬: 스킵은 마지막 줄에서 멈추므로 직접 넘겨 엔딩을 연다.
+      await page.getByTestId("skip-button").click();
+      await expect.poll(() => page.evaluate(() => window.__vn?.typing)).toBe(false);
+      await page.getByTestId("advance-button").click();
     } else await page.getByTestId("skip-button").click();
   }
   await expect(page.getByTestId("ending-screen")).toBeVisible();

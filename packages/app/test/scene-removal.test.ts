@@ -15,7 +15,8 @@ test("deleting a duplicated ending into its original restores the ending and rem
   const removed = parseScript(removeScene(copied, "copy", "merge"));
   assert.deepEqual(removed, source);
   let state = reduce(removed, initialState(removed), { type: "start" });
-  state = reduce(removed, state, { type: "skipScene" });
+  // 스킵은 엔딩 앞 마지막 줄에서 멈춘다 — 독자가 직접 넘겨야 엔딩이 열린다.
+  state = reduce(removed, state, { type: "skipToChoice" }); state = reduce(removed, state, { type: "advance" });
   assert.equal(state.phase, "ending"); assert.equal(state.endingTitle, "함께 남긴 엔딩");
 });
 
@@ -25,7 +26,7 @@ test("deleting a duplicated branch restores choices and their flags without chan
   const removed = parseScript(removeScene(copied, "copy", "fork"));
   assert.deepEqual(removed, source); assert.equal(JSON.stringify(source), before);
   let state = reduce(removed, initialState(removed), { type: "start" });
-  state = reduce(removed, state, { type: "skipScene" }); state = reduce(removed, state, { type: "choose", index: 0 });
+  state = reduce(removed, state, { type: "skipToChoice" }); state = reduce(removed, state, { type: "choose", index: 0 });
   assert.equal(state.flags.remembered, true); assert.equal(state.affection, 2); assert.equal(state.sceneId, "finish");
 });
 

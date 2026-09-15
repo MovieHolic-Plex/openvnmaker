@@ -7,7 +7,8 @@ import { script, applyChoiceFlags, choiceAllowed, lineAllowed, type StoryFlags, 
 
 const fixture: VnScript = {
   title: "ZIP 검증 초안", subtitle: "현재 편집본으로 독립 실행", start: "export-start",
-  characters: script.characters.map(character => ({ ...character, expressionImages: { neutral: `/assets/art/${character.id}-neutral.png` } })),
+  // 화면에 서지 않는 1인칭 화자(me)처럼 원화가 없는 인물은 대사 전용으로 둔다 — 없는 파일을 참조하면 내보내기가 정당하게 실패한다.
+  characters: script.characters.map(character => character.id === "me" ? character : { ...character, expressionImages: { neutral: `/assets/art/${character.id}-neutral.png` } }),
   assets: [{ id: "portable-art", kind: "background", name: "현재 작품의 이미지", url: "/api/image/file/export-cover.png" }],
   scenes: [
     { id: "export-start", chapter: "편집한 첫 장면", background: "title", backgroundUrl: "/api/image/file/export-cover.png", bgm: "daily", lines: [
@@ -130,7 +131,7 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
   expect(runtime).not.toContain(script.scenes[0]!.lines[0]!.text); // Build-default manuscript cannot leak into the export runtime.
   for (const file of manifest.files) expect((await stat(resolve(directory, file.path))).size).toBeGreaterThan(0);
   const hosting = await serve(directory); const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.addInitScript(()=>localStorage.setItem("vnmaker:settings",JSON.stringify({textSpeed:5,bgmVolume:.55,sfxVolume:.7,voiceVolume:.8})));
+  await context.addInitScript(()=>localStorage.setItem("vnmaker:settings",JSON.stringify({textSpeed:5,bgmVolume:.55,sfxVolume:.7,voiceVolume:.8,skipUnread:true})));
   try {
     const player = await context.newPage(); const external: string[] = []; const pageErrors: string[] = [];
     player.on("request", request => { const url = new URL(request.url()); if (url.origin !== hosting.origin || url.pathname.startsWith("/api/")) external.push(url.href); });
@@ -138,7 +139,7 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
     await player.addInitScript(oldScript => {
       localStorage.setItem("vnmaker:save", JSON.stringify({ script: oldScript, sceneId: oldScript.start, lineIndex: 0, affection: 99, savedAt: Date.now() }));
       localStorage.setItem("vnmaker:auto:bundle-0000000000000000", JSON.stringify({ script: oldScript, sceneId: oldScript.start, lineIndex: 0, affection: 99, savedAt: Date.now() }));
-      localStorage.setItem("vnmaker:settings", JSON.stringify({ textSpeed: 5, bgmVolume: .3, sfxVolume: .3 }));
+      localStorage.setItem("vnmaker:settings", JSON.stringify({ textSpeed: 5, bgmVolume: .3, sfxVolume: .3, skipUnread: true }));
       sessionStorage.setItem("vnmaker.previewScript", JSON.stringify(oldScript));
     }, script);
     await player.goto(`${hosting.origin}/?preview=1`);
@@ -194,7 +195,8 @@ test("download edited project ZIP, unzip, and play its assets and isolated saves
     await advance(player, 3); await expect(player.locator(".sprite")).toHaveCount(0);
     await player.getByTestId("skip-button").click(); await expect(player.getByTestId("choice-0")).toBeFocused(); await player.keyboard.press("1");
     await expect(player.getByTestId("dialogue-text")).toHaveText("현재 원고에 쓰인 정확한 결말.");
-    await player.getByTestId("skip-button").click(); await expect(player.getByTestId("ending-title")).toHaveText("수정본의 독립 엔딩");
+    // 스킵은 엔딩 앞 마지막 줄에서 멈춘다 — 엔딩은 독자가 직접 넘겨 연다.
+    await expect.poll(() => player.evaluate(() => window.__vn?.typing)).toBe(false); await player.getByTestId("advance-button").click(); await expect(player.getByTestId("ending-title")).toHaveText("수정본의 독립 엔딩");
     await player.getByTestId("credits-button").click(); await expect(creditPanel).toContainText("Artwork by 테스트 제작자");
     await creditPanel.getByRole("button",{name:"닫기"}).click(); await expect(player.getByTestId("ending-title")).toHaveText("수정본의 독립 엔딩");
     await player.screenshot({ path: testInfo.outputPath("standalone-ending.png") });
@@ -255,7 +257,7 @@ test("the entire long-form novel exports with all rich art and plays through eve
   expect(project.scenes.reduce((count, scene) => count + scene.lines.length, 0)).toBe(829);
   expect(project.assets?.length).toBe(35);
   const hosting = await serve(directory); const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.addInitScript(()=>localStorage.setItem("vnmaker:settings",JSON.stringify({textSpeed:5,bgmVolume:.55,sfxVolume:.7,voiceVolume:.8})));
+  await context.addInitScript(()=>localStorage.setItem("vnmaker:settings",JSON.stringify({textSpeed:5,bgmVolume:.55,sfxVolume:.7,voiceVolume:.8,skipUnread:true})));
   try {
     const player = await context.newPage(); const errors: string[] = []; const external: string[] = [];
     player.on("pageerror", error => errors.push(error.message));
@@ -291,7 +293,11 @@ test("the entire long-form novel exports with all rich art and plays through eve
       if (state.phase === "ending") break;
       visited.add(state.sceneId);
       if (state.phase === "choice") await player.getByTestId("choice-0").click();
-      else await player.getByTestId("skip-button").click();
+      else {
+        await player.getByTestId("skip-button").click();
+        const scene = project.scenes.find(row => row.id === state.sceneId);
+        if (scene?.ending) { await expect.poll(() => player.evaluate(() => window.__vn?.typing)).toBe(false); await player.getByTestId("advance-button").click(); }
+      }
     }
     await expect(player.getByTestId("ending-title")).toHaveText(script.scenes.find(scene => scene.id === "s17a")!.ending!);
     await player.screenshot({ path: testInfo.outputPath("longform-standalone-ending.png") });
@@ -326,6 +332,7 @@ test("the entire long-form novel exports with all rich art and plays through eve
         }
         await player.getByTestId("skip-button").click();
         if(scene.choices?.length){await expect.poll(()=>player.evaluate(()=>window.__vn?.phase)).toBe("choice");await player.getByTestId(`choice-${route.choices[decision++]}`).click();}
+        else if(scene.ending){await expect.poll(()=>player.evaluate(()=>window.__vn?.typing)).toBe(false);await player.getByTestId("advance-button").click();}
       }
       await expect(player.getByTestId("ending-title")).toHaveText(route.ending);
       expect(await player.evaluate(()=>window.__vn!.flags)).toEqual(route.flags);

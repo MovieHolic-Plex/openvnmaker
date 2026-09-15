@@ -23,3 +23,19 @@ export function serializeLibraryArchive(records:unknown[]):string {
   check(records,0);
   return JSON.stringify({format:"vnmaker-library-archive",version:1,records},null,2);
 }
+
+export interface LibraryArchive { readonly version:1; readonly records:readonly unknown[] }
+export const LIBRARY_ARCHIVE_FORMAT="vnmaker-library-archive";
+/** 「보관함 원본 JSON」인지 판별한다. 일반 원고 JSON 이면 null. 형식은 맞는데 내용이 깨졌으면 오류. */
+export function parseLibraryArchive(text:string):LibraryArchive {
+  let value:unknown;
+  try{value=JSON.parse(text);}catch{throw new Error("보관함 원본 JSON을 읽지 못했습니다.");}
+  if(!isLibraryArchive(value))throw new Error("보관함 원본 JSON 형식이 아닙니다.");
+  if(value.version!==1)throw new Error(`지원하지 않는 보관함 원본 버전입니다: ${String(value.version)}`);
+  if(!Array.isArray(value.records))throw new Error("보관함 원본에 기록 목록이 없습니다.");
+  if(value.records.length>500)throw new Error("보관함 원본의 기록이 500개를 넘습니다.");
+  return {version:1,records:value.records};
+}
+export function isLibraryArchive(value:unknown):value is {format:string;version:unknown;records:unknown} {
+  return !!value && typeof value==="object" && !Array.isArray(value) && (value as Record<string,unknown>)["format"]===LIBRARY_ARCHIVE_FORMAT;
+}

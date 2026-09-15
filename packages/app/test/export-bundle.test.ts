@@ -6,6 +6,7 @@ import { readProjectBundle } from "../src/studio/restoreBundle.js";
 import { mediaCredits } from "../src/studio/mediaCredits.js";
 import { buildExportBundle, collectProjectAssets, rebaseProjectAssets } from "../src/studio/exportBundle.js";
 import { createZip, crc32 } from "../src/studio/zip.js";
+import { assetUrl } from "../src/assetUrl.js";
 
 const encoder = new TextEncoder();
 const fixture: VnScript = {
@@ -137,4 +138,17 @@ test("team credits validate bounded text and retain ordered multiline records th
   const credits=[{role:"시나리오",names:"한나\n도윤"},{role:"",names:"참여자"},{role:"빈 초안",names:""}];
   const parsed=parseScript({...fixture,credits});assert.deepEqual(parsed.credits,credits);
   for(const credits of [null,{},[{}],[{role:1,names:"A"}],[{role:"R",names:"a".repeat(4001)}],[{role:"R".repeat(121),names:"A"}],[{role:"R",names:"A\u0000"}],[{role:"R",names:"A",extra:1}],Array.from({length:101},()=>({role:"R",names:"A"}))])assert.throws(()=>parseScript({...fixture,credits}));
+});
+
+test("packaged asset paths resolve relative to the deployed folder, not the domain root", () => {
+  // itch.io·GitHub Pages 같은 하위 경로 배포에서도 루트 상대 원고 경로가 풀려야 한다.
+  assert.equal(assetUrl("/assets/bg/title.png", "https://example.com/games/vn/"), "https://example.com/games/vn/assets/bg/title.png");
+  assert.equal(assetUrl("/assets/bg/title.png", "https://example.com/games/vn/index.html"), "https://example.com/games/vn/assets/bg/title.png");
+  // 루트 배포는 원고의 루트 경로를 그대로 둔다 — 개발 서버·스튜디오의 src 단언이 흔들리지 않게.
+  assert.equal(assetUrl("/assets/bg/title.png", "https://example.com/"), "/assets/bg/title.png");
+  assert.equal(assetUrl("/assets/bg/title.png", "https://example.com/studio.html"), "/assets/bg/title.png");
+  // 외부·프로토콜 상대 주소는 건드리지 않는다.
+  assert.equal(assetUrl("https://cdn.example.com/a.png", "https://example.com/sub/"), "https://cdn.example.com/a.png");
+  assert.equal(assetUrl("//cdn.example.com/a.png", "https://example.com/sub/"), "//cdn.example.com/a.png");
+  assert.equal(assetUrl("assets/bg/title.png", "https://example.com/sub/"), "assets/bg/title.png");
 });

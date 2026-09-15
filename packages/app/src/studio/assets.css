@@ -40,6 +40,7 @@
 .art-section-title h2 { margin:0; font-size:12px; color:#e3e2eb; font-weight:500; flex:1; }
 .art-section-title>span { font-size:9px; color:#7f8393; }
 .art-section-title>span.is-connected { color:#8ebdae; }
+.art-section-title>span.is-error { color:#e2a08e; }
 .art-selected-preview { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:#20212b; border-radius:8px; border:1px solid #383644; margin-bottom:12px; }
 .art-selected-preview--character { object-fit:contain; height:180px; }
 .art-selection>strong { display:block; font-size:12px; font-weight:500; line-height:1.6; }
@@ -71,3 +72,33 @@
 @media(max-width:850px) { .art-library { grid-template-columns:1fr; height:auto; min-height:100%; overflow:auto; padding-bottom:84px; } .art-workbench { border-left:0; border-top:1px solid #292b34; overflow:visible; display:grid; grid-template-columns:1fr 1fr; gap:20px; } .art-workbench section+section { margin-top:0; padding-top:0; border:0; } .art-generation { grid-column:1/-1; } .art-library-main { overflow:visible; } .art-mobile-selection { display:flex; position:fixed; bottom:38px; left:12px; right:12px; padding:9px; gap:9px; align-items:center; background:#232330f0; border:1px solid #746586; border-radius:11px; z-index:45; backdrop-filter:blur(16px); box-shadow:0 8px 30px #0009; } .art-mobile-selection :is(img,canvas) { width:54px; height:40px; flex-shrink:0; object-fit:cover; border-radius:5px; background:#171922; } .art-mobile-selection .art-mobile-preview--character { object-fit:contain; object-position:center top; } .art-mobile-selection>div { flex:1; min-width:0; } .art-mobile-selection strong { display:block; color:#e7def4; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .art-mobile-selection small { display:block; color:#a29aaf; font-size:9px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .art-mobile-selection button { display:flex; gap:5px; align-items:center; border:0; border-radius:6px; background:#c5b3ea; color:#22162e; font-family:inherit; font-size:11px; padding:10px 12px; cursor:pointer; } }
 @media(max-width:520px) { .art-library-main { padding:19px 15px; } .art-library-heading h1 { font-size:21px; } .art-library-heading p { font-size:11px; } .art-count { display:none; } .art-grid { grid-template-columns:1fr 1fr; gap:10px; } .art-card strong { font-size:10px; margin-left:5px; margin-right:5px; } .art-card>small { font-size:8px; margin-left:5px; } .art-curation-banner { min-height:165px; } .art-curation-banner>div { padding:21px; } .art-curation-banner h2 { font-size:20px; } .art-workbench { display:block; } .art-workbench section+section { border-top:1px solid #2a2c36; margin-top:22px; padding-top:20px; } .art-selected-preview { max-height:240px; } }
 .art-import {padding:20px;border-bottom:1px solid #ffffff18;background:#14202a}.art-import label{display:block;color:#b8cedd;font-size:11px;margin:12px 0}.art-import select,.art-import input:not([type=file]){display:block;width:100%;margin-top:6px;padding:9px;border:1px solid #accadd33;border-radius:6px;background:#101821;color:#e0ecf4}.art-import p{font-size:11px;line-height:1.8;color:#90a5b7}
+.art-store-search { display:flex; gap:7px; align-items:center; }
+.art-store-search input { flex:1; min-width:0; box-sizing:border-box; border:1px solid #333540; border-radius:7px; background:#101218; color:#d1d2de; font-family:inherit; font-size:11px; padding:9px; }
+.art-store-search input:focus { outline:1px solid #a28ccb; border-color:#a28ccb; }
+.art-store-search .art-text-button { margin:0; white-space:nowrap; }
+.art-store-filters { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px; }
+.art-store-filters select { margin-top:7px; }
+.art-store-hint { margin-top:12px; }
+.art-store-list { display:flex; flex-direction:column; gap:9px; margin-bottom:12px; }
+.art-store-item { display:flex; gap:9px; align-items:center; border:1px solid #2c2e39; border-radius:9px; background:#181a22; padding:8px; }
+.art-store-thumb { width:64px; height:44px; flex-shrink:0; border-radius:6px; overflow:hidden; background:#12141a; display:flex; align-items:center; justify-content:center; }
+.art-store-thumb img { width:100%; height:100%; object-fit:cover; }
+.art-store-thumb-empty { color:#5c6072; }
+.art-store-copy { flex:1; min-width:0; }
+.art-store-copy strong { display:block; font-size:11px; color:#e2e1ec; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.art-store-copy small { display:block; font-size:9px; color:#83879a; margin:3px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.art-store-license { font-size:8px; color:#8ebdae; }
+.art-store-license.is-embedded { color:#c9a17e; }
+.art-store-license.is-attribution { color:#c0b0e6; }
+.art-store-install { width:auto; flex-shrink:0; padding:8px 11px; font-size:10px; min-height:40px; }
+/* 목록 안 텍스트 버튼은 터치로도 누를 수 있어야 한다(기존 .art-text-button 은 높이 20px 남짓). */
+.art-store .art-text-button { min-height:32px; padding:6px 10px; display:inline-flex; align-items:center; }
+.art-empty-line { margin:0; }
+/* 스토어 상태 문구는 아트 라이브러리의 .art-message/.art-error 와 별도 클래스를 쓴다(선택자 충돌 방지).
+   .art-workbench p (0,1,1) 를 이기려면 같이 스코프를 걸어야 한다 — 안 그러면 문구가 회색으로 덮인다. */
+.art-workbench .art-store-message,.art-workbench .art-store-error { border-radius:8px; padding:12px; margin:12px 0 0; font-size:10px; line-height:1.75; word-break:keep-all; }
+.art-workbench .art-store-message { color:#cdeae2; border:1px solid #36524c; background:#172c2c; }
+.art-workbench .art-store-error { color:#f1b1ab; border:1px solid #693e40; background:#321e26; }
+/* 설치 중 버튼은 비활성이지만 진행 문구는 읽을 수 있어야 한다(disabled 의 opacity .42 를 면제). */
+.art-workbench .art-store-install.is-busy:disabled { opacity:1; }
+

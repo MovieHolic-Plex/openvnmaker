@@ -47,6 +47,12 @@
         "sad": "/assets/art/mirae-sad.png",
         "surprised": "/assets/art/mirae-surprised.png"
       }
+    },
+    {
+      "id": "me",
+      "name": "정우진",
+      "color": "#b7c6d4",
+      "bio": "24세, 컴퓨터공학과. 졸업 프로젝트로 인터랙티브 스토리 엔진을 만든다. 1인칭 시점이라 화면에 서지 않는다."
     }
   ],
   "scenes": [

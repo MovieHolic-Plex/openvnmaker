@@ -22,7 +22,14 @@ async function open(page: Page, sceneId = novel.start) {
   await page.getByTestId(`studio-scene-${sceneId}`).click();
   await expect(page.getByTestId("studio-line-text")).toBeVisible();
 }
-async function project(page: Page): Promise<VnScript> { return page.evaluate(key => JSON.parse(localStorage.getItem(key)!), key); }
+// 대사·선택지의 narrative id 는 편집·가져오기 때 부여되는 비결정적 UUID 다(네이티브 세이브 호환용, parse 가 보존).
+// 원고 "내용" 보존을 볼 때는 id 를 뺀 형태로 비교한다.
+function sansIds<T>(value: T): T { return JSON.parse(JSON.stringify(value), (key, val) => (val && typeof val === "object" && !Array.isArray(val) && "text" in val && "id" in val ? (() => { const { id, ...rest } = val as Record<string, unknown>; return rest; })() : val)); }
+async function project(page: Page): Promise<VnScript> {
+  // 자동 저장은 600ms 디바운스라 편집 직후 바로 읽으면 이전 원고가 나온다. 저장 표시가 완료로 돌아온 뒤 읽는다.
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
+  return page.evaluate(key => JSON.parse(localStorage.getItem(key)!), key);
+}
 async function importJson(page: Page, value: unknown) { await page.getByTestId("studio-import").setInputFiles({ name: "manual.vn.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(value)) }); }
 
 test("수동 대사 수정은 새로고침과 선택 위치 플레이·복귀 후에도 유지된다", async ({ page }) => {
@@ -57,12 +64,12 @@ test("분기 앞에 새 씬을 넣어도 기존 선택지를 보존하며 실행
   const origin = inserted.scenes.find(scene => scene.id === "s05")!;
   const next = inserted.scenes.find(scene => scene.id === origin.next)!;
   expect(inserted.scenes).toHaveLength(original.scenes.length + 1);
-  expect(origin.choices).toBeUndefined(); expect(next.choices).toEqual(before.choices);
+  expect(origin.choices).toBeUndefined(); expect(sansIds(next.choices)).toEqual(sansIds(before.choices));
   await expect(page.getByTestId("studio-validation")).toHaveText("스토리 연결 정상");
   await page.getByTestId("studio-undo").click();
-  expect(await project(page)).toEqual(original);
+  expect(sansIds(await project(page))).toEqual(sansIds(original));
   await page.getByRole("button", { name: "다시 실행", exact: true }).click();
-  expect(await project(page)).toEqual(inserted);
+  expect(sansIds(await project(page))).toEqual(sansIds(inserted));
 });
 
 test("빈 대사를 검증해 플레이를 막고 수정하면 정상 연결로 돌아온다", async ({ page }) => {
@@ -85,11 +92,11 @@ test("작품 JSON 내보내기와 가져오기는 전체 원고·아트·표정�
   const download = await downloading;
   expect(download.suggestedFilename()).toBe(`${before.title}.vn.json`);
   const exported = JSON.parse(await readFile((await download.path())!, "utf8"));
-  expect(exported).toEqual(before);
+  expect(sansIds(exported)).toEqual(sansIds(before));
   await page.getByLabel("작품 제목", { exact: true }).fill("수동 편집 백업 검수");
   await importJson(page, exported);
   await expect(page.getByRole("status")).toContainText("작품을 가져왔습니다");
-  expect(await project(page)).toEqual(before);
+  expect(sansIds(await project(page))).toEqual(sansIds(before));
   expect((await project(page)).assets).toEqual(novel.assets);
   await page.getByTestId("studio-undo").click();
   expect((await project(page)).title).toBe("수동 편집 백업 검수");
@@ -113,7 +120,7 @@ test("로컬 저장 실패를 성공으로 표시하지 않고 JSON 백업은 �
     Storage.prototype.setItem = function(name, value) { if (name === key) throw new DOMException("QA quota", "QuotaExceededError"); return original.call(this, name, value); };
   }, key);
   await page.getByLabel("작품 제목", { exact: true }).fill("저장 실패를 검증하는 제목");
-  await expect(page.getByRole("alert")).toContainText("저장 공간");
+  await expect(page.getByRole("alert")).toContainText("빠른 복구 저장에 실패");
   await expect(page.getByTestId("studio-save-state")).toHaveText("저장 확인 필요");
   const downloading = page.waitForEvent("download");
   await page.getByTestId("studio-export").click();
@@ -134,7 +141,9 @@ test("편집 미리보기 저장은 편집 원고를 담고 일반 플레이 저
   await expect(page.getByTestId("slot-picker")).toBeVisible();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("vnmaker:save:preview")!));
   expect(saved.sceneId).toBe("s02"); expect(saved.lineIndex).toBe(3);
-  expect(saved.script.scenes.find((scene: { id: string }) => scene.id === "s02").lines[3].text).toBe(text);
+  // 원고는 지문(scriptKey)으로 참조 저장된다(자동 저장 용량 축소). 내장(구형식)과 보관소 참조 둘 다 지원한다.
+  const previewScript = await page.evaluate(() => { const s = JSON.parse(localStorage.getItem("vnmaker:save:preview")!); const store = JSON.parse(localStorage.getItem("vnmaker:manuscripts:preview") ?? "{}"); return s.script ?? store[s.scriptKey]; });
+  expect(previewScript.scenes.find((scene: { id: string }) => scene.id === "s02").lines[3].text).toBe(text);
   expect(saved.flags).toEqual(novel.flags);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vnmaker:save")!))).toEqual(normalSave);
   await page.getByTestId("slot-save-0").click();

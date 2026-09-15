@@ -28,16 +28,16 @@ const story:VnScript={...script,title:"選択記録",assets:[],flags:{remembered
   ],ending:"終"},
 ]};
 test("choices persist across merge, save/restore, conditional dialogue, history and all visual cues",()=>{
-  let state=reduce(story,initialState(story),{type:"start"});state=reduce(story,state,{type:"skipScene"});state=reduce(story,state,{type:"choose",index:0});
+  let state=reduce(story,initialState(story),{type:"start"});state=reduce(story,state,{type:"skipToChoice"});state=reduce(story,state,{type:"choose",index:0});
   assert.equal(state.flags.remembered,true);assert.equal(state.lineIndex,0);
   const restored=reduce(story,initialState(story),{type:"restore",sceneId:state.sceneId,lineIndex:state.lineIndex,flags:state.flags,affection:state.affection,history:state.history});
   assert.deepEqual(restored.flags,state.flags);assert.deepEqual(restored.history,state.history);
   const scene=story.scenes[1]!;
-  assert.equal(cgAt(scene,1,restored.flags),"/assets/art/rain-umbrella-cg.png");assert.equal(framingAt(scene,1,restored.flags),"wide");assert.equal(bgmAt(scene,1,restored.flags),null);assert.deepEqual(spritesAt(scene,1,restored.flags),[]);
+  assert.equal(cgAt(story,scene,1,restored.flags),"/assets/art/rain-umbrella-cg.png");assert.equal(framingAt(scene,1,restored.flags),"wide");assert.equal(bgmAt(scene,1,restored.flags),null);assert.deepEqual(spritesAt(scene,1,restored.flags),[]);
   state=reduce(story,restored,{type:"advance"});assert.equal(state.lineIndex,2);assert.equal(spritesAt(scene,2,state.flags)[0]?.poseUrl,"/assets/art/seorin-working.png");
-  state=reduce(story,state,{type:"skipScene"});assert.equal(state.phase,"ending");assert.ok(!state.history.some(row=>row.text==="BBBBBBBB"));
+  state=reduce(story,state,{type:"skipToChoice"});assert.equal(state.phase,"scene","스킵은 엔딩 앞 마지막 줄에서 멈춘다");state=reduce(story,state,{type:"advance"});assert.equal(state.phase,"ending");assert.ok(!state.history.some(row=>row.text==="BBBBBBBB"));
   const actor=spritesAt(scene,3,state.flags)[0]!;assert.equal(actor.poseUrl,null);assert.equal(actor.expression,"smile");
-  const alternate=reduce(story,reduce(story,reduce(story,initialState(story),{type:"start"}),{type:"skipScene"}),{type:"choose",index:1});assert.equal(alternate.lineIndex,1);assert.equal(cgAt(scene,1,alternate.flags),undefined);
+  const alternate=reduce(story,reduce(story,reduce(story,initialState(story),{type:"start"}),{type:"skipToChoice"}),{type:"choose",index:1});assert.equal(alternate.lineIndex,1);assert.equal(cgAt(story,scene,1,alternate.flags),undefined);
 });
 test("runtime estimates count only the rows actually read after each choice",()=>{
   const estimate=estimateScriptDuration(story,1);assert.equal(estimate.minMinutes,8);assert.equal(estimate.maxMinutes,12);
@@ -48,9 +48,10 @@ test("conditional empty cycles report an error instead of overflowing, and saved
   const restored=reduce(story,initialState(story),{type:"restore",sceneId:"choice",lineIndex:0,affection:0,phase:"choice"});assert.equal(restored.phase,"choice");
 });
 test("scene duplicate/move/delete preserves branch payloads, remaps incoming links and remains immutable",()=>{
-  const copy=duplicateScene(story,"choice","copy");assert.equal(copy.scenes[0]!.next,"copy");assert.equal(copy.scenes[0]!.choices,undefined);assert.deepEqual(copy.scenes[1]!.choices,story.scenes[0]!.choices);
-  const moved=moveScene(copy,"copy",2);assert.equal(moved.start,story.start);assert.equal(moved.scenes.find(scene=>scene.id==="choice")!.next,"copy");
-  const deleted=removeScene(moved,"copy","merge");assert.equal(deleted.scenes[0]!.next,"merge");assert.deepEqual(story.scenes[0]!.choices?.[0]?.set,{remembered:true});
+  // 복제는 원본을 건드리지 않는 온전한 사본이다 — 예전에는 원본의 선택지를 사본으로 옮기고 원본을 사본에 연결했다.
+  const copy=duplicateScene(story,"choice","copy");assert.deepEqual(copy.scenes[0],story.scenes[0]);assert.deepEqual(copy.scenes[1]!.choices,story.scenes[0]!.choices);assert.equal(copy.scenes[1]!.id,"copy");
+  const moved=moveScene(copy,"copy",2);assert.equal(moved.start,story.start);assert.deepEqual(moved.scenes.find(scene=>scene.id==="choice"),story.scenes[0]);
+  const deleted=removeScene(moved,"copy","merge");assert.deepEqual(deleted.scenes[0],story.scenes[0]);assert.deepEqual(story.scenes[0]!.choices?.[0]?.set,{remembered:true});
   const withoutStart=removeScene(story,"choice","merge");assert.equal(withoutStart.start,"merge");assert.throws(()=>removeScene(withoutStart,"merge","merge"));
 });
 test("parser rejects unsafe pose URLs, malformed conditions and prototype flags",()=>{

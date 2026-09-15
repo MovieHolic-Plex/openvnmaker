@@ -188,6 +188,20 @@ test("60개 씬의 긴 설정과 연속성도 게이트웨이 프롬프트 한�
   assert.ok(makeOutlinePrompt(plan.brief, 90, longCast).length <= 16000);
 });
 
+test("집필 프롬프트 압축은 맥락 안의 $ 패턴을 치환 문자로 해석하지 않는다", () => {
+  // prior 는 가까운 조상 10개까지라, 한도를 넘기려면 설정·인물·기획도 함께 크게 만든다.
+  const longCast = { ...base, characters: Array.from({ length: 8 }, (_, index) => ({ id: `actor_${index}`, name: `인물 ${index}`, color: "#aabbcc", bio: "전기. ".repeat(80).slice(0, 290) })) };
+  const outline: ProductionOutline = { title: "유리 바다", subtitle: "검증", bible: "설정. ".repeat(700).slice(0, 2490), start: "scene_0", scenes: Array.from({ length: 15 }, (_, index) => ({ id: `scene_${index}`, chapter: `${index}장`, title: "유리 바다", summary: "요약. ".repeat(200).slice(0, 900), artDirection: "연출. ".repeat(150).slice(0, 700), targetMinutes: 6, background: "title", ...(index === 14 ? { ending: "끝" } : { next: `scene_${index + 1}` }) })) };
+  const plan = createPlan(parseOutline(outline, 90), longCast, "기획. ".repeat(200).slice(0, 890), 90);
+  const marker = "기록물 $&$'$` 그대로";
+  for (const beat of plan.outline.scenes) plan.jobs[beat.id] = { status: "short", draft: { scene: scene(beat.id, 1, { next: beat.next }), summary: `${marker} ${"사건. ".repeat(80).slice(0, 290)}`, continuity: Array.from({ length: 4 }, () => `${marker} ${"복선. ".repeat(40).slice(0, 135)}`), model: "fixture", updatedAt: 1 } };
+  const prompt = makeDraftPrompt(plan, plan.outline.scenes[14]!);
+  // 축소 루프가 돈 뒤에도 마커가 문자 그대로 남는다 — $&·$'·$` 로 자기 삽입되면
+  // 한도 초과 오류가 나거나 본문이 오염된다.
+  assert.ok(prompt.length <= 16000);
+  assert.ok(prompt.includes(marker));
+});
+
 test("기존 아트와 커스텀 표정을 보존하되 예전 씬 연결은 새 장편에 남기지 않는다", () => {
   const source = { ...base, artDirection: "유리와 황금빛", assets: [{ id: "art", name: "배경", kind: "background" as const, url: "/assets/bg/title.png", sceneId: "first" }], characters: base.characters.map(character => ({ ...character, expressionImages: { neutral: "/assets/sprite/seorin-neutral.png" } })) };
   const plan = createPlan(parseOutline(outlineFixture(), 90), source, "서린과의 약속", 90);

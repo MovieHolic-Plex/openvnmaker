@@ -17,3 +17,17 @@ export function removeCharacter(script:VnScript,id:string):VnScript {
     ...(script.assets?{assets:script.assets.map(asset=>{if(asset.characterId!==id)return asset;const {characterId,...rest}=asset;return rest;})}:{}),
   });
 }
+
+/** 캐릭터 ID를 바꾸고 화자·배우 배치·아트 에셋의 참조를 함께 옮긴다. 표시 이름과 원화는 그대로다. */
+export function renameCharacter(script:VnScript,from:string,to:string):VnScript {
+  const actor=script.characters.find(actor=>actor.id===from);
+  if(!actor)throw new Error("이름을 바꿀 캐릭터를 찾을 수 없습니다.");
+  if(from===to)return script;
+  if(!validCharacterKey(to))throw new Error("ID는 영문자로 시작하는 64자 이하의 영문·숫자·하이픈·밑줄을 사용하세요.");
+  if(script.characters.some(actor=>actor.id===to))throw new Error("이미 사용 중인 캐릭터 ID입니다.");
+  const move=(rows:readonly SpriteDirection[]|undefined)=>rows?.map(row=>row.character===from?{...row,character:to}:row);
+  return parseScript({...script,characters:script.characters.map(actor=>actor.id===from?{...actor,id:to}:actor),
+    scenes:script.scenes.map(scene=>({...scene,...(scene.sprites?{sprites:move(scene.sprites)}:{}),lines:scene.lines.map(line=>({...line,...(line.speaker===from?{speaker:to}:{}),...(line.sprites?{sprites:move(line.sprites)}:{})}))})),
+    ...(script.assets?{assets:script.assets.map(asset=>asset.characterId===from?{...asset,characterId:to}:asset)}:{}),
+  });
+}

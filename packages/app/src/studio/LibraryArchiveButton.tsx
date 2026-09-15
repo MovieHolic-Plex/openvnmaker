@@ -14,5 +14,5 @@ export function LibraryArchiveButton({disabled=false}:{disabled?:boolean}){
     }catch(error){setStatus(`원본을 내려받지 못했습니다: ${error instanceof Error?error.message:String(error)}`);}
     finally{setBusy(false);}
   }
-  return <div><button type="button" className="studio-button" disabled={disabled||busy} onClick={()=>void download()}>보관함 원본 JSON 받기</button><p>정상·손상 원고 기록을 함께 보관합니다. 이미지·음원은 포함되지 않으며, 바로 가져올 수 있는 작품 백업 형식은 아닙니다.</p>{status&&<p role="status">{status}</p>}</div>;
+  return <div><button type="button" className="studio-button" disabled={disabled||busy} onClick={()=>void download()}>보관함 원본 JSON 받기</button><p>정상·손상 원고 기록을 함께 보관합니다. 이미지·음원은 포함되지 않습니다. 이 파일은 복구 화면과 「내 작품」의 백업 가져오기에서 다시 들여올 수 있습니다.</p>{status&&<p role="status">{status}</p>}</div>;
 }

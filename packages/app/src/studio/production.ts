@@ -240,7 +240,8 @@ export function makeDraftPrompt(plan: ProductionPlan, beat: SceneBeat, extend = 
   while (bounded.length > 16000 && prior.length) {
     const previousContext = JSON.stringify(prior);
     prior.shift();
-    bounded = bounded.replace(previousContext, JSON.stringify(prior));
+    // 함수 리플레이서 — 치환 문자열의 $&·$'·$` 가 특수 해석되지 않게 한다.
+    bounded = bounded.replace(previousContext, () => JSON.stringify(prior));
   }
   if (bounded.length > 16000) throw new Error("집필 프롬프트가 너무 큽니다. 선택지와 인물 설정을 줄여 주세요.");
   return bounded;

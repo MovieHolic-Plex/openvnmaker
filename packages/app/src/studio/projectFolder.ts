@@ -1,5 +1,6 @@
-import {characterExpressions,characterImage,parseScript,type VnScript} from "@vnmaker/content";
+import {parseScript,type VnScript} from "@vnmaker/content";
 import {collectProjectAssets,rebaseProjectAssets} from "./exportBundle.js";
+import {bundlePathKind,rebaseRestoredScript} from "./restoreBundle.js";
 import {describeImage,ensureAssetServer,storeAssets,type StoredAsset} from "../storage/projectAssets.js";
 import {describeAudio,probeAudio} from "../storage/projectAudio.js";
 
@@ -77,23 +78,26 @@ export async function openProjectFolder(root:FolderHandle,onProgress?:Progress,f
   }
   if(seen.size!==expected.size)throw new Error("작품에 필요한 파일이 목록에서 빠져 있습니다.");
   async function read(entry:Entry){const blob=await(await fileHandle(root,entry.path)).getFile();if(blob.size!==entry.size||await hash(blob)!==entry.sha256)throw new Error(`파일이 변경되거나 손상되었습니다: ${entry.path}`);return blob;}
-  const replacements=new Map<string,string>();let count=0;
+  const replacements=new Map<string,string>(),unchanged=new Set<string>();let count=0;
   for(const entry of raw.files){
     onProgress?.({phase:"check",complete:count++,total:raw.files.length});
     const blob=await read(entry),asset=await describe(entry.path,blob,true);
     if(entry.path.startsWith("assets/audio/")){
       const response=await fetcher(`/${entry.path}`,{cache:"no-store",redirect:"error"});
       if(!response.ok||await hash(await response.blob())!==entry.sha256)throw new Error(`이 에디터 버전과 기본 음원이 다릅니다: ${entry.path}`);
-    }else replacements.set(`/${entry.path}`,asset.path);
+      continue;
+    }
+    // 기본 이미지(배경·내장 스프라이트·컬렉션 아트)가 이 편집기에 그대로 있으면 복사본을 만들지 않고 원고도 그 주소를 유지한다.
+    if(bundlePathKind(`/${entry.path}`)==="builtin"){
+      try{const response=await fetcher(`/${entry.path}`,{cache:"no-store",redirect:"error"});if(response.ok&&await hash(await response.blob())===entry.sha256){unchanged.add(entry.path);continue;}}catch{/* 다른 판본 — 아래에서 들여온다. */}
+    }
+    if(asset.path!==`/${entry.path}`)replacements.set(`/${entry.path}`,asset.path);
   }
-  const restored=rebaseProjectAssets({...script,
-    characters:script.characters.map(actor=>({...actor,expressionImages:Object.fromEntries(characterExpressions(actor).flatMap(expression=>{const url=characterImage(actor,expression);return url?[[expression,url]]:[];}))})),
-    scenes:script.scenes.map(scene=>({...scene,backgroundUrl:scene.backgroundUrl??`/assets/bg/${scene.background}.png`}))
-  },replacements);
+  const restored=rebaseRestoredScript(script,replacements);
   await ensureAssetServer();count=0;
   for(const entry of raw.files){
     onProgress?.({phase:"restore",complete:count++,total:raw.files.length});
-    if(entry.path.startsWith("assets/audio/"))continue;
+    if(entry.path.startsWith("assets/audio/")||unchanged.has(entry.path))continue;
     // Recheck because external applications can change files between validation and copying.
     const asset=await describe(entry.path,await read(entry),false);
     const stored:StoredAsset={...asset,originalName:entry.path.split("/").at(-1)!,createdAt:Date.now()};await storeAssets([stored]);

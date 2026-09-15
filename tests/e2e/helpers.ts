@@ -7,6 +7,10 @@ export interface VnHook {
   readonly typing: boolean;
   readonly phase: string;
   readonly error: string | null;
+  readonly flags?: Record<string, string | number | boolean>;
+  /** 되돌릴 수 있는 과거 상태 수(2026-09-14 추가). */
+  readonly pastLength?: number;
+  readonly reducedMotion?: boolean;
 }
 
 /** window.__vn 을 읽는다. 플레이어가 매 상태 변화마다 갱신한다. */

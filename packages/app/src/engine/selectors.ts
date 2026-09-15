@@ -18,9 +18,18 @@ export function backgroundAt(scene: Scene, lineIndex: number, flags: StoryFlags 
   return result;
 }
 
+/** scene.cg 에셋 id 를 등록된 아트 에셋 주소로 해석한다. */
+function sceneCgUrl(script: VnScript, scene: Scene): string | undefined {
+  if (scene.cgUrl !== undefined) return scene.cgUrl;
+  if (scene.cg === undefined) return undefined;
+  return script.assets?.find((asset) => asset.id === scene.cg)?.url;
+}
+
 /** Cue-bound artwork follows a dialogue line, so inserting lines keeps its cue attached. */
-export function cgAt(scene: Scene, lineIndex: number, flags: StoryFlags = {}): string | undefined {
-  let result = scene.cgUrl;
+export function cgAt(script: VnScript, scene: Scene, lineIndex: number, flags: StoryFlags = {}): string | undefined {
+  const current = scene.lines[lineIndex];
+  if (current && lineAllowed(current, flags) && current.cgHide === true) return undefined;
+  let result = sceneCgUrl(script, scene);
   for (const line of scene.lines.slice(0, lineIndex + 1)) if (lineAllowed(line, flags) && line.cgUrl !== undefined) result = line.cgUrl ?? undefined;
   return result;
 }
@@ -59,7 +68,7 @@ export function bgmAt(scene: Scene, lineIndex: number, flags: StoryFlags = {}): 
 
 export function speakerName(script: VnScript, speaker: Line["speaker"]): string | null {
   if (speaker === null) return null;
-  return script.characters.find((c) => c.id === speaker)?.name ?? (speaker === "me" ? "정우진" : speaker);
+  return script.characters.find((c) => c.id === speaker)?.name ?? (speaker === "me" ? "나" : speaker);
 }
 
 export function speakerColor(script: VnScript, speaker: Line["speaker"]): string {

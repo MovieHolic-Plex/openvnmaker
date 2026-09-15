@@ -297,3 +297,22 @@
 .project-library .project-restore input{display:block;width:100%;margin:10px 0}.project-library .project-restore small{display:block;line-height:1.7}
 .editor-session{min-height:100dvh;box-sizing:border-box;display:grid;place-items:center;padding:28px;background:radial-gradient(ellipse at top,#28263d,#11151e 70%);color:#e6e8ef}.editor-session section{width:min(100%,580px);box-sizing:border-box;border:1px solid #76729655;border-radius:20px;padding:clamp(22px,5vw,44px);background:#171b27;box-shadow:0 24px 80px #0004}.editor-session h1{font-size:clamp(23px,4vw,32px);line-height:1.35;margin:18px 0}.editor-session p{font-size:14px;line-height:1.8;color:#bbc3d6;word-break:keep-all}.editor-session [role=status]{padding:14px;border-radius:10px;background:#a89ade16;color:#d0c2ff;line-height:1.6;font-size:13px;margin:24px 0}.editor-session a{color:#b9eadc;font-size:14px}.editor-session a:focus-visible{outline:2px solid #d0c2ff;outline-offset:5px}
 .project-recovery{padding:18px 24px;background:#1c2534;border-bottom:1px solid #839cc14d;max-height:45dvh;overflow:auto;flex-shrink:0}.project-recovery h2{font-size:17px;color:#e0eafa;margin:0 0 10px}.project-recovery p{font-size:12px;line-height:1.7;color:#bfcee5;margin:8px 0}.project-recovery>div{display:flex;gap:8px;flex-wrap:wrap}.project-recovery button{white-space:normal}
+
+/* 2026-09-14 편집 UX: 상한 표시, 대사 이동/복제, 장면 순서 버튼, 씬 ID·변수 이름 변경, 찾아 바꾸기, 미리보기 게이트, 제작실 서랍 */
+.rail-heading span.is-near-cap,.timeline-heading h2 span.is-near-cap{color:#f1c37b;background:#f1c37b14}
+.capacity-hint{display:block;margin:-6px 0 8px;font-size:9px;color:#c9af84}.capacity-hint.is-full{color:#e3a3a3}
+.studio-field .field-help{display:block;margin:2px 0 8px}.field-error{display:block;margin:2px 0 8px;font-size:9px;color:#e3a3a3}
+.studio-scene-list li{position:relative;list-style:none}.scene-item-actions{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:2px}.scene-item-actions .icon-button{width:20px;height:20px;font-size:11px;border-radius:4px;background:#ffffff0a}.scene-item-actions .icon-button:disabled{opacity:.3}
+.timeline-heading .icon-button{min-width:24px}
+.rename-field{display:inline-flex;flex-direction:column;gap:2px;min-width:0}.rename-field input{width:120px;font:inherit;background:#0e1521;border:1px solid #9cb2cd2e;color:#dce6f2;border-radius:5px;padding:4px 6px}.rename-field small{color:#e3a3a3;font-size:9px}
+.palette-mode{font-size:11px !important;padding:6px 10px;border-radius:6px;border:1px solid #b0bbdc26;color:#aebed4;background:transparent}.palette-mode.is-active{background:#b0bbdc1a;color:#dae4f5}
+.command-replace{display:flex;gap:8px;align-items:center;padding:12px 20px 0}.command-replace input{flex:1;min-width:0;background:#0e1521;border:1px solid #9cb2cd2e;color:#dce6f2;border-radius:6px;padding:9px 11px;font-size:13px}
+.preview-gate{display:grid;gap:10px;padding:12px;margin-bottom:8px;border-radius:8px;background:#ffffff08;font-size:11px;color:#cdbbdc}.preview-gate p{margin:0}.preview-gate.is-blocked{color:#e3a3a3;background:#e3a3a312}
+.production-view{min-height:0;flex:1;overflow-y:auto;display:flex;flex-direction:column;background:#111620}.production-view .manuscript-review{overflow:visible;min-height:auto;flex:none}
+.production-drawer{margin:0 36px 40px;border:1px solid #b5b4ff22;border-radius:12px;background:#12141d}.production-drawer>summary{display:flex;align-items:center;gap:10px;padding:16px 20px;cursor:pointer;color:#dbe4f5;font-size:14px;font-weight:500;list-style:none}.production-drawer>summary::-webkit-details-marker{display:none}.production-drawer>summary small{margin-left:auto;color:#8e9db7;font-size:10px;font-weight:400}.production-drawer[open]>summary{border-bottom:1px solid #b5b4ff22}.production-drawer .production-panel{height:auto;overflow:visible}
+.scene-paste-dialog textarea{display:block;width:100%;margin-top:14px;min-height:200px;padding:10px;border:1px solid #9cb2cd2e;background:#0e1521;color:#dce6f2;border-radius:6px;box-sizing:border-box;font:12px/1.7 inherit}.scene-paste-dialog code{color:#c5a3ee}
+@media(max-width:850px){.production-drawer{margin:0 23px 30px}}
+
+/* 좁은 화면에서는 상단 작업 버튼이 한 줄을 넘으면 다음 줄로 감싸 화면 밖(음수 x)으로 밀리지 않게 한다. */
+@media (max-width: 640px) { .studio-modern .top-actions { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; } }
+@media (max-width: 480px) { .studio-modern .top-actions { justify-content: space-between; } .studio-modern .top-actions .studio-button, .studio-modern .top-actions .export-button { padding: 6px 7px; font-size: 10px; } }

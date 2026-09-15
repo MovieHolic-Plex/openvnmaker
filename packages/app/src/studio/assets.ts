@@ -48,6 +48,28 @@ export function assetUsage(script: VnScript, asset: Artwork): number {
   return script.scenes.filter(scene => scene.backgroundUrl === asset.url || scene.cgUrl === asset.url || scene.lines.some(line=>line.cgUrl === asset.url || line.backgroundUrl === asset.url) || (!scene.backgroundUrl && asset.url === `/assets/bg/${scene.background}.png`)).length;
 }
 
+/** 라이브러리 카드만 뺀다. 장면·배우가 아직 쓰는 이미지는 호출자가 assetUsage 로 먼저 막는다. 파일 정리는 assetCleanup 이 맡는다. */
+export function unregisterArtwork(script: VnScript, assetId: string): VnScript {
+  return parseScript({ ...script, assets: (script.assets ?? []).filter(row => row.id !== assetId) });
+}
+
+export interface ImportedArtworkFile { readonly path: string; readonly originalName: string; readonly createdAt: number }
+/**
+ * 가져온 파일 중 이미 같은 용도(종류·배우·표정)로 등록된 이미지는 카드를 다시 만들지 않는다.
+ * 같은 PNG 를 두 번 가져오면 URL 은 하나인데 카드가 둘이던 문제. 같은 배치 안의 중복 파일도 하나로 접는다.
+ */
+export function dedupeImportedArtwork(script: VnScript, rows: readonly ImportedArtworkFile[], kind: Artwork["kind"], characterId?: string, expression?: string): { fresh: ImportedArtworkFile[]; skipped: number } {
+  const existing = (script.assets ?? []).filter(asset => asset.kind === kind && (kind !== "character" || (asset.characterId === characterId && (asset.expression ?? "") === (expression ?? ""))));
+  const seen = new Set<string>();
+  const fresh: ImportedArtworkFile[] = [];
+  let skipped = 0;
+  for (const row of rows) {
+    if (seen.has(row.path) || existing.some(asset => asset.url === row.path)) { skipped += 1; continue; }
+    seen.add(row.path); fresh.push(row);
+  }
+  return { fresh, skipped };
+}
+
 export function registerArtwork(script: VnScript, asset: Artwork): VnScript {
   return parseScript({ ...script, assets: [...(script.assets ?? []).filter(row => row.id !== asset.id), asset] });
 }
