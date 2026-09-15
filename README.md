@@ -11,7 +11,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.base.json)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](packages/app)
 [![Electron](https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white)](packages/desktop)
-[![Tests](https://img.shields.io/badge/unit-379%20passing-2ea44f?style=flat-square)](#개발)
+[![Tests](https://img.shields.io/badge/unit-387%20passing-2ea44f?style=flat-square)](#개발)
 
 <img src="docs/screenshots/studio-stage.webp" alt="VN Maker 장면 편집 화면" width="100%">
 
@@ -24,6 +24,7 @@
 - **쓰면서 바로 봅니다.** 왼쪽에서 대사를 고치면 가운데 미리보기가 즉시 그 장면을 그립니다. 화자·표정·배우 배치·카메라·배경·CG·음악·효과음을 대사 단위로 지정합니다.
 - **분기를 다룹니다.** 상태 변수(켜짐/꺼짐·숫자·문자)를 만들고 선택지가 값을 바꾸며, 대사와 선택지에 표시 조건을 겁니다. 호감도 누적 같은 연산도 됩니다.
 - **완성하면 나갑니다.** 게임 ZIP 하나로 정적 웹 호스팅에 올리거나, Windows에서 Ren'Py SDK로 실행 파일을 만듭니다.
+- **에셋이 같이 옵니다.** 배경 20장, 이벤트 CG 8장, 배우 3명(표정 4종씩), 음원 15개를 편집기 안에서 골라 바로 설치합니다. 로그인도 서버도 필요 없습니다.
 - **계정 없이 돌아갑니다.** 플레이와 편집에 로그인이나 외부 API가 필요 없습니다. AI 기능은 전부 선택 사항입니다.
 
 기본 작품으로 장편 비주얼 노벨 **〈비가 남긴 빈칸〉**이 들어 있습니다. 20장면 · 829행 · 8경로 · 2엔딩 · 원화 35장, 한 경로당 약 106분 분량입니다.
@@ -63,6 +64,12 @@
 <img src="docs/screenshots/studio-art.webp" alt="아트 디렉션" width="100%">
 
 배경·이벤트 CG·캐릭터 표정을 관리하고 장면에 적용합니다. 이미지 생성은 **Codex(로컬 ChatGPT)** 와 **Agy(Google Gemini)** 중에서 고를 수 있습니다.
+
+### 에셋 스토어 — 그림과 소리를 골라 설치
+
+<img src="docs/screenshots/studio-store.webp" alt="에셋 스토어" width="100%">
+
+이 저장소에 담긴 자산 46종을 편집기에서 바로 설치합니다. 앱이 자산을 함께 담고 있어 네트워크 없이도 되고, 자산을 뺀 빌드나 포크에서는 저장소에서 직접 받습니다. 배우를 설치하면 표정이 캐릭터에 연결되고 단색 배경 제거도 함께 켜집니다.
 
 ### 플레이어
 
@@ -133,14 +140,15 @@ packages/
 
 ```sh
 pnpm typecheck        # 전 패키지 타입 검사
-pnpm test             # 단위 테스트 379개
+pnpm test             # 단위 테스트 387개
 pnpm e2e              # Playwright E2E
 pnpm build            # 프로덕션 빌드
+pnpm catalog          # 에셋 카탈로그 다시 생성
 ```
 
 | 패키지 | 단위 테스트 |
 |---|---|
-| app | 229 |
+| app | 237 |
 | gateway | 103 |
 | ir | 21 |
 | content | 14 |
@@ -155,7 +163,8 @@ pnpm build            # 프로덕션 빌드
 - [사용 설명서](docs/guide.md) — 편집·저장·복구·배포의 자세한 동작
 - [데스크톱 앱](packages/desktop/README.md) — Electron 구조와 코드 서명
 - [구현 상태](docs/production/status.md) — 검증 증거와 남은 출시 요건
-- [losia 스토어 연동](docs/integration/losia-store.md) — 에셋 스토어 설치 경로
+- [저장소 에셋 스토어](docs/integration/repo-assets.md) — 편집기에서 바로 설치하는 자산 46종
+- [losia 스토어 연동](docs/integration/losia-store.md) — 외부 스토어 프록시 경로
 
 ---
 

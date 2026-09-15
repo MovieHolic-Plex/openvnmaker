@@ -36,6 +36,8 @@ export interface StoreManifest {
   readonly license: "embedded" | "attribution" | "downloadable";
   readonly uploader?: { readonly handle?: string; readonly display?: string };
   readonly provenance?: { readonly generator?: string; readonly model?: string; readonly prompt?: string };
+  /** 원본이 단색 배경(초록 등)일 때 그 색. 설치할 캐릭터에 걸어 주지 않으면 게임에서 그 배경이 그대로 보인다. */
+  readonly chromaKey?: string;
   readonly files: readonly StoreManifestFile[];
 }
 
@@ -59,6 +61,12 @@ export interface InstallOptions {
   readonly characterId?: string;
   /** 카드 출처 표기에 쓰는 스토어 주소. 게이트웨이 기본값과 같다. */
   readonly source?: string;
+  /** 설치한 자산 id 의 앞머리. 출처가 다르면 나눠야 같은 이름의 자산이 서로를 덮지 않는다. */
+  readonly idPrefix?: string;
+  /** 출처 표기에 쓰는 이름. 업로더가 없는 출처(저장소 등)에서 쓴다. */
+  readonly creditName?: string;
+  /** 자산 상세 주소의 앞부분. 빈 문자열이면 출처 주소만 남긴다. */
+  readonly assetPagePrefix?: string;
 }
 
 export class StoreInstallError extends Error {}
@@ -105,7 +113,10 @@ function audioKindOf(manifest: StoreManifest): "bgm" | "sfx" {
 }
 
 function mediaSource(manifest: StoreManifest, options: InstallOptions): string {
-  return `${options.source ?? DEFAULT_STORE_SOURCE}/api/assets/${manifest.id}`;
+  const origin = options.source ?? DEFAULT_STORE_SOURCE;
+  // 자산마다 주소가 있는 스토어는 그 주소를, 그렇지 않은 출처(저장소 등)는 출처 자체를 남긴다.
+  const prefix = options.assetPagePrefix ?? "/api/assets/";
+  return prefix === "" ? origin : `${origin}${prefix}${manifest.id}`;
 }
 
 /** 검증된 매니페스트만 계획 단계로 보낸다. 여기서 막지 않으면 빈 URL 이 원고로 들어간다. */
@@ -141,6 +152,8 @@ export function parseStoreManifest(value: unknown): StoreManifest {
     license,
     files,
     ...(Array.isArray(row["tags"]) ? { tags: row["tags"].filter((tag): tag is string => typeof tag === "string") } : {}),
+    // 색 표기만 받는다. 아무 문자열이나 통과시키면 원고의 캐릭터에 쓰레기 값이 들어간다.
+    ...(typeof row["chromaKey"] === "string" && /^#[0-9a-fA-F]{6}$/.test(row["chromaKey"]) ? { chromaKey: row["chromaKey"] } : {}),
     ...(row["uploader"] && typeof row["uploader"] === "object" ? { uploader: row["uploader"] as NonNullable<StoreManifest["uploader"]> } : {}),
     ...(row["provenance"] && typeof row["provenance"] === "object" ? { provenance: row["provenance"] as NonNullable<StoreManifest["provenance"]> } : {}),
   };
@@ -203,8 +216,10 @@ export function assertInstallable(plan: InstallPlan, options: InstallOptions): v
 }
 
 function provenanceFor(manifest: StoreManifest, options: InstallOptions): MediaProvenance {
-  const display = manifest.uploader?.display?.trim() || manifest.uploader?.handle?.trim() || "losia";
-  return { creator: display, source: mediaSource(manifest, options), license: manifest.license, credit: `${display} · losia.online` };
+  const fallback = options.creditName ?? "losia";
+  const display = manifest.uploader?.display?.trim() || manifest.uploader?.handle?.trim() || fallback;
+  const home = (options.source ?? DEFAULT_STORE_SOURCE).replace(/^https?:\/\//, "");
+  return { creator: display, source: mediaSource(manifest, options), license: manifest.license, credit: `${display} · ${home}` };
 }
 
 /**
@@ -229,7 +244,7 @@ export function artworksFromInstall(
 
   for (const file of plan.files) {
     const url = stored.get(file.role)!;
-    const id = `losia-${manifest.id}-${idSlug(file.role)}`;
+    const id = `${options.idPrefix ?? "losia"}-${manifest.id}-${idSlug(file.role)}`;
     if (file.kind === "audio") {
       const duration = durations?.get(file.role);
       if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {

@@ -1,0 +1,896 @@
+{
+  "spec": "openvnmaker-catalog/1",
+  "repo": "MovieHolic-Plex/openvnmaker",
+  "pathsAreRelativeTo": "packages/app/public",
+  "generatedAt": "2026-09-15",
+  "total": 46,
+  "items": [
+    {
+      "id": "cast-seorin",
+      "kind": "character",
+      "name": "한서린",
+      "tags": [
+        "인물",
+        "크로마키"
+      ],
+      "license": "downloadable",
+      "chromaKey": "#00ff00",
+      "thumb": "catalog/thumbs/cast-seorin.webp",
+      "fileCount": 5,
+      "files": [
+        {
+          "role": "expression:neutral",
+          "path": "assets/art/seorin-neutral.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:smile",
+          "path": "assets/art/seorin-smile.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:sad",
+          "path": "assets/art/seorin-sad.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:surprised",
+          "path": "assets/art/seorin-surprised.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "pose:한서린 · 작업 자세",
+          "path": "assets/art/seorin-working.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "cast-dohyun",
+      "kind": "character",
+      "name": "배도현",
+      "tags": [
+        "인물",
+        "크로마키"
+      ],
+      "license": "downloadable",
+      "chromaKey": "#00ff00",
+      "thumb": "catalog/thumbs/cast-dohyun.webp",
+      "fileCount": 5,
+      "files": [
+        {
+          "role": "expression:neutral",
+          "path": "assets/art/dohyun-neutral.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:smile",
+          "path": "assets/art/dohyun-smile.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:sad",
+          "path": "assets/art/dohyun-sad.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:surprised",
+          "path": "assets/art/dohyun-surprised.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "pose:배도현 · 작업 자세",
+          "path": "assets/art/dohyun-working.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "cast-mirae",
+      "kind": "character",
+      "name": "오미래",
+      "tags": [
+        "인물",
+        "크로마키"
+      ],
+      "license": "downloadable",
+      "chromaKey": "#00ff00",
+      "thumb": "catalog/thumbs/cast-mirae.webp",
+      "fileCount": 5,
+      "files": [
+        {
+          "role": "expression:neutral",
+          "path": "assets/art/mirae-neutral.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:smile",
+          "path": "assets/art/mirae-smile.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:sad",
+          "path": "assets/art/mirae-sad.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "expression:surprised",
+          "path": "assets/art/mirae-surprised.png",
+          "mime": "image/png"
+        },
+        {
+          "role": "pose:오미래 · 작업 자세",
+          "path": "assets/art/mirae-reading.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-campus-after-rain",
+      "kind": "stage",
+      "name": "비가 지난 오후의 정문",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-campus-after-rain.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/campus-after-rain.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-atelier-midnight",
+      "kind": "stage",
+      "name": "불을 밝힌 밤의 작업실",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-atelier-midnight.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/atelier-midnight.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-nocturne-atrium",
+      "kind": "stage",
+      "name": "비가 머문 유리별관",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-nocturne-atrium.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/nocturne-atrium.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-atelier-golden-hour",
+      "kind": "stage",
+      "name": "오후의 회화 작업실",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-atelier-golden-hour.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/atelier-golden-hour.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-rain-library",
+      "kind": "stage",
+      "name": "빗소리를 품은 도서관",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-rain-library.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/rain-library.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-midnight-cafe",
+      "kind": "stage",
+      "name": "자정의 카페",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-midnight-cafe.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/midnight-cafe.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-rooftop-before-dawn",
+      "kind": "stage",
+      "name": "새벽 전 옥상",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-rooftop-before-dawn.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/rooftop-before-dawn.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-archive-room",
+      "kind": "stage",
+      "name": "오래된 소리를 보관한 방",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-archive-room.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/archive-room.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-glass-exhibition-dawn",
+      "kind": "stage",
+      "name": "빈칸을 남긴 새벽 전시",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-glass-exhibition-dawn.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/glass-exhibition-dawn.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-campus-morning",
+      "kind": "stage",
+      "name": "비가 그친 아침의 정문",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-campus-morning.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/campus-morning.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-morning-cafe",
+      "kind": "stage",
+      "name": "강변 식당의 아침",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-morning-cafe.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/morning-cafe.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-riverside-morning",
+      "kind": "stage",
+      "name": "다시 걷는 강변",
+      "tags": [
+        "배경"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-riverside-morning.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/art/riverside-morning.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-rain-umbrella-cg",
+      "kind": "stage",
+      "name": "우산 아래 두 손",
+      "tags": [
+        "이벤트 CG"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-rain-umbrella-cg.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "cg",
+          "path": "assets/art/rain-umbrella-cg.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-blue-pigment-cg",
+      "kind": "stage",
+      "name": "지워도 남는 청색",
+      "tags": [
+        "이벤트 CG"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-blue-pigment-cg.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "cg",
+          "path": "assets/art/blue-pigment-cg.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-empty-sixth-frame-cg",
+      "kind": "stage",
+      "name": "여섯 번째 자리",
+      "tags": [
+        "이벤트 CG"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-empty-sixth-frame-cg.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "cg",
+          "path": "assets/art/empty-sixth-frame-cg.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-seorin-packing-cg",
+      "kind": "stage",
+      "name": "접어 둔 귀퉁이",
+      "tags": [
+        "이벤트 CG"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-seorin-packing-cg.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "cg",
+          "path": "assets/art/seorin-packing-cg.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-recorder-ribbon-cg",
+      "kind": "stage",
+      "name": "풀지 못한 살구색 끈",
+      "tags": [
+        "이벤트 CG"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-recorder-ribbon-cg.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "cg",
+          "path": "assets/art/recorder-ribbon-cg.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-records-comparison-cg",
+      "kind": "stage",
+      "name": "두 색의 책갈피",
+      "tags": [
+        "이벤트 CG"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-records-comparison-cg.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "cg",
+          "path": "assets/art/records-comparison-cg.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-glass-assembly-cg",
+      "kind": "stage",
+      "name": "같은 무게를 받치는 손",
+      "tags": [
+        "이벤트 CG"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-glass-assembly-cg.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "cg",
+          "path": "assets/art/glass-assembly-cg.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-rain-first-visitor-cg",
+      "kind": "stage",
+      "name": "첫 관람객의 아침",
+      "tags": [
+        "이벤트 CG"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-rain-first-visitor-cg.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "cg",
+          "path": "assets/art/first-visitor-cg.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-basic-art-studio",
+      "kind": "stage",
+      "name": "기본 배경 · art-studio",
+      "tags": [
+        "배경",
+        "기본 제공"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-basic-art-studio.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/bg/art-studio.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-basic-campus-cafe",
+      "kind": "stage",
+      "name": "기본 배경 · campus-cafe",
+      "tags": [
+        "배경",
+        "기본 제공"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-basic-campus-cafe.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/bg/campus-cafe.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-basic-campus-gate",
+      "kind": "stage",
+      "name": "기본 배경 · campus-gate",
+      "tags": [
+        "배경",
+        "기본 제공"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-basic-campus-gate.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/bg/campus-gate.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-basic-corridor-rain",
+      "kind": "stage",
+      "name": "기본 배경 · corridor-rain",
+      "tags": [
+        "배경",
+        "기본 제공"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-basic-corridor-rain.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/bg/corridor-rain.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-basic-lawn-sunset",
+      "kind": "stage",
+      "name": "기본 배경 · lawn-sunset",
+      "tags": [
+        "배경",
+        "기본 제공"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-basic-lawn-sunset.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/bg/lawn-sunset.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-basic-library-window",
+      "kind": "stage",
+      "name": "기본 배경 · library-window",
+      "tags": [
+        "배경",
+        "기본 제공"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-basic-library-window.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/bg/library-window.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-basic-riverside-dusk",
+      "kind": "stage",
+      "name": "기본 배경 · riverside-dusk",
+      "tags": [
+        "배경",
+        "기본 제공"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-basic-riverside-dusk.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/bg/riverside-dusk.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "stage-basic-rooftop-night",
+      "kind": "stage",
+      "name": "기본 배경 · rooftop-night",
+      "tags": [
+        "배경",
+        "기본 제공"
+      ],
+      "license": "downloadable",
+      "thumb": "catalog/thumbs/stage-basic-rooftop-night.webp",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "base",
+          "path": "assets/bg/rooftop-night.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "sound-bgm-main-theme-mp3",
+      "kind": "sound",
+      "name": "메인 테마",
+      "tags": [
+        "배경음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/bgm/main-theme.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-bgm-rain-mp3",
+      "kind": "sound",
+      "name": "비 내리는 날",
+      "tags": [
+        "배경음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/bgm/rain.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-bgm-daily-mp3",
+      "kind": "sound",
+      "name": "평범한 하루",
+      "tags": [
+        "배경음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/bgm/daily.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-bgm-warm-mp3",
+      "kind": "sound",
+      "name": "따뜻한 오후",
+      "tags": [
+        "배경음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/bgm/warm.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-bgm-ending-mp3",
+      "kind": "sound",
+      "name": "엔딩",
+      "tags": [
+        "배경음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/bgm/ending.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-rain-loop-mp3",
+      "kind": "sound",
+      "name": "빗소리 루프",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/rain-loop.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-footsteps-mp3",
+      "kind": "sound",
+      "name": "발소리",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/footsteps.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-door-open-mp3",
+      "kind": "sound",
+      "name": "문 열리는 소리",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/door-open.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-page-turn-mp3",
+      "kind": "sound",
+      "name": "책장 넘기는 소리",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/page-turn.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-brush-stroke-mp3",
+      "kind": "sound",
+      "name": "붓질",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/brush-stroke.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-cicada-mp3",
+      "kind": "sound",
+      "name": "매미 소리",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/cicada.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-heartbeat-mp3",
+      "kind": "sound",
+      "name": "심장 박동",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/heartbeat.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-phone-buzz-mp3",
+      "kind": "sound",
+      "name": "휴대폰 진동",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/phone-buzz.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-ui-click-mp3",
+      "kind": "sound",
+      "name": "UI 클릭",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/ui-click.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    },
+    {
+      "id": "sound-sfx-ui-hover-mp3",
+      "kind": "sound",
+      "name": "UI 호버",
+      "tags": [
+        "효과음"
+      ],
+      "license": "downloadable",
+      "fileCount": 1,
+      "files": [
+        {
+          "role": "audio",
+          "path": "assets/audio/sfx/ui-hover.mp3",
+          "mime": "audio/mpeg"
+        }
+      ]
+    }
+  ]
+}

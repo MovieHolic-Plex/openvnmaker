@@ -29,7 +29,8 @@
     "qa:docs": "node tools/qa/docs-regression.mjs",
     "qa:audio": "node tools/audio-check.mjs",
     "assets:audio": "node tools/audio-gen.mjs",
-    "doctor:momus": "node tools/momus-gate-doctor.mjs"
+    "doctor:momus": "node tools/momus-gate-doctor.mjs",
+    "catalog": "node tools/asset-catalog/build.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

@@ -5,7 +5,7 @@
  * 전부 저장한 뒤 한 트랜잭션으로 쓴다 — 중간에 실패한 설치가 반쪽 자산을 남기지 않는다.
  */
 import type { Artwork, AudioAsset, MediaProvenance } from "@vnmaker/content";
-import { downloadStoreFile, fetchStoreManifest } from "../api/store.js";
+import type { StoreSource } from "../api/storeSource.js";
 import { describeImage, ensureAssetServer, storeAssets, type StoredAsset } from "../storage/projectAssets.js";
 import { describeAudio, probeAudio } from "../storage/projectAudio.js";
 import { artworksFromInstall, assertInstallable, installPlan, type InstallOptions, type StoreManifest } from "./storeInstall.js";
@@ -21,13 +21,22 @@ export interface StoreInstallResult {
 }
 
 export async function installStoreAsset(
+  source: StoreSource,
   id: string,
   options: InstallOptions & { readonly signal?: AbortSignal; readonly onProgress?: (progress: InstallProgress) => void } = {},
 ): Promise<StoreInstallResult> {
-  const manifest = await fetchStoreManifest(id, options.signal);
+  // 출처별 표기와 id 앞머리는 소스가 정한다. 호출자가 매번 챙기면 한 군데만 빠져도 자산이 서로를 덮는다.
+  const settings: InstallOptions & typeof options = {
+    ...options,
+    source: options.source ?? source.origin,
+    idPrefix: options.idPrefix ?? source.idPrefix,
+    creditName: options.creditName ?? source.creditName,
+    assetPagePrefix: options.assetPagePrefix ?? source.assetPagePrefix,
+  };
+  const manifest = await source.manifest(id, settings.signal);
   const plan = installPlan(manifest);
   // 저장 전에 실패해야 고아 blob 이 남지 않는다.
-  assertInstallable(plan, options);
+  assertInstallable(plan, settings);
   await ensureAssetServer();
 
   const stored = new Map<string, string>();
@@ -35,8 +44,8 @@ export async function installStoreAsset(
   const pending: StoredAsset[] = [];
   let done = 0;
   for (const file of plan.files) {
-    if (options.signal?.aborted) throw new Error("설치를 중단했습니다.");
-    const blob = await downloadStoreFile(manifest.id, file.role, options.signal);
+    if (settings.signal?.aborted) throw new Error("설치를 중단했습니다.");
+    const blob = await source.download(manifest.id, file.role, settings.signal);
     if (file.kind === "audio") {
       const described = await describeAudio(blob);
       const duration = await probeAudio(described.blob);
@@ -49,10 +58,10 @@ export async function installStoreAsset(
       pending.push({ path: described.path, blob: described.blob, originalName: `${manifest.name} · ${file.role}`, createdAt: Date.now() });
     }
     done += 1;
-    options.onProgress?.({ done, total: plan.files.length });
+    settings.onProgress?.({ done, total: plan.files.length });
   }
   await storeAssets(pending);
 
-  const installed = artworksFromInstall(manifest, plan, stored, options, durations);
+  const installed = artworksFromInstall(manifest, plan, stored, settings, durations);
   return { manifest, ...installed, ignored: plan.ignored };
 }

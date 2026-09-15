@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { parseScript, type Artwork, type VnScript } from "@vnmaker/content";
-import { searchStoreAssets, type StoreCatalogItem } from "../api/store.js";
+import type { StoreCatalogItem } from "../api/store.js";
+import { STORE_SOURCES, storeSourceById } from "../api/storeSource.js";
 import { Icon } from "./Icon.js";
 import { installStoreAsset, type InstallProgress } from "./installFromStore.js";
 import "./assets.css";
@@ -19,10 +20,13 @@ const KIND_LABELS = { all: "전체", stage: "무대", character: "인물", sound
 const LICENSE_LABELS = { downloadable: "자유 다운로드", attribution: "출처 표시", embedded: "미리보기만" } as const;
 
 /**
- * losia.online 스토어 패널. 카탈로그는 게이트웨이 프록시(/api/store/*)를 지난다.
+ * 에셋 스토어 패널. 출처를 골라 쓴다 — openvnmaker 저장소는 브라우저가 직접 받고,
+ * losia.online 은 CORS 때문에 게이트웨이 프록시(/api/store/*)를 지난다.
  * 설치는 파일을 브라우저 보관함에 넣고 프로젝트 아트로 등록한다 — 플레이어와 ZIP 번들이 같은 경로를 쓴다.
  */
 export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled }: Props) {
+  const [sourceId, setSourceId] = useState<string>(STORE_SOURCES[0]!.id);
+  const source = storeSourceById(sourceId);
   const [kind, setKind] = useState<keyof typeof KIND_LABELS>("all");
   const [sort, setSort] = useState<"new" | "use" | "name">("new");
   const [query, setQuery] = useState("");
@@ -54,7 +58,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     listRef.current = controller;
     setLoading(true);
     setError("");
-    void searchStoreAssets({ ...(kind === "all" ? {} : { kind }), ...(applied ? { q: applied } : {}), sort, take }, controller.signal)
+    void source.search({ ...(kind === "all" ? {} : { kind }), ...(applied ? { q: applied } : {}), sort, take }, controller.signal)
       .then(catalog => {
         if (!alive) return;
         setItems(catalog.items);
@@ -70,7 +74,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; controller.abort(); };
-  }, [active, kind, sort, applied, take]);
+  }, [active, source, kind, sort, applied, take]);
 
   async function install(item: StoreCatalogItem) {
     if (busy) return;
@@ -79,7 +83,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     installRef.current = controller;
     setBusy(item.id); setError(""); setMessage(""); setProgress({ done: 0, total: 1 });
     try {
-      const result = await installStoreAsset(item.id, {
+      const result = await installStoreAsset(source, item.id, {
         ...(item.kind === "character" && characterId ? { characterId } : {}),
         signal: controller.signal,
         onProgress: setProgress,
@@ -90,15 +94,26 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       }
       const artworkIds = new Set(result.artworks.map(asset => asset.id));
       const audioIds = new Set(result.audio.map(asset => asset.id));
+      // 설치는 어느 캐릭터의 어떤 표정인지 이미 안다. 표정표에 걸어 주지 않으면 그림만 보관함에 쌓이고
+      // 무대에는 아무것도 뜨지 않는다 — 원본이 초록 배경이면 그 색도 같이 걸어야 초록 상자가 안 보인다.
+      const chroma = result.manifest.chromaKey;
+      const expressions = Object.fromEntries(result.artworks.flatMap(asset => asset.kind === "character" && asset.expression ? [[asset.expression, asset.url]] : []));
+      const touched = characterId !== "" && result.artworks.some(asset => asset.kind === "character");
+      const keyed = touched && chroma !== undefined;
       const next = parseScript({
         ...scriptRef.current,
+        ...(touched ? { characters: scriptRef.current.characters.map(character => character.id !== characterId ? character : {
+          ...character,
+          ...(chroma === undefined ? {} : { chromaKey: chroma }),
+          ...(Object.keys(expressions).length ? { expressionImages: { ...character.expressionImages, ...expressions } } : {}),
+        }) } : {}),
         assets: [...(scriptRef.current.assets ?? []).filter(asset => !artworkIds.has(asset.id)), ...result.artworks],
         audioAssets: [...(scriptRef.current.audioAssets ?? []).filter(asset => !audioIds.has(asset.id)), ...result.audio],
       });
       onChange(next);
       onInstalled?.(result.artworks);
       const parts = [result.artworks.length ? `이미지 ${result.artworks.length}개` : "", result.audio.length ? `음원 ${result.audio.length}개` : ""].filter(Boolean).join(" · ");
-      setMessage(`‘${item.name}’ 설치 완료 — ${parts}. 라이브러리에서 장면에 적용하세요.${result.ignored.length ? ` (지원하지 않는 역할 ${result.ignored.length}개는 건너뛰었습니다)` : ""}`);
+      setMessage(`‘${item.name}’ 설치 완료 — ${parts}. 라이브러리에서 장면에 적용하세요.${Object.keys(expressions).length ? ` 표정 ${Object.keys(expressions).length}종을 이 캐릭터에 연결했습니다.` : ""}${keyed ? " 원본이 단색 배경이라 배경 제거도 켰습니다." : ""}${result.ignored.length ? ` (지원하지 않는 역할 ${result.ignored.length}개는 건너뛰었습니다)` : ""}`);
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -106,10 +121,21 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     }
   }
 
-  const installedIds = new Set((script.assets ?? []).filter(asset => asset.id.startsWith("losia-")).map(asset => asset.id));
+  const installedIds = new Set((script.assets ?? []).filter(asset => asset.id.startsWith(`${source.idPrefix}-`)).map(asset => asset.id));
 
   return <section className="art-section art-store" data-testid="store-panel">
-    <div className="art-section-title"><Icon name="download" /><h2>losia 스토어</h2><span className={loading ? "" : error ? "is-error" : "is-connected"}>{loading ? "불러오는 중" : error ? "연결 실패" : `${total}개`}</span></div>
+    <div className="art-section-title"><Icon name="download" /><h2>에셋 스토어</h2><span className={loading ? "" : error ? "is-error" : "is-connected"}>{loading ? "불러오는 중" : error ? "연결 실패" : `${total}개`}</span></div>
+    <div className="art-store-sources" role="tablist" aria-label="에셋 출처">
+      {STORE_SOURCES.map(option => <button
+        key={option.id}
+        type="button"
+        role="tab"
+        aria-selected={option.id === sourceId}
+        className={`art-store-source ${option.id === sourceId ? "is-active" : ""}`}
+        data-testid={`store-source-${option.id}`}
+        onClick={() => { if (option.id === sourceId) return; setSourceId(option.id); setItems([]); setTotal(0); setError(""); setMessage(""); setTake(12); }}
+      >{option.label}</button>)}
+    </div>
     <form className="art-store-search" onSubmit={event => { event.preventDefault(); setApplied(query.trim()); }}>
       <input aria-label="스토어 검색" data-testid="store-search" placeholder="무대·인물·소리 검색" value={query} onChange={event => setQuery(event.target.value)} />
       <button type="submit" className="art-text-button">검색</button>
@@ -119,7 +145,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       <label>정렬<select aria-label="스토어 정렬" value={sort} onChange={event => setSort(event.target.value as typeof sort)}><option value="new">최신</option><option value="use">사용순</option><option value="name">이름</option></select></label>
     </div>
     {kind !== "stage" && kind !== "sound" && <label className="art-store-character">설치할 캐릭터<select aria-label="스토어 캐릭터" data-testid="store-character" value={characterId} onChange={event => setCharacterId(event.target.value)}>{script.characters.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}</select></label>}
-    <p className="art-store-hint">losia.online의 공개 자산입니다. 설치하면 이 작품의 보관함에 들어가고, 플레이어와 게임 ZIP에 함께 담깁니다.</p>
+    <p className="art-store-hint" data-testid="store-hint">{source.hint}</p>
     <div className="art-store-list" data-testid="store-list">
       {items.map(item => <div className="art-store-item" key={item.id} data-testid={`store-item-${item.id}`}>
         <div className="art-store-thumb">
@@ -131,7 +157,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
           <span className={`art-store-license is-${item.license}`}>{item.license === "embedded" ? "미리보기만 볼 수 있습니다(설치 불가)" : item.kind === "sound" ? "음원으로 설치" : "이미지로 설치"}</span>
         </div>
         <button type="button" className={`art-primary art-store-install ${busy === item.id ? "is-busy" : ""}`} data-testid={`store-install-${item.id}`} disabled={busy !== "" || item.license === "embedded"} onClick={() => void install(item)}>
-          {busy === item.id ? `설치 중 ${progress?.done ?? 0}/${progress?.total ?? 1}` : installedIds.has(`losia-${item.id}-base`) || installedIds.has(`losia-${item.id}-audio`) ? "다시 설치" : "설치"}
+          {busy === item.id ? `설치 중 ${progress?.done ?? 0}/${progress?.total ?? 1}` : installedIds.has(`${source.idPrefix}-${item.id}-base`) || installedIds.has(`${source.idPrefix}-${item.id}-audio`) ? "다시 설치" : "설치"}
         </button>
       </div>)}
       {!items.length && !loading && !error && <p className="art-empty-line">조건에 맞는 자산이 없습니다.</p>}

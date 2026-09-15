@@ -43,6 +43,8 @@ async function openStore(page: Page) {
   await page.goto("/studio.html");
   await page.getByTestId("workspace-assets").click();
   await expect(page.getByTestId("store-panel")).toBeVisible();
+  // 기본 출처는 게이트웨이가 필요 없는 openvnmaker 저장소다. 이 파일은 losia 프록시 경로를 검증하므로 그쪽으로 옮긴다.
+  await page.getByTestId("store-source-losia").click();
 }
 
 test("스토어에서 설치한 무대 자산이 라이브러리에 등록되고 플레이어에서 렌더된다", async ({ page }) => {
