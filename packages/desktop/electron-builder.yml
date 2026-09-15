@@ -1,0 +1,34 @@
+# 서명·공증은 기본적으로 끈다. 인증서 없이도 설치본이 나오고, 첫 실행에서만
+# Windows SmartScreen / macOS Gatekeeper 경고가 뜬다(README 에 여는 방법을 적어 두었다).
+# 인증서가 생기면 CSC_LINK / CSC_KEY_PASSWORD 와 아래 mac.notarize 를 켜면 된다.
+appId: online.losia.vnmaker
+productName: VN Maker
+copyright: © VN Maker
+directories:
+  output: ../../output/desktop
+  buildResources: build
+# 메인 프로세스를 한 파일로 번들했으므로 dist 만 담으면 된다(pnpm 심링크 추적이 필요 없다).
+files:
+  - dist/**/*
+  - package.json
+asar: true
+win:
+  target:
+    - nsis
+  artifactName: ${productName}-${version}-windows-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+mac:
+  target:
+    - dmg
+  category: public.app-category.developer-tools
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  # 공증하려면 notarize: true 로 바꾸고 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID 를 넘긴다.
+  notarize: false
+linux:
+  target:
+    - AppImage
+  category: Development
+  executableName: vn-maker

@@ -3,9 +3,15 @@ packages:
 
 onlyBuiltDependencies:
   - esbuild
+  - electron
+  - electron-builder
+  - electron-winstaller
 
 minimumReleaseAgeExclude:
   - tsx
 
 allowBuilds:
   esbuild: true
+  electron: true
+  electron-builder: true
+  electron-winstaller: true

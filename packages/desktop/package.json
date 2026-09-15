@@ -1,0 +1,26 @@
+{
+  "name": "@vnmaker/desktop",
+  "version": "0.1.0",
+  "productName": "VN Maker",
+  "private": true,
+  "type": "module",
+  "description": "VN Maker 데스크톱 셸 (Electron). 스튜디오와 게이트웨이를 한 오리진의 로컬 서버로 묶어 띄운다.",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test --import tsx test/server.test.ts",
+    "dev": "node run-dev.mjs",
+    "start": "electron .",
+    "pack:dir": "electron-builder --dir",
+    "pack:installer": "electron-builder"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3"
+  }
+}

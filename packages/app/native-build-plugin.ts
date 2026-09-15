@@ -28,8 +28,16 @@ export function nativeRequestAllowed(req:Pick<IncomingMessage,"headers"|"socket"
   return (!req.headers.origin||req.headers.origin===`http://${host}`)&&req.headers["sec-fetch-site"]!=="cross-site";
 }
 
-/** Local SDK execution is opt-in through server configuration, never a browser-provided command. */
-export function nativeBuildPlugin(appRoot:string,sdkSetting:string|undefined):Plugin{
+export interface NativeBuildService {
+  readonly middleware:(req:IncomingMessage,res:ServerResponse,next:()=>void)=>void;
+  readonly stop:()=>void;
+}
+
+/**
+ * Local SDK execution is opt-in through server configuration, never a browser-provided command.
+ * 서버 프레임워크와 무관한 알맹이 — Vite 플러그인과 데스크톱 앱이 같은 미들웨어를 공유한다.
+ */
+export function nativeBuildService(appRoot:string,sdkSetting:string|undefined):NativeBuildService{
   const sdk=sdkSetting?resolve(appRoot,sdkSetting):undefined,output=resolve(appRoot,"../../output/editor-native-builds");
   const jobs=new Map<string,Job>(),cancellations=new Set<string>(),writes=new Map<string,Promise<void>>(),runner=nativeProcess();let active:string|undefined;
   const directory=(id:string)=>join(output,id);
@@ -127,5 +135,10 @@ export function nativeBuildPlugin(appRoot:string,sdkSetting:string|undefined):Pl
       }catch(error){active=undefined;job.error=String(error);await update(job,"failed").catch(()=>{job.phase="failed";});throw error;}
     })().catch(error=>{if(!res.headersSent)send(res,500,{error:error instanceof Error?error.message:String(error)});else res.destroy();});
   }
+  return {middleware,stop};
+}
+
+export function nativeBuildPlugin(appRoot:string,sdkSetting:string|undefined):Plugin{
+  const {middleware,stop}=nativeBuildService(appRoot,sdkSetting);
   return {name:"vnmaker-native-build",configureServer(server){server.middlewares.use(middleware);server.httpServer?.once("close",stop);},configurePreviewServer(server){server.middlewares.use(middleware);server.httpServer.once("close",stop);}};
 }

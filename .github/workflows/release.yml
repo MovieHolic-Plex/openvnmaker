@@ -1,0 +1,75 @@
+name: Release desktop installers
+
+# 태그를 밀면 Windows · macOS · Linux 설치본을 만들어 릴리스에 붙인다.
+# macOS 설치본은 맥에서만 만들 수 있어서 CI 가 유일한 현실적인 경로다.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "릴리스 태그 (예: v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --draft --title "VN Maker $TAG" --generate-notes
+
+  build:
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - name: Build web assets and desktop bundle
+        run: pnpm desktop:build
+      - name: Build installer
+        env:
+          # 서명 인증서가 없다. 자동 탐색을 끄지 않으면 macOS 빌드가 키체인을 뒤지다 실패한다.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: pnpm --filter @vnmaker/desktop exec electron-builder --publish never
+      - name: Upload installers to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(output/desktop/*.exe output/desktop/*.dmg output/desktop/*.AppImage output/desktop/*.zip)
+          if [ ${#files[@]} -eq 0 ]; then echo "설치본이 없다"; exit 1; fi
+          gh release upload "$TAG" "${files[@]}" --clobber
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --draft=false
