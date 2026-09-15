@@ -71,6 +71,8 @@ function createWindow(): BrowserWindow {
     height: 960,
     minWidth: 1024,
     minHeight: 700,
+    // Windows·macOS 는 패키징된 아이콘을 쓰지만 리눅스는 창 아이콘을 직접 줘야 한다.
+    ...(process.platform === "linux" ? { icon: join(here, "icon.png") } : {}),
     backgroundColor: "#15131d",
     show: false,
     title: "VN Maker 스튜디오",

@@ -54,4 +54,7 @@ try {
   await writeFile(join(out, "xdg-open"), "#!/bin/sh\nexec xdg-open \"$@\"\n", { mode: 0o755 });
 }
 
+// 리눅스 창 아이콘은 런타임에 파일로 읽는다. buildResources 는 앱 안에 들어가지 않으므로 여기서 복사한다.
+await cp(join(here, "build", "icon.png"), join(out, "icon.png"));
+
 console.log(`데스크톱 번들 완료: ${out}`);

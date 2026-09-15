@@ -32,3 +32,5 @@ linux:
     - AppImage
   category: Development
   executableName: vn-maker
+  # 실행 중인 창을 .desktop 항목과 묶어 준다(도크/작업표시줄 아이콘이 붙는다).
+  syncDesktopName: true
