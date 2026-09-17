@@ -19,7 +19,7 @@ async function request(path:string,options?:RequestInit){
 }
 export function NativeBuildButton({script,onChange}:{script:VnScript;onChange:(script:VnScript)=>void}){
   const[open,setOpen]=useState(false),[ready,setReady]=useState(false),[checking,setChecking]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(""),[preparing,setPreparing]=useState(false),[job,setJob]=useState<Job|null>(null),[jobId,setJobId]=useState<string|null>(()=>localStorage.getItem(KEY)),[noGateway,setNoGateway]=useState(false);
-  useEffect(()=>{void fetchHostCapabilities().then(host=>{if(host&&!host.gateway)setNoGateway(true);});},[]);
+  useEffect(()=>{void fetchHostCapabilities().then(host=>{if(host&&(!host.gateway||host.native===false))setNoGateway(true);});},[]);
   const dialog=useRef<HTMLDialogElement>(null),preparation=useRef<AbortController|null>(null);
   const[history,setHistory]=useState<Job[]>([]),[unreadable,setUnreadable]=useState(0),[historyError,setHistoryError]=useState("");
   useEffect(()=>{if(!open)return;let stale=false;void request("/jobs").then(value=>{if(!stale){setHistory(value.jobs);setUnreadable(value.unreadable);setHistoryError("");}}).catch(error=>{if(!stale)setHistoryError(error.message);});return()=>{stale=true;};},[open,job?.phase]);

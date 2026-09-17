@@ -20,6 +20,13 @@ export interface HostCapabilities {
   readonly publishWorks: string;
   /** 업로드 최대 바이트. 모르면 null. */
   readonly publishMaxBytes: number | null;
+  /**
+   * 에이전트 그래프(게이트웨이 story 프로젝트)가 있는가. losia 처럼 AI 만 얹은
+   * 호스트는 false 를 보내 그래프 미리보기 버튼을 숨긴다. 생략(데스크톱)은 true 간주.
+   */
+  readonly graph: boolean;
+  /** 네이티브 빌드 서버(/api/native-build)가 있는가. 생략(데스크톱)은 true 간주. */
+  readonly native: boolean;
 }
 
 const NOT_HOSTED: HostCapabilities | null = null;
@@ -30,7 +37,7 @@ export async function readHostCapabilities(signal?: AbortSignal): Promise<HostCa
     const res = await fetch("/.well-known/openvnmaker.json", { signal: signal ?? AbortSignal.timeout(8_000) });
     if (!res.ok) return NOT_HOSTED;
     const body = await res.json() as {
-      spec?: unknown; gateway?: unknown;
+      spec?: unknown; gateway?: unknown; graph?: unknown; native?: unknown;
       auth?: { authenticated?: unknown; signIn?: unknown };
       publish?: { works?: unknown; maxBytes?: unknown };
     };
@@ -41,6 +48,8 @@ export async function readHostCapabilities(signal?: AbortSignal): Promise<HostCa
       signIn: typeof body.auth?.signIn === "string" ? body.auth.signIn : "/login",
       publishWorks: typeof body.publish?.works === "string" ? body.publish.works : "/api/works",
       publishMaxBytes: typeof body.publish?.maxBytes === "number" ? body.publish.maxBytes : null,
+      graph: body.graph !== false,
+      native: body.native !== false,
     };
   } catch {
     return NOT_HOSTED;

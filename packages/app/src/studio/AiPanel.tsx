@@ -79,7 +79,7 @@ export function AiPanel({ active = true, script, scene, lineIndex, onApply }: Pr
     {noGateway
       ? <p className="ai-disclosure">이 배포에는 AI 서버가 없어 어시스턴트를 쓸 수 없습니다. 에셋 스토어와 losia 게시는 그대로 동작합니다.</p>
       : <>
-          <div className={`ai-connection ${auth?.authenticated ? "connected" : ""}`}><i />{auth === null ? "연결 확인 중" : auth.authenticated ? "AI 연결됨" : auth.reachable ? "AI 연결 필요" : "게이트웨이 연결 불가"}{auth && !auth.authenticated && <button type="button" onClick={() => void connect()} disabled={connecting || !auth.reachable}>{connecting ? "연결 중…" : "Google 연결"}</button>}</div>
+          <div className={`ai-connection ${auth?.authenticated ? "connected" : ""}`}><i />{auth === null ? "연결 확인 중" : auth.authenticated ? "AI 연결됨" : auth.reachable ? "AI 연결 필요" : "게이트웨이 연결 불가"}{auth && !auth.authenticated && <button type="button" onClick={() => void connect()} disabled={connecting || !auth.reachable}>{connecting ? "연결 중…" : auth.provider === "losia" ? "losia 로그인" : "Google 연결"}</button>}</div>
           {model && <p className="ai-model">{model}</p>}
           <p className="ai-disclosure">비공식 Antigravity 연결 · 텍스트와 이미지가 계정 할당량을 공유합니다.</p>
         </>}

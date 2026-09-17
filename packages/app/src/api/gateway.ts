@@ -7,6 +7,10 @@ export interface AuthStatus {
   readonly email: string | null;
   readonly projectId: string | null;
   readonly error: string | null;
+  /** 인증 제공자 — "losia" 면 Google OAuth 대신 사이트 로그인으로 보낸다. */
+  readonly provider: string | null;
+  /** 로그인해야 할 때 서버가 주는 사이트 경로 — 있으면 그 주소로 이동한다. */
+  readonly loginUrl: string | null;
 }
 
 export interface GenerateResponse {
@@ -29,8 +33,10 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
   try {
     const res = await fetch("/api/auth/status", { headers: STUDIO_HEADER, signal: AbortSignal.timeout(8_000) });
     const body = await readJson(res);
+    const provider = typeof body["provider"] === "string" ? body["provider"] : null;
+    const loginUrl = typeof body["loginUrl"] === "string" ? body["loginUrl"] : null;
     if (!res.ok) {
-      return { reachable: true, authenticated: false, email: null, projectId: null, error: String(body["error"] ?? res.status) };
+      return { reachable: true, authenticated: false, email: null, projectId: null, error: String(body["error"] ?? res.status), provider, loginUrl };
     }
     const authenticated = body["authenticated"] === true;
     return {
@@ -39,6 +45,8 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
       email: typeof body["email"] === "string" ? body["email"] : null,
       projectId: typeof body["projectId"] === "string" ? body["projectId"] : null,
       error: null,
+      provider,
+      loginUrl,
     };
   } catch (err) {
     return {
@@ -47,6 +55,8 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
       email: null,
       projectId: null,
       error: err instanceof Error ? err.message : String(err),
+      provider: null,
+      loginUrl: null,
     };
   }
 }
@@ -54,7 +64,15 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
 export async function startLogin(): Promise<AuthStatus> {
   const res = await fetch("/api/auth/login", { method: "POST", headers: STUDIO_HEADER, signal: AbortSignal.timeout(300_000) });
   const body = await readJson(res);
-  if (!res.ok) throw new Error(String(body["error"] ?? `login ${res.status}`));
+  // losia 처럼 사이트 로그인으로 대체하는 호스트는 loginUrl 을 돌려준다 — 그 주소로 보낸다.
+  if (!res.ok) {
+    const loginUrl = typeof body["loginUrl"] === "string" ? body["loginUrl"] : null;
+    if (loginUrl && typeof window !== "undefined") {
+      window.location.href = loginUrl;
+      return new Promise<AuthStatus>(() => {});
+    }
+    throw new Error(String(body["error"] ?? `login ${res.status}`));
+  }
   return fetchAuthStatus();
 }
 
