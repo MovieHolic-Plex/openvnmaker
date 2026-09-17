@@ -336,3 +336,73 @@ test("upcomingImages 는 남은 연출 컷과 next·선택지 대상 씬의 첫 
   assert.deepEqual(upcomingImages(script, script.scenes[2]!, 0), ["/assets/art/library.png", "/assets/art/seorin-neutral.png"]);
   assert.deepEqual(upcomingImages(script, script.scenes[1]!, 0), [], "엔딩 씬 뒤에는 미리 받을 것이 없다");
 });
+
+/* 조건 경로(scene.routes)·장면 진입 set — compileGraph 가 만드는 구조의 런타임 의미. */
+
+test("scene.set 은 진입 시점에 적용되고 첫 대사의 when 이 그 값을 본다", () => {
+  const script: VnScript = { ...fixture, start: "a", scenes: [
+    { id: "a", background: "title", set: { metYuna: true }, lines: [
+      { speaker: null, text: "숨겨지는 줄", when: { none: ["metYuna"] } },
+      { speaker: null, text: "보이는 줄", when: { all: ["metYuna"] } },
+    ], ending: "끝" },
+  ] };
+  const state = reduce(script, initialState(script), { type: "start" });
+  assert.equal(state.flags["metYuna"], true);
+  assert.equal(state.lineIndex, 1, "진입 set 이 첫 대사의 when 보다 먼저 적용된다");
+});
+
+test("조건 경로는 순서대로 평가되고 첫 매치로 이동한다 — 실패 시 next 로 폴백", () => {
+  const mk = (flags: VnScript["flags"]): VnScript => ({ ...fixture, start: "a", flags, scenes: [
+    { id: "a", background: "title", lines: [{ speaker: null, text: "갈림길" }], routes: [
+      { next: "b", when: { all: ["flag"] } },
+      { next: "c", when: { all: ["other"] } },
+    ], next: "d" },
+    { id: "b", background: "title", lines: [{ speaker: null, text: "b" }], ending: "b끝" },
+    { id: "c", background: "title", lines: [{ speaker: null, text: "c" }], ending: "c끝" },
+    { id: "d", background: "title", lines: [{ speaker: null, text: "d" }], ending: "d끝" },
+  ] });
+  const first = reduce(mk({ flag: true, other: true }), reduce(mk({ flag: true, other: true }), initialState(mk({})), { type: "start" }), { type: "advance" });
+  assert.equal(first.sceneId, "b", "두 조건이 다 참이면 앞 경로가 이긴다");
+  const script = mk({ other: true });
+  const routed = reduce(script, reduce(script, initialState(script), { type: "start" }), { type: "advance" });
+  assert.equal(routed.sceneId, "c", "앞 조건이 실패하면 뒤 경로를 탄다");
+  const fallback = reduce(mk({}), reduce(mk({}), initialState(mk({})), { type: "start" }), { type: "advance" });
+  assert.equal(fallback.sceneId, "d", "전부 실패하면 무조건 next 로 폴백한다");
+});
+
+test("엔딩과 조건 경로는 공존한다 — 경로가 실패하면 엔딩으로 폴백", () => {
+  const mk = (flags: VnScript["flags"]): VnScript => ({ ...fixture, start: "a", flags, scenes: [
+    { id: "a", background: "title", lines: [{ speaker: null, text: "마지막 밤" }], routes: [{ next: "b", when: { all: ["metYuna"] } }], ending: "조용한 엔딩" },
+    { id: "b", background: "title", lines: [{ speaker: null, text: "b" }], ending: "b끝" },
+  ] });
+  const gone = reduce(mk({ metYuna: true }), reduce(mk({ metYuna: true }), initialState(mk({})), { type: "start" }), { type: "advance" });
+  assert.equal(gone.sceneId, "b", "조건이 맞으면 엔딩 대신 경로로 간다");
+  const ended = reduce(mk({}), reduce(mk({}), initialState(mk({})), { type: "start" }), { type: "advance" });
+  assert.equal(ended.phase, "ending", "경로가 실패하면 엔딩으로 폴백한다");
+  assert.equal(ended.endingTitle, "조용한 엔딩");
+});
+
+test("선택지가 있으면 routes·next·ending 은 엔진이 무시한다", () => {
+  const script: VnScript = { ...fixture, start: "a", scenes: [
+    { id: "a", background: "title", lines: [{ speaker: null, text: "고른다" }], choices: [{ text: "유일", next: "b" }], routes: [{ next: "c" }], next: "d", ending: "무시됨" },
+    { id: "b", background: "title", lines: [{ speaker: null, text: "b" }], ending: "b끝" },
+    { id: "c", background: "title", lines: [{ speaker: null, text: "c" }], ending: "c끝" },
+    { id: "d", background: "title", lines: [{ speaker: null, text: "d" }], ending: "d끝" },
+  ] };
+  const state = reduce(script, reduce(script, initialState(script), { type: "start" }), { type: "advance" });
+  assert.equal(state.phase, "choice");
+  const picked = reduce(script, state, { type: "choose", index: 0 });
+  assert.equal(picked.sceneId, "b");
+});
+
+test("restore 도 진입 set 을 적용한다 — 저장에 없는 진입 플래그가 대사 표시를 바꾼다", () => {
+  const script: VnScript = { ...fixture, start: "a", scenes: [
+    { id: "a", background: "title", set: { entered: true }, lines: [
+      { speaker: null, text: "첫 줄", when: { all: ["entered"] } },
+      { speaker: null, text: "둘째 줄" },
+    ], ending: "끝" },
+  ] };
+  const restored = reduce(script, initialState(script), { type: "restore", sceneId: "a", lineIndex: 0, affection: 0, flags: {} });
+  assert.equal(restored.flags["entered"], true);
+  assert.equal(restored.lineIndex, 0, "entered 가 적용돼 첫 줄이 보인다");
+});

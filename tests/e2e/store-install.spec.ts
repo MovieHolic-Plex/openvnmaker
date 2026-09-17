@@ -73,9 +73,11 @@ test("스토어에서 설치한 무대 자산이 라이브러리에 등록되고
   ).toMatch(/\/assets\/user\/[0-9a-f]{64}\.png$/);
 
   // 3) 플레이어 미리보기가 로컬에 저장된 그 파일을 렌더한다.
+  // 부하 시 플레이어 부팅이 폴링보다 늦을 수 있다 — 무대가 뜬 뒤에 재도록 기다린다.
   await page.getByTestId("studio-play").click();
   await page.waitForURL(/preview=1/);
-  await expect.poll(() => imageLoaded(page, "bg-image")).toBeGreaterThan(0);
+  await expect(page.getByTestId("stage")).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => imageLoaded(page, "bg-image"), { timeout: 30_000 }).toBeGreaterThan(0);
   await expect(page.getByTestId("bg-image")).toHaveAttribute("src", /\/assets\/user\/[0-9a-f]{64}\.png$/);
 });
 

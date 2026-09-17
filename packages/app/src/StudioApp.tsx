@@ -21,6 +21,8 @@ import { AiPanel } from "./studio/AiPanel.js";
 import { AssetLibrary } from "./studio/AssetLibrary.js";
 import { CommandPalette } from "./studio/CommandPalette.js";
 import { ExportBundleButton } from "./studio/ExportBundleButton.js";
+import { LosiaPublishButton } from "./studio/LosiaPublishButton.js";
+import { fetchHostCapabilities } from "./api/host.js";
 import { NativeBuildButton } from "./studio/NativeBuildButton.js";
 import { SceneTools } from "./studio/SceneTools.js";
 import { StoryMap } from "./studio/StoryMap.js";
@@ -32,6 +34,7 @@ import { duplicateLine, insertLines, moveLine, removeLine } from "./studio/lineO
 import { moveScene, renameScene } from "./studio/sceneOperations.js";
 import { collectMediaReferences, findMissingMedia, type MediaReference } from "./studio/mediaIntegrity.js";
 import { ensureAssetServer } from "./storage/projectAssets.js";
+import { fetchProjectScript } from "./api/gateway.js";
 
 type View = "overview" | "stage" | "production" | "graph" | "assets" | "characters";
 const views: { id: View; name: string; icon: IconName }[] = [{ id: "overview", name: "프로젝트 홈", icon: "home" }, { id: "stage", name: "장면 편집", icon: "scenes" }, { id: "production", name: "원고·분량", icon: "layers" }, { id: "graph", name: "스토리 맵", icon: "graph" }, { id: "assets", name: "아트 디렉션", icon: "image" }, { id: "characters", name: "등장인물", icon: "users" }];
@@ -73,6 +76,9 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
   const previewFlags = useMemo(() => previewFlagsFor(script, previewChoices), [script, previewChoices]);
   const [artOnly, setArtOnly] = useState(false);
   const [rightTab, setRightTab] = useState<"ai" | "inspector">("inspector");
+  // 호스트 능력 기술서 — 게이트웨이 없는 배포에서는 게이트웨이 전용 버튼을 숨긴다.
+  const [hostCaps, setHostCaps] = useState<{ gateway: boolean } | null>(null);
+  useEffect(() => { void fetchHostCapabilities().then(setHostCaps); }, []);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
   const [sessionSaveError, setSaveError] = useState(initial.error);
@@ -255,6 +261,24 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
       window.location.href = "/?preview=1";
     } catch { setSaveError("미리보기 데이터를 저장하지 못했습니다. 브라우저 저장 공간을 확인하세요."); }
   }
+  /** 게이트웨이 프로젝트 그래프(story/)를 컴파일해 처음부터 플레이한다 — 스튜디오 원고와는 별개 세계다. */
+  async function previewGraph() {
+    setNotice("");
+    try {
+      const compiled = await fetchProjectScript();
+      const errors = compiled.issues.filter(issue => issue.severity === "error");
+      if (errors.length) {
+        setNotice(`그래프에 오류 ${errors.length}개가 있습니다: ${errors[0]?.message ?? ""}`.slice(0, 240));
+        return;
+      }
+      const parsed = parseScript(compiled.script);
+      sessionStorage.setItem("vnmaker.previewScript", JSON.stringify(parsed));
+      sessionStorage.setItem("vnmaker.previewPosition", JSON.stringify({ sceneId: parsed.start, lineIndex: 0 }));
+      window.location.href = "/?preview=1";
+    } catch (err) {
+      setNotice(`그래프 미리보기 실패: ${err instanceof Error ? err.message : String(err)}`.slice(0, 240));
+    }
+  }
   /** 현재 장면과 바로 이어지는 장면의 오류만 미리보기를 막는다. 집필 중인 장편은 어딘가 늘 미완성이다. */
   function play() {
     const liveIssues = analysisScript === script ? issues : auditScript(script);
@@ -301,7 +325,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
     <header className="studio-top">
       <button className="studio-brand" onClick={() => setView("overview")} aria-label="VN Maker 스튜디오 홈"><span className="brand-mark"><Icon name="layers" size={23} /></span><strong>VN<span>MAKER</span></strong><small>STUDIO</small></button>
       <div className="project-heading"><Icon name="file" size={15} /><input aria-label="작품 제목" value={titleDraft} maxLength={200} onChange={event => { setTitleDraft(event.target.value); if (event.target.value.trim()) edit({ ...script, title: event.target.value }, "title"); }} onBlur={() => { if (!titleDraft.trim()) setTitleDraft(script.title); }} /><span className={`save-state ${saveError ? "has-error" : ""}`} data-testid="studio-save-state"><Icon name={saveError ? "warning" : "check"} size={13} />{saveError ? "저장 확인 필요" : autosave.pending ? "저장 중…" : "로컬 저장됨"}</span></div>
-      <div className="top-actions"><VersionHistory script={script} projectId={activeProjectId} onRestore={next=>{changeProjectEpoch();setPreviewChoices({});edit(next);selectScene(next.start);setView("stage");setNotice("백업한 버전으로 복원했습니다. 직전 작업은 버전 기록에 보관했습니다.");}}/><button type="button" className="icon-button" title="실행 취소 (Ctrl+Z)" aria-label="실행 취소" data-testid="studio-undo" disabled={!history.past.length} onClick={() => undoRedo("undo")}><Icon name="undo" /></button><button type="button" className="icon-button" title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행" disabled={!history.future.length} onClick={() => undoRedo("redo")}><Icon name="redo" /></button><span className="action-divider" /><button type="button" className="studio-button export-button" onClick={exportProject} data-testid="studio-export"><Icon name="download" /><span>JSON</span></button><ExportBundleButton script={script}/><NativeBuildButton script={script} onChange={next=>edit(next)}/><button type="button" className="studio-button primary" onClick={play} data-testid="studio-play"><Icon name="play" size={14} /><span>여기서 플레이</span></button></div>
+      <div className="top-actions"><VersionHistory script={script} projectId={activeProjectId} onRestore={next=>{changeProjectEpoch();setPreviewChoices({});edit(next);selectScene(next.start);setView("stage");setNotice("백업한 버전으로 복원했습니다. 직전 작업은 버전 기록에 보관했습니다.");}}/><button type="button" className="icon-button" title="실행 취소 (Ctrl+Z)" aria-label="실행 취소" data-testid="studio-undo" disabled={!history.past.length} onClick={() => undoRedo("undo")}><Icon name="undo" /></button><button type="button" className="icon-button" title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행" disabled={!history.future.length} onClick={() => undoRedo("redo")}><Icon name="redo" /></button><span className="action-divider" /><button type="button" className="studio-button export-button" onClick={exportProject} data-testid="studio-export"><Icon name="download" /><span>JSON</span></button><ExportBundleButton script={script}/><LosiaPublishButton script={script}/><NativeBuildButton script={script} onChange={next=>edit(next)}/>{hostCaps?.gateway !== false && <button type="button" className="icon-button" title="에이전트 그래프(게이트웨이 story 프로젝트)를 컴파일해 처음부터 플레이" aria-label="그래프 미리보기" data-testid="studio-graph-play" onClick={() => void previewGraph()}><Icon name="graph" /></button>}<button type="button" className="studio-button primary" onClick={play} data-testid="studio-play"><Icon name="play" size={14} /><span>여기서 플레이</span></button></div>
     </header>
     {saveError && <div className="save-alert" role="alert">{saveError}<button onClick={retrySave}>{saveEnabled ? "다시 저장" : "현재 작품 저장"}</button></div>}
     {!saveEnabled && initial.error && <ProjectRecovery id={activeProjectId} onRestore={next=>{changeProjectEpoch();setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setSaveError(null);setSaveEnabled(true);setNotice("작품 보관함 원고로 복구했습니다.");}}/>}
@@ -322,7 +346,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
           <div className="stage-authoring-tools"><SceneTools script={script} scene={scene} onChange={edit} onSelect={openScene} onInsertLines={lines => insertPastedLines(lines, false)}/>{script.scenes.some(row=>row.choices?.some(choice=>choice.set||choice.add)) && <details className="preview-routes"><summary>미리보기 선택 경로</summary>{script.scenes.filter(row=>row.choices?.some(choice=>choice.set||choice.add)).map((row,i)=><label key={row.id}>선택 {i+1}<select aria-label={`미리보기 선택 ${i+1}`} value={previewChoices[row.id] ?? -1} onChange={event=>setPreviewChoices({...previewChoices,[row.id]:Number(event.target.value)})}><option value={-1}>선택하지 않음</option>{row.choices!.map((choice,j)=><option key={j} value={j}>{choice.text}</option>)}</select></label>)}</details>}</div>
           {!lineAllowed(line,previewFlags)&&<p className="conditional-preview-note">이 대사는 현재 미리보기 선택 경로에서 생략됩니다. 원고와 조건은 계속 편집할 수 있습니다.</p>}<span className="workspace-format"><i /> LIVE PREVIEW</span><button className={`studio-button focus-button ${focusMode ? "is-active" : ""}`} aria-pressed={focusMode} onClick={() => setFocusMode(!focusMode)}><Icon name="expand" size={13} />{focusMode ? "패널 열기" : "집중 모드"}</button></>}</div></div>
         {view === "overview" && <ProjectOverview onEdit={edit} script={script} onNavigate={setView} onSelectScene={openScene} onValidate={() => setShowIssues(true)} />}
-        {view === "production" && <div className="production-view"><ManuscriptReview script={script} onSelectScene={openScene} /><details className="production-drawer" data-testid="production-drawer" onToggle={event => setProductionOpen(event.currentTarget.open)}><summary><Icon name="spark" size={15} />장편 AI 제작실<small>기획 · 챕터 설계 · 연속성 집필 · 원고 적용</small></summary>{productionOpen && <ProductionPanel script={script} onApply={(next, nextSceneId) => { if (edit(next) && nextSceneId) openScene(nextSceneId); }} onSelectScene={openScene} />}</details></div>}
+        {view === "production" && <div className="production-view"><ManuscriptReview script={script} onSelectScene={openScene} />{hostCaps?.gateway !== false && <details className="production-drawer" data-testid="production-drawer" onToggle={event => setProductionOpen(event.currentTarget.open)}><summary><Icon name="spark" size={15} />장편 AI 제작실<small>기획 · 챕터 설계 · 연속성 집필 · 원고 적용</small></summary>{productionOpen && <ProductionPanel script={script} onApply={(next, nextSceneId) => { if (edit(next) && nextSceneId) openScene(nextSceneId); }} onSelectScene={openScene} />}</details>}</div>}
         {view === "stage" && <>
           <section className="preview-workspace"><div className="preview-meta"><span><i /> SCENE {String(sceneNumber).padStart(2, "0")}</span><div><Icon name="image" size={12} />{scene.backgroundUrl ? "프로젝트 원화" : scene.background}<span className="meta-divider" />{scene.bgm && <><Icon name="music" size={12} />{script.audioAssets?.find(asset=>asset.url===scene.bgm)?.name??(scene.bgm.startsWith("/assets/user/")?"사용자 음원":scene.bgm)}</>}</div></div>
             <section className="stage-fit" ref={stageRef} aria-label="16:9 게임 미리보기"><div className="preview-frame" style={{ width: `${previewWidth}px` }}><section className="stage" data-testid="studio-stage"><Stage background={scene.background} backgroundUrl={backgroundAt(scene,index,previewFlags)} cgUrl={cgAt(script,scene,index,previewFlags)} hideSprites={scene.hideSprites} framing={framingAt(scene,index,previewFlags)} characters={script.characters} sprites={spritesAt(scene,index,previewFlags)} speaking={line.speaker} chapter={null} sceneEpoch={0} transition="none" />{!artOnly && <DialogueBox speaker={speakerName(script, line.speaker)} color={speakerColor(script, line.speaker)} text={line.text} typing={true} />}</section></div></section>
@@ -336,7 +360,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
         <div className="full-workspace art-workspace" hidden={view !== "assets"}><MemoAssetLibrary generationEnabled={true} active={view === "assets"} projectEpoch={projectEpoch} script={view === "assets" ? script : analysisScript} scene={view === "assets" ? scene : analysisScene} onChange={assetChange} onPatchScene={assetPatchScene} /></div>
         {view === "characters" && <CharacterManager script={script} onChange={edit}/>}
       </main>
-      <aside className="studio-inspector"><div className="right-tabs" role="tablist" aria-label="작업 패널"><button type="button" role="tab" aria-selected={rightTab === "ai"} onClick={() => setRightTab("ai")}><Icon name="spark" />AI</button><button type="button" role="tab" aria-selected={rightTab === "inspector"} onClick={() => setRightTab("inspector")}><Icon name="settings" />속성</button></div><div className="right-panel-scroll"><div hidden={rightTab !== "ai"}><MemoAiPanel active={rightTab === "ai"} script={rightTab === "ai" ? script : analysisScript} scene={rightTab === "ai" ? scene : analysisScene} lineIndex={index} onApply={applyAiProposal} /><div className="scene-notes"><p className="eyebrow">SCENE DIRECTION</p><h2>{sceneTitle(scene)}</h2><img src={backgroundSrc(scene)} alt="장면 아트" /><p>{scene.artBrief || "이 장면의 감정과 시각적 방향을 속성 패널에 기록하세요."}</p><div><span>{scene.lines.length}줄</span><span>{scene.cgUrl ? "EVENT CG" : "BACKGROUND"}</span></div><button className="studio-button" onClick={() => setView("assets")}><Icon name="image" />아트 디렉션 열기</button><button className="studio-button" onClick={() => setView("production")}><Icon name="clock" />전체 원고 검수</button></div></div><div hidden={rightTab !== "inspector"}><Inspector script={script} scene={scene} lineIndex={index} patchScene={patchScene} patchLine={patchLine} onChange={edit} onAddLine={addLine} onInsertLines={insertPastedLines} onRenameScene={renameCurrentScene} textRef={lineTextRef} /></div></div></aside>
+      <aside className="studio-inspector"><div className="right-tabs" role="tablist" aria-label="작업 패널"><button type="button" role="tab" aria-selected={rightTab === "ai"} onClick={() => setRightTab("ai")}><Icon name="spark" />AI</button><button type="button" role="tab" aria-selected={rightTab === "inspector"} onClick={() => setRightTab("inspector")}><Icon name="settings" />속성</button></div><div className="right-panel-scroll"><div hidden={rightTab !== "ai"}><MemoAiPanel active={rightTab === "ai"} script={rightTab === "ai" ? script : analysisScript} scene={rightTab === "ai" ? scene : analysisScene} lineIndex={index} onApply={applyAiProposal} /><div className="scene-notes"><p className="eyebrow">SCENE DIRECTION</p><h2>{sceneTitle(scene)}</h2><img src={backgroundSrc(scene)} alt="장면 아트" /><p>{scene.artBrief || "이 장면의 감정과 시각적 방향을 속성 패널에 기록하세요."}</p><div><span>{scene.lines.length}줄</span><span>{scene.cgUrl ? "EVENT CG" : "BACKGROUND"}</span></div><button className="studio-button" onClick={() => setView("assets")}><Icon name="image" />아트 디렉션 열기</button><button className="studio-button" onClick={() => setView("production")}><Icon name="clock" />전체 원고 검수</button></div></div><div hidden={rightTab !== "inspector"}><Inspector script={script} scene={scene} lineIndex={index} patchScene={patchScene} patchLine={patchLine} onChange={edit} onAddLine={addLine} onInsertLines={insertPastedLines} onRenameScene={renameCurrentScene} textRef={lineTextRef} projectEpoch={projectEpoch} /></div></div></aside>
     </div>
     <footer className="studio-status"><span><i />{saveError ? "저장 상태 확인 필요" : autosave.pending ? "현재 원고 저장 중…" : "이 브라우저에 자동 저장"}</span><div><span>{script.scenes.length} scenes</span><span>{totalLines} lines</span><span>예상 {scriptDuration}</span><span>{script.scenes.filter(row => row.ending).length} endings</span></div><button type="button" className={errors.length ? "has-error" : ""} onClick={() => { if (showIssues) closeIssues(); else setShowIssues(true); }} data-testid="studio-validation"><Icon name={allIssues.length ? "warning" : "check"} size={12} />{errors.length ? `수정 필요 ${errors.length}` : allIssues.length ? `검토 ${allIssues.length}건` : "스토리 연결 정상"}</button></footer>
     {notice && <div className="studio-toast" role="status">{notice}<button className="icon-button" aria-label="알림 닫기" onClick={() => setNotice("")}><Icon name="close" size={13} /></button></div>}

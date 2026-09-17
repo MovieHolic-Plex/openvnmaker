@@ -2,6 +2,7 @@ import { BACKGROUNDS, validBackgroundUrl } from "@vnmaker/content";
 import type { Scene, VnScript } from "@vnmaker/content";
 import { useEffect, useRef, useState } from "react";
 import { fetchAuthStatus, generateImage, generateLine, startLogin, type AuthStatus } from "../api/gateway.js";
+import { fetchHostCapabilities } from "../api/host.js";
 import { Icon } from "./Icon.js";
 import { AI_MODES, makePrompt, parseProposal, sceneTitle, type AiMode, type Proposal } from "./project.js";
 
@@ -16,6 +17,7 @@ export function AiPanel({ active = true, script, scene, lineIndex, onApply }: Pr
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [notice, setNotice] = useState("");
+  const [noGateway, setNoGateway] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const proposalRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -24,8 +26,12 @@ export function AiPanel({ active = true, script, scene, lineIndex, onApply }: Pr
   useEffect(() => {
     // AI 탭을 실제로 열었을 때만 상태를 조회한다 — 수동 편집은 내부 요청을 만들지 않는다.
     if (!active) return;
-    void fetchAuthStatus().then(setAuth);
-    void fetch("/api/generate/config").then(res => res.json()).then((data: { model?: string }) => setModel(data.model ?? "")).catch(() => {});
+    void fetchHostCapabilities().then(host => {
+      // 게이트웨이가 없는 배포(호스팅된 /make)에서는 죽은 프로브를 보내지 않는다.
+      if (host && !host.gateway) { setNoGateway(true); return; }
+      void fetchAuthStatus().then(setAuth);
+      void fetch("/api/generate/config").then(res => res.json()).then((data: { model?: string }) => setModel(data.model ?? "")).catch(() => {});
+    });
     return () => abortRef.current?.abort();
   }, [active]);
   // 원고 객체는 편집마다 새로 만들어지고 실행 취소는 같은 객체를 돌려주므로 참조 비교로 충분하다.
@@ -70,9 +76,13 @@ export function AiPanel({ active = true, script, scene, lineIndex, onApply }: Pr
       <div className="ai-suggestions">{suggestions.map(text => <button key={text} type="button" disabled={busy} onClick={() => setInstruction(text)}>{text}<Icon name="plus" size={12} /></button>)}</div>
       {busy ? <button type="button" className="studio-button ai-generate" onClick={() => { abortRef.current?.abort(); setBusy(false); setNotice("요청 대기를 취소했습니다. 서버에서 시작한 생성은 계속될 수 있습니다."); }}><span className="loading-dot" />쓰는 중 · 대기 취소<Icon name="stop" size={13} /></button> : <button type="submit" className="studio-button ai-generate" data-testid="studio-ai-generate" disabled={!instruction.trim() || !auth?.authenticated}><Icon name="spark" />{mode === "image" ? "배경 생성하기" : "제안 생성하기"}<Icon name="arrow" /></button>}
     </form>
-    <div className={`ai-connection ${auth?.authenticated ? "connected" : ""}`}><i />{auth === null ? "연결 확인 중" : auth.authenticated ? "AI 연결됨" : auth.reachable ? "AI 연결 필요" : "게이트웨이 연결 불가"}{auth && !auth.authenticated && <button type="button" onClick={() => void connect()} disabled={connecting || !auth.reachable}>{connecting ? "연결 중…" : "Google 연결"}</button>}</div>
-    {model && <p className="ai-model">{model}</p>}
-    <p className="ai-disclosure">비공식 Antigravity 연결 · 텍스트와 이미지가 계정 할당량을 공유합니다.</p>
+    {noGateway
+      ? <p className="ai-disclosure">이 배포에는 AI 서버가 없어 어시스턴트를 쓸 수 없습니다. 에셋 스토어와 losia 게시는 그대로 동작합니다.</p>
+      : <>
+          <div className={`ai-connection ${auth?.authenticated ? "connected" : ""}`}><i />{auth === null ? "연결 확인 중" : auth.authenticated ? "AI 연결됨" : auth.reachable ? "AI 연결 필요" : "게이트웨이 연결 불가"}{auth && !auth.authenticated && <button type="button" onClick={() => void connect()} disabled={connecting || !auth.reachable}>{connecting ? "연결 중…" : "Google 연결"}</button>}</div>
+          {model && <p className="ai-model">{model}</p>}
+          <p className="ai-disclosure">비공식 Antigravity 연결 · 텍스트와 이미지가 계정 할당량을 공유합니다.</p>
+        </>}
     {error && <div className="studio-alert" role="alert" data-testid="studio-ai-error"><Icon name="warning" /><div><strong>생성하지 못했습니다</strong><p>{error}</p><small>현재 작품은 변경되지 않았습니다.</small></div></div>}
     {notice && <p role="status" className="studio-notice">{notice}</p>}
     {proposal && <section ref={proposalRef} className="ai-proposal" data-testid="studio-ai-proposal"><div className="panel-heading"><Icon name="spark" /><h3>{proposal.title}</h3></div><p>{proposal.detail}</p>{proposal.before.length > 0 && <div className="diff-before"><small>변경 전</small>{proposal.before.map((text, index) => <p key={index}>{text}</p>)}</div>}{proposal.imageUrl && <img src={proposal.imageUrl} alt="AI가 제안한 배경" data-testid="studio-gen-preview" />}<div className="diff-after"><small>제안 · {proposal.model}</small>{proposal.after.map((text, index) => <p key={index}>{text}</p>)}</div>{stale && <p className="studio-error" role="alert">생성 후 작품이 변경됐습니다. 최신 내용으로 다시 생성하세요.</p>}<div className="proposal-actions"><button className="studio-button" type="button" onClick={() => setProposal(null)}>버리기</button><button className="studio-button primary" type="button" data-testid="studio-ai-apply" disabled={stale} onClick={() => { if (stale) return; onApply(proposal.next, proposal.sceneId, proposal.lineIndex); setProposal(null); setNotice("작품에 적용했습니다. 실행 취소로 되돌릴 수 있습니다."); }}><Icon name="check" />작품에 적용</button></div></section>}

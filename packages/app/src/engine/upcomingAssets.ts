@@ -32,7 +32,7 @@ export function upcomingImages(script: VnScript, scene: Scene, lineIndex: number
       push(direction.poseUrl ?? characterImage(actor, direction.expression ?? "neutral", direction.outfit));
     }
   }
-  const targets = scene.choices?.length ? scene.choices.map(choice => choice.next) : scene.next ? [scene.next] : [];
+  const targets = scene.choices?.length ? scene.choices.map(choice => choice.next) : [...(scene.routes ?? []).map(route => route.next), ...(scene.next ? [scene.next] : [])];
   for (const id of targets) {
     const target = findScene(script, id);
     if (!target) continue;

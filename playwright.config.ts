@@ -1,6 +1,16 @@
 import { defineConfig, devices } from "@playwright/test";
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-const PORT = Number(process.env.VNMAKER_APP_PORT ?? 5173);
+// 5173 은 사용자 dev 서버가 쓰는 포트다 — 거기로 재사용하면 VNMAKER_PROJECT_DIR 격리가
+// 무력화돼 스펙이 실제 프로젝트에 노드/엣지를 심는다. 전용 포트를 쓴다.
+const PORT = Number(process.env.VNMAKER_APP_PORT ?? 5199);
+
+// e2e 게이트웨이는 실제 사용자 프로젝트를 건드리지 않도록 전용 그래프 저장소를 쓴다.
+// (스펙이 노드/엣지를 직접 심는다 — 기본 ~/.vnmaker/projects/default 와 섞이면 안 된다.)
+const E2E_PROJECT_DIR = process.env.VNMAKER_E2E_PROJECT_DIR ?? join(tmpdir(), "vnmaker-e2e-project");
+mkdirSync(E2E_PROJECT_DIR, { recursive: true });
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -20,7 +30,7 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } } },
   ],
   webServer: {
-    command: `pnpm --filter @vnmaker/app dev --host 127.0.0.1 --port ${PORT} --strictPort`,
+    command: `VNMAKER_PROJECT_DIR=${E2E_PROJECT_DIR} pnpm --filter @vnmaker/app dev --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: true,
     timeout: 120_000,

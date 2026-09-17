@@ -9,17 +9,18 @@
     "start": "tsx src/main.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test --import tsx test/credentials.test.ts test/routes.test.ts test/models.test.ts test/images.test.ts test/codex-images.test.ts test/generate.test.ts test/project.test.ts test/agent.test.ts test/hardening.test.ts test/store.test.ts test/review.test.ts"
+    "test": "node --test --import tsx test/credentials.test.ts test/routes.test.ts test/models.test.ts test/images.test.ts test/codex-images.test.ts test/generate.test.ts test/project.test.ts test/agent.test.ts test/hardening.test.ts test/store.test.ts test/review.test.ts test/losia.test.ts"
   },
   "dependencies": {
-    "hono": "4.13.5",
     "@hono/node-server": "2.1.1",
-    "open": "11.0.2",
-    "@vnmaker/ir": "workspace:*"
+    "@vnmaker/content": "workspace:*",
+    "@vnmaker/ir": "workspace:*",
+    "hono": "4.13.5",
+    "open": "11.0.2"
   },
   "devDependencies": {
+    "@types/node": "26.4.0",
     "tsx": "4.23.13",
-    "typescript": "5.9.3",
-    "@types/node": "26.4.0"
+    "typescript": "5.9.3"
   }
 }

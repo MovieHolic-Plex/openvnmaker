@@ -28,9 +28,12 @@ function enterScene(script: VnScript, state: VnState, id: string, visited: strin
     return { ...state, error: `알 수 없는 씬 id: ${id}` };
   }
   if (visited.includes(id)) return { ...state, error: "표시할 대사가 없는 장면이 순환합니다." };
-  const lineIndex = nextVisible(scene, 0, state.flags);
+  // 진입 시점 set — 첫 대사의 when 과 조건 경로가 이 플래그를 본다.
+  const flags = scene.set ? { ...state.flags, ...scene.set } : state.flags;
+  const lineIndex = nextVisible(scene, 0, flags);
   const entered: VnState = {
     ...state,
+    flags,
     phase: "scene",
     sceneId: id,
     lineIndex: Math.max(0, lineIndex),
@@ -40,11 +43,14 @@ function enterScene(script: VnScript, state: VnState, id: string, visited: strin
   return lineIndex < 0 ? leaveScene(script, entered, scene, [...visited, id]) : entered;
 }
 
-/** 씬의 마지막 줄을 지난 뒤 어디로 갈지 결정한다. */
+/** 씬의 마지막 줄을 지난 뒤 어디로 갈지 결정한다. 조건 경로가 씬 자체 출구(엔딩·다음)보다 먼저 평가된다. */
 function leaveScene(script: VnScript, state: VnState, scene: Scene, visited: string[] = []): VnState {
   if (scene.choices && scene.choices.length > 0) {
     if(!scene.choices.some(choice=>choiceAllowed(choice,state.flags)))return {...state,error:`씬 ${scene.id}: 현재 상태에서 선택할 수 있는 선택지가 없습니다.`};
     return { ...state, phase: "choice" };
+  }
+  for (const route of scene.routes ?? []) {
+    if (lineAllowed(route, state.flags)) return enterScene(script, state, route.next, visited);
   }
   if (scene.ending) {
     return { ...state, phase: "ending", endingTitle: scene.ending };
@@ -97,11 +103,11 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
       const history = action.history ?? [];
       const restored = enterScene(script, { ...state, flags, affection: action.affection, history, past: rebuildPast(script, action.rollback, history), endingTitle: null }, action.sceneId);
       const requested = Math.min(scene.lines.length - 1, Math.max(0, Math.floor(action.lineIndex)));
-      const lineIndex = nextVisible(scene, requested, flags);
+      const lineIndex = nextVisible(scene, requested, restored.flags);
       if (action.phase === "choice" && scene.choices?.length) {
         // 저장 뒤 원고나 조건이 바뀌어 고를 수 있는 선택지가 하나도 없으면 leaveScene 과 같은 복구 가능한 오류로 남긴다.
         // 조용히 선택 단계에 들어가면 버튼 없는 선택 화면에서 빠져나올 수 없다.
-        if (!scene.choices.some(choice => choiceAllowed(choice, flags))) return { ...restored, error: `씬 ${scene.id}: 저장된 위치에서 선택할 수 있는 선택지가 없습니다. 저장 당시와 원고나 선택 기억이 달라졌을 수 있습니다.` };
+        if (!scene.choices.some(choice => choiceAllowed(choice, restored.flags))) return { ...restored, error: `씬 ${scene.id}: 저장된 위치에서 선택할 수 있는 선택지가 없습니다. 저장 당시와 원고나 선택 기억이 달라졌을 수 있습니다.` };
         return { ...restored, phase: "choice", lineIndex: Math.max(0, requested) };
       }
       if (action.phase === "ending" && scene.ending) return { ...restored, phase: "ending", endingTitle: scene.ending, lineIndex: Math.max(0, requested) };

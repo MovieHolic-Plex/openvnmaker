@@ -3,7 +3,13 @@ import { createZip, type ZipEntry } from "./zip.js";
 import { mediaCredits } from "./mediaCredits.js";
 
 export interface ExportProgress { readonly phase: "player" | "assets" | "zip"; readonly complete: number; readonly total: number; readonly path?: string }
-interface ExportOptions { readonly fetcher?: typeof fetch; readonly signal?: AbortSignal; readonly onProgress?: (progress: ExportProgress) => void }
+interface ExportOptions {
+  readonly fetcher?: typeof fetch;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (progress: ExportProgress) => void;
+  /** 독립 플레이어 런타임의 주소 앞부분. 기본 /export-runtime — losia 호스팅 스튜디오는 /make/export-runtime. */
+  readonly runtimeBase?: string;
+}
 interface RuntimeManifest { version: number; entry: string; stylesheets: string[]; files: { path: string; size: number; sha256: string }[] }
 const encode = (text: string) => new TextEncoder().encode(text);
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, value => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!);
@@ -88,12 +94,13 @@ export async function buildExportBundle(source: VnScript, options: ExportOptions
     return response;
   };
   options.onProgress?.({ phase: "player", complete: 0, total: 1 });
+  const runtimeBase = (options.runtimeBase ?? "/export-runtime").replace(/\/+$/, "");
   let runtime: RuntimeManifest;
-  try { runtime = runtimeManifest(await (await request("/export-runtime/manifest.json")).json()); }
+  try { runtime = runtimeManifest(await (await request(`${runtimeBase}/manifest.json`)).json()); }
   catch (error) { options.signal?.throwIfAborted(); throw new Error(`독립 플레이어를 준비하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`); }
   const entries: ZipEntry[] = [];
   for (const file of runtime.files) {
-    const bytes = new Uint8Array(await (await request(`/export-runtime/${file.path}`)).arrayBuffer());
+    const bytes = new Uint8Array(await (await request(`${runtimeBase}/${file.path}`)).arrayBuffer());
     if (bytes.length !== file.size || await sha256(bytes) !== file.sha256) throw new Error(`플레이어 파일이 변경되거나 손상되었습니다: ${file.path}. 다시 내보내주세요.`);
     entries.push({ path: file.path, bytes });
   }

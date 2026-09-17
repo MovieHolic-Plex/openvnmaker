@@ -58,9 +58,21 @@ export function generateRenpyScript(source:VnScript):string {
         if(choice.affection)out.push(`            $ vn_affection += ${choice.affection}`);
         out.push(`            jump ${label(choice.next)}`);
       });
-    }else if(scene.ending){out.push("    window hide",`    call screen vn_ending(${renpyText(scene.ending)})`,"    return");}
-    else if(scene.next)out.push(`    jump ${label(scene.next)}`);
-    else out.push("    return");
+    }else{
+      // 조건 경로는 엔진과 같이 앞에서부터 첫 매치만 따른다. 무조건 경로는 else — 뒤 경로는 도달 불가라 끊는다.
+      const routes=scene.routes??[];
+      const firstOpen=routes.findIndex(route=>route.when===undefined);
+      const chain=firstOpen<0?routes:routes.slice(0,firstOpen+1);
+      chain.forEach((route,index)=>{
+        if(route.when===undefined)out.push(index===0?`    jump ${label(route.next)}`:`    else:\n        jump ${label(route.next)}`);
+        else out.push(`    ${index===0?"if":"elif"} vn_condition(${pythonJson(route.when)}):\n        jump ${label(route.next)}`);
+      });
+      if(firstOpen<0){
+        if(scene.ending)out.push("    window hide",`    call screen vn_ending(${renpyText(scene.ending)})`,"    return");
+        else if(scene.next)out.push(`    jump ${label(scene.next)}`);
+        else out.push("    return");
+      }
+    }
     out.push("");
   });
   return out.join("\n");
@@ -192,8 +204,11 @@ init python:
             renpy.show(tag, what=Transform(portrait, xysize=bounds, fit="contain", xalign=position, yalign=0.0, ypos=top, alpha=.8 if speaker and speaker != actor["id"] else 1.0), zorder=5)
 
     def vn_enter(index):
-        global vn_slots, vn_background, vn_cg, vn_framing, vn_hide_actors
+        global vn_slots, vn_background, vn_cg, vn_framing, vn_hide_actors, vn_flags
         scene = vn_scene(index)
+        if scene.get("set"):
+            # 진입 시점 플래그 — 첫 대사의 when 과 조건 경로가 이 값을 본다. 새 dict 로 묶어 롤백을 살린다.
+            vn_flags = dict(vn_flags, **scene["set"])
         vn_slots = {}
         vn_background = scene.get("backgroundUrl") or "assets/bg/" + scene["background"] + ".png"
         vn_cg = scene.get("cgUrl")

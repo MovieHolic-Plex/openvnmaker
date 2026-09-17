@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { script, parseScript, auditScript, lineAllowed, type StoryFlags } from "../src/index.js";
+import { script, parseScript, auditScript, lineAllowed, type StoryFlags, type VnScript } from "../src/index.js";
 import { findBrokenSceneRefs, findManifestViolations } from "../src/check.js";
 const count = (text: string) => Array.from(text.replace(/\s/gu, "")).length;
 const byId = new Map(script.scenes.map(scene => [scene.id,scene]));
@@ -86,4 +86,39 @@ test("compare 조건은 플래그가 없으면 ne 를 포함해 모두 거짓이
   assert.equal(lineAllowed({ when: { all: ["n"] } }, { n: 0 }), false);
   assert.equal(lineAllowed({ when: { all: ["s"] } }, { s: "" }), false);
   assert.equal(lineAllowed({ when: { none: ["n"] } }, { n: 0 }), true);
+});
+
+test("scene.set·scene.routes — 진입 변수와 조건 경로를 검증한다", () => {
+  const base = { title: "t", subtitle: "", start: "a", characters: [], scenes: [
+    { id: "a", background: "title", set: { metYuna: true }, lines: [{ speaker: null, text: "x" }], routes: [{ next: "b", when: { all: ["metYuna"] } }], next: "c" },
+    { id: "b", background: "title", lines: [{ speaker: null, text: "y" }], ending: "b끝" },
+    { id: "c", background: "title", lines: [{ speaker: null, text: "z" }], ending: "c끝" },
+  ] };
+  const parsed = parseScript(base);
+  assert.equal(parsed.scenes[0]?.set?.["metYuna"], true);
+  assert.equal(parsed.scenes[0]?.routes?.[0]?.next, "b");
+  // 잘못된 set 값·예약어 키·빈 경로 배열·잘못된 조건을 거부한다
+  assert.throws(() => parseScript({ ...base, scenes: [{ ...base.scenes[0], set: { bad: { nested: 1 } } }, ...base.scenes.slice(1)] }), /선택 기억 값/);
+  assert.throws(() => parseScript({ ...base, scenes: [{ ...base.scenes[0], set: JSON.parse('{"__proto__":true}') }, ...base.scenes.slice(1)] }), /선택 기억 이름/);
+  assert.throws(() => parseScript({ ...base, scenes: [{ ...base.scenes[0], routes: [] }, ...base.scenes.slice(1)] }), /조건부 경로/);
+  assert.throws(() => parseScript({ ...base, scenes: [{ ...base.scenes[0], routes: [{ next: "b", when: { unknown: 1 } }] }, ...base.scenes.slice(1)] }), /표시 조건/);
+  assert.throws(() => parseScript({ ...base, scenes: [{ ...base.scenes[0], routes: [{ next: "" }] }, ...base.scenes.slice(1)] }), /경로 연결/);
+});
+
+test("auditScript — 조건 경로의 도착지·도달성과 진입 set 을 반영한다", () => {
+  const base = { title: "t", subtitle: "", start: "a", characters: [], scenes: [
+    { id: "a", background: "title", lines: [{ speaker: null, text: "x" }], routes: [{ next: "b", when: { all: ["flag"] } }], next: "c" },
+    { id: "b", background: "title", lines: [{ speaker: null, text: "y" }], ending: "b끝" },
+    { id: "c", background: "title", lines: [{ speaker: null, text: "z" }], ending: "c끝" },
+  ] };
+  assert.deepEqual(auditScript(base as VnScript).filter(issue => issue.severity === "error"), []);
+  // 조건 경로의 dangling 도착지는 오류
+  const dangling = auditScript({ ...base, scenes: [{ ...base.scenes[0], routes: [{ next: "ghost", when: { all: ["flag"] } }] }, ...base.scenes.slice(1)] } as VnScript);
+  assert.ok(dangling.some(issue => issue.severity === "error" && /조건부 경로/.test(issue.message)));
+  // 진입 set 이 만든 플래그로 조건 경로가 열린다 — a.set 이 flag 를 세면 b 로 간다
+  const opened = auditScript({ ...base, scenes: [{ ...base.scenes[0], set: { flag: true } }, ...base.scenes.slice(1)] } as VnScript);
+  assert.deepEqual(opened.filter(issue => issue.severity === "error"), []);
+  // 선택지가 있으면 경로·next·엔딩은 무시된다는 경고
+  const warned = auditScript({ ...base, scenes: [{ ...base.scenes[0], choices: [{ text: "가기", next: "b" }] }, ...base.scenes.slice(1)] } as VnScript);
+  assert.ok(warned.some(issue => issue.severity === "warning" && /우선/.test(issue.message)));
 });

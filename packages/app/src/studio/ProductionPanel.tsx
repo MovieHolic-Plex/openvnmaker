@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { VnScript } from "@vnmaker/content";
 import { fetchAuthStatus, generateLine, type AuthStatus } from "../api/gateway";
+import { fetchHostCapabilities } from "../api/host.js";
 import { Icon } from "./Icon";
 import { assembleProduction, createPlan, DEFAULT_READING_SPEED, durationLabel, estimateScriptDuration, makeDraftPrompt, makeOutlinePrompt, parseDraft, parseOutline, planDraftScript, PRODUCTION_BACKUP_KEY, PRODUCTION_KEY, restoreProduction, sceneCharacters, scriptFingerprint, type DraftJob, type ProductionPlan } from "./production";
 import "./production.css";
@@ -47,7 +48,8 @@ export function ProductionPanel({ script, onApply, onSelectScene, onBusyChange }
   const [bibleText, setBibleText] = useState(initial.plan?.outline.bible ?? "");
   const controllerRef = useRef<AbortController | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { let alive = true; void fetchAuthStatus().then(value => { if (alive) setAuth(value); }); return () => { alive = false; }; }, []);
+  const [noGateway, setNoGateway] = useState(false);
+  useEffect(() => { let alive = true; void fetchHostCapabilities().then(host => { if (!alive) return; if (host && !host.gateway) { setNoGateway(true); return; } void fetchAuthStatus().then(value => { if (alive) setAuth(value); }); }); return () => { alive = false; }; }, []);
   useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   useEffect(() => () => { controllerRef.current?.abort(); }, []);
   useEffect(() => { setEditingBeat(false); }, [selectedId]);
@@ -200,7 +202,7 @@ export function ProductionPanel({ script, onApply, onSelectScene, onBusyChange }
       <div className="production-brief-controls"><label>목표 분량<select aria-label="목표 플레이 시간" value={target} disabled={busy} onChange={event => setTarget(Number(event.target.value))}><option value={30}>30분 · 중편</option><option value={60}>60분 · 장편</option><option value={90}>90분 · 장편</option><option value={120}>120분 · 장편</option><option value={180}>180분 · 장편</option></select></label><label>읽기 속도<select aria-label="읽기 속도" value={readingSpeed} disabled={busy} onChange={event => setReadingSpeed(Number(event.target.value))}><option value={240}>천천히 · 240자/분</option><option value={320}>보통 · 320자/분</option><option value={400}>빠르게 · 400자/분</option></select></label><button type="submit" className="production-primary" disabled={controlsDisabled || blocked || !brief.trim()} data-testid="production-outline"><Icon name="spark" />{busy ? "작업 중…" : plan ? "새 장편 설계 생성" : "장편 설계 생성"}</button></div>
       <p>AI가 전체 흐름을 먼저 설계합니다. 현재 작품은 ‘원고 적용’을 누를 때까지 유지되며, 새 계획 생성 시 이전 계획을 자동 백업합니다.</p>
     </form>}
-    {!authenticated && <div className="production-alert"><Icon name="spark" /><span>{auth ? "AI 연결이 필요합니다. AI 어시스턴트에서 로그인한 뒤 연결을 다시 확인하세요." : "AI 연결을 확인하고 있습니다…"}</span><button type="button" disabled={busy} onClick={() => { void fetchAuthStatus().then(setAuth); }}>연결 확인</button></div>}
+    {!authenticated && <div className="production-alert"><Icon name="spark" /><span>{noGateway ? "이 배포에는 AI 서버가 없어 제작실을 쓸 수 없습니다." : auth ? "AI 연결이 필요합니다. AI 어시스턴트에서 로그인한 뒤 연결을 다시 확인하세요." : "AI 연결을 확인하고 있습니다…"}</span>{!noGateway && <button type="button" disabled={busy} onClick={() => { void fetchAuthStatus().then(setAuth); }}>연결 확인</button>}</div>}
     {plan && <>
       <div className="production-progress"><div><span>{busy ? activity : saved ? `${completed}개 씬의 초안이 안전하게 저장되었습니다` : `${completed}개 씬 작성 · 로컬 저장 실패, 파일 백업 필요`}</span><strong>{Math.round(completed / totalScenes * 100)}%</strong></div><div role="progressbar" aria-label="씬 집필 진행률" aria-valuemin={0} aria-valuemax={totalScenes} aria-valuenow={completed}><i style={{ width: `${completed / totalScenes * 100}%` }} /></div><div className="production-queue-actions">{busy ? <button type="button" onClick={() => { controllerRef.current?.abort(); setNotice("중단을 요청했습니다. 이미 완료한 씬은 보존됩니다."); }}><Icon name="stop" />집필 중단</button> : <button type="button" className="production-primary" disabled={!authenticated || !saved || editingBeat || completed === totalScenes} onClick={runQueue} data-testid="production-run"><Icon name="spark" />{completed ? "남은 씬 이어서 집필" : "전체 씬 순차 집필"}</button>}<p>{totalScenes - completed}개 씬을 한 번씩 요청합니다. 오류가 발생하면 멈추며 새로고침 뒤에도 저장 지점에서 재개할 수 있습니다.</p></div></div>
       <div className="production-workbench"><div className="production-chapters">{chapters.map((chapter, index) => <section key={chapter}><h3><span>{String(index + 1).padStart(2, "0")}</span>{chapter}</h3>{plan.outline.scenes.filter(scene => scene.chapter === chapter).map(scene => { const state = plan.jobs[scene.id]!; return <button type="button" key={scene.id} onClick={() => setSelectedId(scene.id)} aria-pressed={selected?.id === scene.id} className={`production-scene ${selected?.id === scene.id ? "selected" : ""}`} data-testid={`production-scene-${scene.id}`}><span className={`production-dot ${state.status}`} /><span><strong>{scene.title}</strong><small>{scene.targetMinutes}분 목표 · {statuses[state.status]}{scene.ending ? " · END" : scene.choices ? " · 분기" : ""}</small></span>{state.draft && <em>{(sceneCharacters(state.draft.scene) / plan.charsPerMinute).toFixed(1)}분</em>}</button>; })}</section>)}</div>

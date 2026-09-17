@@ -14,6 +14,10 @@ interface Props {
   readonly onChange: (script: VnScript) => void;
   /** 설치 후 아트 라이브러리가 새 카드를 바로 보여 줄 수 있게 한다. */
   readonly onInstalled?: (artworks: readonly Artwork[]) => void;
+  /** 지정하면 종류 선택을 숨기고 그 종류만 보여 준다 — 음원 보관함의 "소리" 전용 패널처럼. */
+  readonly fixedKind?: keyof typeof KIND_LABELS;
+  /** 패널이 화면에 둘 이상 있을 때 구분한다. */
+  readonly panelTestId?: string;
 }
 
 const KIND_LABELS = { all: "전체", stage: "무대", character: "인물", sound: "소리" } as const;
@@ -24,10 +28,11 @@ const LICENSE_LABELS = { downloadable: "자유 다운로드", attribution: "출�
  * losia.online 은 CORS 때문에 게이트웨이 프록시(/api/store/*)를 지난다.
  * 설치는 파일을 브라우저 보관함에 넣고 프로젝트 아트로 등록한다 — 플레이어와 ZIP 번들이 같은 경로를 쓴다.
  */
-export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled }: Props) {
+export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled, fixedKind, panelTestId = "store-panel" }: Props) {
   const [sourceId, setSourceId] = useState<string>(STORE_SOURCES[0]!.id);
   const source = storeSourceById(sourceId);
-  const [kind, setKind] = useState<keyof typeof KIND_LABELS>("all");
+  const [kindChoice, setKind] = useState<keyof typeof KIND_LABELS>(fixedKind ?? "all");
+  const kind = fixedKind ?? kindChoice;
   const [sort, setSort] = useState<"new" | "use" | "name">("new");
   const [query, setQuery] = useState("");
   const [applied, setApplied] = useState("");
@@ -36,6 +41,9 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
   const [take, setTake] = useState(12);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // 설치 실패는 카탈로그 조회 실패와 다른 상태다 — 같은 변수에 쓰면
+  // 목록 뱃지가 '연결 실패'로 바뀌어 스토어가 죽은 것처럼 보인다.
+  const [installError, setInstallError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
   const [brokenThumbs, setBrokenThumbs] = useState<ReadonlySet<string>>(() => new Set());
@@ -81,7 +89,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     const controller = new AbortController();
     const requestEpoch = projectEpoch;
     installRef.current = controller;
-    setBusy(item.id); setError(""); setMessage(""); setProgress({ done: 0, total: 1 });
+    setBusy(item.id); setInstallError(""); setMessage(""); setProgress({ done: 0, total: 1 });
     try {
       const result = await installStoreAsset(source, item.id, {
         ...(item.kind === "character" && characterId ? { characterId } : {}),
@@ -98,6 +106,12 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       // 무대에는 아무것도 뜨지 않는다 — 원본이 초록 배경이면 그 색도 같이 걸어야 초록 상자가 안 보인다.
       const chroma = result.manifest.chromaKey;
       const expressions = Object.fromEntries(result.artworks.flatMap(asset => asset.kind === "character" && asset.expression ? [[asset.expression, asset.url]] : []));
+      // base 만 있고 무표정 표정이 없는 자산은 base 를 neutral 로 채운다 — 안 채우면 스프라이트가
+      // 존재하지 않는 내장 경로로 빠져 무대에 아무것도 안 뜬다.
+      if (expressions["neutral"] === undefined) {
+        const base = result.artworks.find(asset => asset.kind === "character" && asset.expression === undefined);
+        if (base) expressions["neutral"] = base.url;
+      }
       const touched = characterId !== "" && result.artworks.some(asset => asset.kind === "character");
       const keyed = touched && chroma !== undefined;
       const next = parseScript({
@@ -115,7 +129,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       const parts = [result.artworks.length ? `이미지 ${result.artworks.length}개` : "", result.audio.length ? `음원 ${result.audio.length}개` : ""].filter(Boolean).join(" · ");
       setMessage(`‘${item.name}’ 설치 완료 — ${parts}. 라이브러리에서 장면에 적용하세요.${Object.keys(expressions).length ? ` 표정 ${Object.keys(expressions).length}종을 이 캐릭터에 연결했습니다.` : ""}${keyed ? " 원본이 단색 배경이라 배경 제거도 켰습니다." : ""}${result.ignored.length ? ` (지원하지 않는 역할 ${result.ignored.length}개는 건너뛰었습니다)` : ""}`);
     } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause));
+      if (!controller.signal.aborted) setInstallError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       if (installRef.current === controller) { installRef.current = null; setBusy(""); setProgress(null); }
     }
@@ -123,7 +137,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
 
   const installedIds = new Set((script.assets ?? []).filter(asset => asset.id.startsWith(`${source.idPrefix}-`)).map(asset => asset.id));
 
-  return <section className="art-section art-store" data-testid="store-panel">
+  return <section className="art-section art-store" data-testid={panelTestId}>
     <div className="art-section-title"><Icon name="download" /><h2>에셋 스토어</h2><span className={loading ? "" : error ? "is-error" : "is-connected"}>{loading ? "불러오는 중" : error ? "연결 실패" : `${total}개`}</span></div>
     <div className="art-store-sources" role="tablist" aria-label="에셋 출처">
       {STORE_SOURCES.map(option => <button
@@ -133,7 +147,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
         aria-selected={option.id === sourceId}
         className={`art-store-source ${option.id === sourceId ? "is-active" : ""}`}
         data-testid={`store-source-${option.id}`}
-        onClick={() => { if (option.id === sourceId) return; setSourceId(option.id); setItems([]); setTotal(0); setError(""); setMessage(""); setTake(12); }}
+        onClick={() => { if (option.id === sourceId) return; setSourceId(option.id); setItems([]); setTotal(0); setError(""); setInstallError(""); setMessage(""); setTake(12); }}
       >{option.label}</button>)}
     </div>
     <form className="art-store-search" onSubmit={event => { event.preventDefault(); setApplied(query.trim()); }}>
@@ -141,7 +155,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       <button type="submit" className="art-text-button">검색</button>
     </form>
     <div className="art-store-filters">
-      <label>종류<select aria-label="스토어 종류" data-testid="store-kind" value={kind} onChange={event => setKind(event.target.value as keyof typeof KIND_LABELS)}>{Object.entries(KIND_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      {fixedKind === undefined && <label>종류<select aria-label="스토어 종류" data-testid="store-kind" value={kind} onChange={event => setKind(event.target.value as keyof typeof KIND_LABELS)}>{Object.entries(KIND_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
       <label>정렬<select aria-label="스토어 정렬" value={sort} onChange={event => setSort(event.target.value as typeof sort)}><option value="new">최신</option><option value="use">사용순</option><option value="name">이름</option></select></label>
     </div>
     {kind !== "stage" && kind !== "sound" && <label className="art-store-character">설치할 캐릭터<select aria-label="스토어 캐릭터" data-testid="store-character" value={characterId} onChange={event => setCharacterId(event.target.value)}>{script.characters.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}</select></label>}
@@ -164,6 +178,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       {items.length > 0 && items.length < total && <button type="button" className="art-text-button" data-testid="store-more" onClick={() => setTake(value => value + 12)}>더 보기 ({items.length}/{total})</button>}
     </div>
     {error && <p className="art-store-error" role="alert">{error}</p>}
+    {installError && <p className="art-store-error" role="alert" data-testid="store-install-error">{installError}</p>}
     {message && <p className="art-store-message" role="status" data-testid="store-status">{message}</p>}
   </section>;
 }

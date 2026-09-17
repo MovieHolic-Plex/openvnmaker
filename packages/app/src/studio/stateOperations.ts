@@ -16,7 +16,7 @@ function renameKeys<T>(record: Record<string, T>, from: string, to: string): Rec
   return Object.fromEntries(Object.entries(record).map(([key, value]) => [key === from ? to : key, value]));
 }
 
-/** 상태 변수 이름을 바꾸고 초기값·대사 조건·선택지 조건·선택 결과의 참조를 함께 갱신한다. */
+/** 상태 변수 이름을 바꾸고 초기값·대사 조건·선택지 조건·선택 결과·장면 진입 변수·조건 경로의 참조를 함께 갱신한다. */
 export function renameFlag(script: VnScript, from: string, to: string): VnScript {
   const flags = script.flags ?? {};
   if (!Object.hasOwn(flags, from)) throw new Error("바꿀 변수를 찾을 수 없습니다.");
@@ -31,5 +31,11 @@ export function renameFlag(script: VnScript, from: string, to: string): VnScript
     if (row.add) next = { ...next, add: renameKeys(row.add, from, to) };
     return next;
   };
-  return parseScript({ ...script, flags: renameKeys(flags, from, to), scenes: script.scenes.map(scene => ({ ...scene, lines: scene.lines.map(line), ...(scene.choices ? { choices: scene.choices.map(choice) } : {}) })) });
+  return parseScript({ ...script, flags: renameKeys(flags, from, to), scenes: script.scenes.map(scene => ({
+    ...scene,
+    lines: scene.lines.map(line),
+    ...(scene.set ? { set: renameKeys(scene.set, from, to) } : {}),
+    ...(scene.routes ? { routes: scene.routes.map(route => route.when ? { ...route, when: renameCondition(route.when, from, to) } : route) } : {}),
+    ...(scene.choices ? { choices: scene.choices.map(choice) } : {}),
+  })) });
 }

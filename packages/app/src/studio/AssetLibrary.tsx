@@ -2,6 +2,7 @@ import { ArtImage } from "../components/ArtImage.js";
 import { useEffect, useRef, useState } from "react";
 import { EXPRESSIONS, type Artwork, type Scene, type VnScript } from "@vnmaker/content";
 import { fetchAuthStatus, generateImage, type ImageBackend, type ImageBackendInfo } from "../api/gateway.js";
+import { fetchHostCapabilities } from "../api/host.js";
 import { Icon } from "./Icon.js";
 import { applyArtwork, artPrompt, assetUsage, createGeneratedArtwork, DEFAULT_ART_DIRECTION, libraryAssets, pendingArtScenes, recoveredArtwork, registerArtwork, rememberArtwork, sceneArtBrief, unregisterArtwork, type RecoveredArtwork } from "./assets.js";
 import { removeUnreferencedAssets } from "./assetCleanup.js";
@@ -11,6 +12,7 @@ import "./assets.css";
 import { ArtImportButton } from "./ArtImportButton.js";
 import { StorePanel } from "./StorePanel.js";
 import { MediaProvenanceEditor } from "./MediaProvenanceEditor.js";
+import { LosiaAssetPublish } from "./LosiaAssetPublish.js";
 
 interface Props {
   readonly generationEnabled?: boolean;
@@ -55,14 +57,18 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
     // 수동 편집만 하는 동안 내부 API 를 부르지 않는다 — 아트 작업 공간을 열었을 때 확인한다.
     if (!generationEnabled || !active) return;
     let alive = true;
-    void fetchAuthStatus().then(status => { if (alive) setAuthenticated(status.authenticated); });
-    void fetch("/api/image/config").then(async (response): Promise<Record<string, unknown>> => response.ok ? await response.json() as Record<string, unknown> : {}).then(config => {
+    void fetchHostCapabilities().then(host => {
+      // 게이트웨이 없는 배포에는 생성 엔드포인트가 없다 — 죽은 프로브를 보내지 않는다.
+      if (!alive || (host && !host.gateway)) return;
+      void fetchAuthStatus().then(status => { if (alive) setAuthenticated(status.authenticated); });
+      void fetch("/api/image/config").then(async (response): Promise<Record<string, unknown>> => response.ok ? await response.json() as Record<string, unknown> : {}).then(config => {
       if (!alive) return;
       if (typeof config["model"] === "string") setModel(config["model"]);
       if (config["authRequired"] === false) setAuthRequired(false);
       if (config["available"] === false) setBackendAvailable(false);
       if (Array.isArray(config["backends"])) { const list = config["backends"] as ImageBackendInfo[]; setBackends(list); setBackend(prev => prev ?? (config["backend"] as ImageBackend | undefined) ?? list[0]?.id); }
-    }).catch(() => {});
+      }).catch(() => {});
+    });
     return () => { alive = false; controllerRef.current?.abort(); };
   }, [generationEnabled, active]);
   useEffect(() => { setBrief(sceneArtBrief(script, scene, kind)); }, [scene.id, scene.artBrief, kind]);
@@ -169,7 +175,7 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
       {selected && <MediaProvenanceEditor key={selected.id} value={selected.provenance} onChange={provenance => onChange(registerArtwork(script, { ...selected, provenance }))} />}
       <StorePanel active={active} script={script} projectEpoch={projectEpoch} onChange={onChange} onInstalled={artworks => { const first = artworks[0]; if (first) { setSelectedId(first.id); setFilter(first.kind); setSearch(""); } }} />
       <ArtImportButton script={script} onImport={rows=>{let next=script;for(const asset of rows)next=registerArtwork(next,asset);onChange(next);setSelectedId(rows[0]!.id);setFilter("all");setSearch("");setMessage(`${rows.length}개 원화를 가져왔습니다. 장면에 적용할 이미지를 선택하세요.`);}}/>
-      {selected && <section className="art-selection"><div className="art-section-title"><Icon name="image" /><h2>선택한 이미지</h2><span>{kindLabels[selected.kind]}</span></div><ArtImage className={`art-selected-preview art-selected-preview--${selected.kind}`} src={selected.url} alt={selected.name} chromaKey={selectedCharacter?.chromaKey} testId="art-selected-preview" /><strong>{selected.name}</strong><p>{selectedContext}{selected.kind === "character" ? "에 적용됩니다." : ""}</p><button className="art-primary" type="button" data-testid="art-apply" onClick={() => apply(selected)}><Icon name="check" />{selected.kind === "character" ? (selected.expression ? "이 표정에 적용" : "현재 장면에 포즈 적용") : "현재 장면에 적용"}</button>{script.assets?.some(saved => saved.id === selected.id) && <button className="art-secondary" type="button" data-testid="art-remove" disabled={assetUsage(script, selected) > 0} title={assetUsage(script, selected) > 0 ? "장면·배우의 이미지 지정을 먼저 바꾸세요." : "라이브러리에서 제거"} onClick={() => void remove(selected)}><Icon name="trash" size={13} />{assetUsage(script, selected) > 0 ? "사용 중이라 제거할 수 없음" : "라이브러리에서 제거"}</button>}</section>}
+      {selected && <section className="art-selection"><div className="art-section-title"><Icon name="image" /><h2>선택한 이미지</h2><span>{kindLabels[selected.kind]}</span></div><ArtImage className={`art-selected-preview art-selected-preview--${selected.kind}`} src={selected.url} alt={selected.name} chromaKey={selectedCharacter?.chromaKey} testId="art-selected-preview" /><strong>{selected.name}</strong><p>{selectedContext}{selected.kind === "character" ? "에 적용됩니다." : ""}</p><button className="art-primary" type="button" data-testid="art-apply" onClick={() => apply(selected)}><Icon name="check" />{selected.kind === "character" ? (selected.expression ? "이 표정에 적용" : "현재 장면에 포즈 적용") : "현재 장면에 적용"}</button>{script.assets?.some(saved => saved.id === selected.id) && <button className="art-secondary" type="button" data-testid="art-remove" disabled={assetUsage(script, selected) > 0} title={assetUsage(script, selected) > 0 ? "장면·배우의 이미지 지정을 먼저 바꾸세요." : "라이브러리에서 제거"} onClick={() => void remove(selected)}><Icon name="trash" size={13} />{assetUsage(script, selected) > 0 ? "사용 중이라 제거할 수 없음" : "라이브러리에서 제거"}</button>}<LosiaAssetPublish target={{ type: "image", asset: selected }} script={script} /></section>}
       <section className="art-direction"><div className="art-section-title"><Icon name="settings" /><h2>작품 아트 디렉션</h2></div><textarea aria-label="작품 아트 디렉션" value={script.artDirection ?? DEFAULT_ART_DIRECTION} placeholder="화풍, 색감, 조명과 캐릭터 외형을 적어 주세요." onChange={event => onChange({ ...script, artDirection: event.target.value })} maxLength={3000} rows={4} /><p>현재 작품의 색감, 화풍과 인물 외형을 정리한 제작 기준입니다.</p></section>
       {generationEnabled && <section className="art-generation"><div className="art-section-title"><Icon name="spark" /><h2>이미지 스튜디오</h2><span className={ready ? "is-connected" : ""}>{needsAuth ? (authenticated ? "연결됨" : "로그인 필요") : (canUseBackend ? (backend === "codex" ? "Codex 준비됨" : "준비됨") : (backend === "codex" ? "Codex 없음" : "사용 불가"))}</span></div>
         {backends.length > 1 && <label>생성 엔진<select aria-label="이미지 생성 엔진" value={backend ?? ""} disabled={busy} data-testid="art-backend" onChange={event => setBackend(event.target.value as ImageBackend)}>{backends.map(info => <option key={info.id} value={info.id} disabled={!info.available}>{info.id === "codex" ? "Codex (로컬 ChatGPT)" : "Agy (Google Gemini)"}{info.available ? "" : " · 사용 불가"}</option>)}</select></label>}

@@ -15,6 +15,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import type { Socket } from "node:net";
 import { extname, resolve, sep } from "node:path";
+import { Readable } from "node:stream";
+import { LOSIA_UPLOAD_PATHS } from "../../gateway/src/config.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -141,8 +143,11 @@ async function serveStatic(root: string, req: IncomingMessage, res: ServerRespon
 
 /** Node 요청을 Hono 의 fetch 로 넘긴다. Vite 개발 서버의 mountGateway 와 같은 동작이다. */
 async function serveGateway(gateway: HonoLike, bodyMax: number, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const pathname = (req.url ?? "/").split("?")[0] ?? "/";
+  // losia 업로드는 수백 MB 가 될 수 있다 — 버퍼링 상한 대신 본문을 스트림으로 흘린다(상한은 게이트웨이 라우트가 강제).
+  const streamUpload = LOSIA_UPLOAD_PATHS.has(pathname) && req.method === "POST";
   const chunks: Buffer[] = [];
-  if (req.method !== "GET" && req.method !== "HEAD") {
+  if (req.method !== "GET" && req.method !== "HEAD" && !streamUpload) {
     // 버퍼링 단계에서도 같은 상한을 둔다 — 다 읽고 나서 자르면 이미 늦다.
     let size = 0;
     for await (const chunk of req) {
@@ -164,8 +169,10 @@ async function serveGateway(gateway: HonoLike, bodyMax: number, req: IncomingMes
   const request = new Request(`http://${host}${req.url ?? "/"}`, {
     method: req.method ?? "GET",
     headers,
-    ...(chunks.length > 0 ? { body: Buffer.concat(chunks) } : {}),
-  });
+    ...(streamUpload
+      ? { body: Readable.toWeb(req) as ReadableStream, duplex: "half" }
+      : chunks.length > 0 ? { body: Buffer.concat(chunks) } : {}),
+  } as RequestInit);
   const response = await gateway.fetch(request);
   const body = Buffer.from(await response.arrayBuffer());
   const out: Record<string, string> = {};

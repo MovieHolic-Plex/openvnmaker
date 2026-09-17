@@ -90,3 +90,71 @@ test("edges 를 왕복한다", async () => {
   assert.equal(edges[0]?.from, "hello");
   assert.equal(edges[0]?.to, "cafe-02");
 });
+
+const say = (id: string, extra: Record<string, unknown>[] = []) => ({
+  id,
+  beats: [{ op: "say" as const, who: null, text: `${id} 대사` }, ...extra],
+});
+
+test("GET /api/project/script 는 그래프를 컴파일해 검증된 원고를 준다", async () => {
+  const project = createMemoryProjectStore();
+  await project.writeNode(say("a"));
+  await project.writeNode(say("b", [{ op: "ending", title: "끝" }]));
+  await project.writeEdges([{ from: "a", to: "b" }]);
+  const app = createApp({ store: createMemoryStore(null), project });
+  const res = await app.request("/api/project/script");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { script: { start: string; scenes: { id: string; next?: string; ending?: string }[] }; issues: unknown[] };
+  assert.equal(body.script.start, "a");
+  assert.equal(body.script.scenes[0]?.next, "b");
+  assert.equal(body.script.scenes[1]?.ending, "끝");
+  assert.ok(Array.isArray(body.issues));
+});
+
+test("GET /api/project/script — 조건 엣지는 routes 로, set 비트는 장면 진입 플래그로 컴파일된다", async () => {
+  const project = createMemoryProjectStore();
+  await project.writeNode(say("a", [{ op: "set", vars: { metYuna: true } }]));
+  await project.writeNode(say("b", [{ op: "ending", title: "b끝" }]));
+  await project.writeNode(say("c", [{ op: "ending", title: "c끝" }]));
+  await project.writeEdges([{ from: "a", to: "b", when: { all: ["metYuna"] } } as never, { from: "a", to: "c" }]);
+  const app = createApp({ store: createMemoryStore(null), project });
+  const res = await app.request("/api/project/script");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { script: { scenes: { id: string; set?: unknown; routes?: unknown[]; next?: string }[] } };
+  const a = body.script.scenes.find((scene) => scene.id === "a");
+  assert.deepEqual(a?.set, { metYuna: true });
+  assert.deepEqual(a?.routes, [{ next: "b", when: { all: ["metYuna"] } }]);
+  assert.equal(a?.next, "c");
+});
+
+test("GET /api/project/script — 노드가 없거나 dangling 엣지면 400", async () => {
+  const empty = createApp({ store: createMemoryStore(null), project: createMemoryProjectStore() });
+  assert.equal((await empty.request("/api/project/script")).status, 400);
+  const project = createMemoryProjectStore();
+  await project.writeNode(say("a"));
+  await project.writeEdges([{ from: "a", to: "ghost" }]);
+  const app = createApp({ store: createMemoryStore(null), project });
+  const res = await app.request("/api/project/script");
+  assert.equal(res.status, 400);
+});
+
+test("PUT /api/project/edges — 양 끝 노드를 검증하고 문자열 when 을 정규화한다", async () => {
+  const project = createMemoryProjectStore();
+  await project.writeNode(say("a"));
+  await project.writeNode(say("b"));
+  const app = createApp({ store: createMemoryStore(null), project });
+  const bad = await app.request("/api/project/edges", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
+    body: JSON.stringify({ edges: [{ from: "a", to: "ghost" }] }),
+  });
+  assert.equal(bad.status, 400);
+  const ok = await app.request("/api/project/edges", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-VNMaker-Studio": "1" },
+    body: JSON.stringify({ edges: [{ from: "a", to: "b", when: "metYuna" }] }),
+  });
+  assert.equal(ok.status, 200);
+  const edges = await project.readEdges();
+  assert.deepEqual(edges[0]?.when, { all: ["metYuna"] });
+});

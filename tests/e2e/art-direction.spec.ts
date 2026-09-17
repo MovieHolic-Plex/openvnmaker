@@ -41,7 +41,8 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       expect(scene.lines[cue.index].text).toContain(cue.anchor);
       await page.evaluate(({ positionKey, cue, flags }) => localStorage.setItem(positionKey, JSON.stringify({ sceneId: cue.scene, lineIndex: cue.index, view: "stage", flags })), { positionKey, cue, flags: novel.flags });
       await page.reload();
-      await page.getByTestId(`studio-line-${cue.index}`).click();
+      // 스위트 부하에서 스튜디오 부팅이 15초 기본 대기를 넘기는 경우가 있어 이 클릭만 넉넉히 기다린다.
+      await page.getByTestId(`studio-line-${cue.index}`).click({ timeout: 60_000 });
       await expect(page.getByTestId("dialogue-text")).toHaveText(scene.lines[cue.index].text);
       const stage = page.getByTestId("studio-stage");
       const expectedUrl = `/assets/art/${item.name}.png`;
@@ -114,6 +115,9 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       localStorage.setItem(projectKey, JSON.stringify(novel));
     }, { novel, projectKey });
     await page.goto("/studio.html");
+    // 첫 마운트가 기본 위치를 쓰기 전에 기다린다 — 그렇지 않으면 앱의 position 저장이
+    // 아래 evaluate 덮어쓰기를 되돌려 overview 로 복원된다.
+    await expect(page.getByLabel("작품 제목")).toHaveValue(novel.title);
     for (const item of cases.filter(c => c.kind === "cg")) {
       await page.evaluate(({ positionKey, cue, flags }) => localStorage.setItem(positionKey, JSON.stringify({ sceneId: cue.scene, lineIndex: cue.index, view: "stage", flags })), { positionKey, cue: item.cue, flags: novel.flags });
       await page.reload();

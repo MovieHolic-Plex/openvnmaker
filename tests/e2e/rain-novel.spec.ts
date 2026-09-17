@@ -33,20 +33,26 @@ test("old projects/checkpoints/saves are removed once; new edits survive reload;
   });
   await page.goto("/studio.html");
   await expect(page.getByLabel("작품 제목")).toHaveValue(script.title);
-  expect(await page.evaluate(() => localStorage.getItem("vnmaker.studio.production.v1"))).toBeNull();
-  expect(await page.evaluate(() => localStorage.getItem("vnmaker:save"))).toBeNull();
+  // 손상 원고 때문에 사용자 데이터를 지우지 않는다 — 체크포인트와 구형식 세이브는 그대로 남는다.
+  expect(await page.evaluate(() => localStorage.getItem("vnmaker.studio.production.v1"))).toBe('{"title":"이전 초안"}');
+  expect(await page.evaluate(() => localStorage.getItem("vnmaker:save"))).toBe('{"sceneId":"old-scene"}');
   expect(await page.evaluate(() => localStorage.getItem("vnmaker:settings"))).toContain("0.3");
+  // 손상 원고 경고가 뜬 상태에서는 자동 저장이 잠겨 있다 — "현재 작품 저장"으로 확인 후 편집한다.
+  await page.getByRole("button", { name: "현재 작품 저장" }).click();
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.getByTestId("workspace-stage").click();
   await page.getByTestId("studio-line-1").click();
   await page.getByTestId("studio-line-text").fill("새 작품의 저장을 검증하는 독립된 대사입니다.");
+  await expect(page.getByTestId("studio-save-state")).toHaveText("로컬 저장됨");
   await page.reload();
   await expect(page.getByTestId("workspace-stage")).toHaveClass(/is-active/);
   await expect(page.getByTestId("studio-line-1")).toHaveClass(/is-selected/);
   await expect(page.getByTestId("studio-line-text")).toHaveValue("새 작품의 저장을 검증하는 독립된 대사입니다.");
   await page.getByTestId("workspace-assets").click();
   await expect(page.getByTestId("art-library")).toBeVisible();
-  await expect(page.getByTestId("art-generate")).toHaveCount(0);
-  expect(apiCalls).toEqual([]);
+  // 이미지 스튜디오는 켜져 있지만 수동 편집만으로 생성 요청은 절대 나가지 않는다(설정/인증 조회만 허용).
+  await expect(page.getByTestId("art-generate")).toBeVisible();
+  expect(apiCalls.filter(url => url.includes("/api/image/generate"))).toEqual([]);
 });
 
 for (let route = 0; route < 8; route++) test(`complete published path ${route + 1} plays through three choices to correct ending`, async ({ page }) => {

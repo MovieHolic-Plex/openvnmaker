@@ -105,7 +105,6 @@ test("menu->jump->ending 그래프를 멀티씬 VnScript 로 컴파일한다", (
   assert.equal(intro.lines[0]?.sfx, undefined);
   assert.equal(intro.lines[1]?.speaker, "me");
   assert.equal(intro.lines[1]?.sfx, "door-open");
-  // set 비트는 컴파일 타임 전역 폴딩이 의미를 깨서 거부된다 — flags 는 더 이상 나오지 않는다.
   assert.equal(script.flags, undefined);
 
   const park = script.scenes[1];
@@ -152,25 +151,67 @@ test("엣지 없이도 jump 로 next 를 잇는다", () => {
   assert.equal(script.scenes[0]?.next, "roof-03");
 });
 
-/* 의미가 정해지지 않은 그래프 기능은 조용히 깨는 대신 거부한다 (2026-09 리뷰 #8). */
+/* 분기 의미 (2026-09 결정): 조건 엣지는 순서대로 평가되는 scene.routes 가 되고,
+   무조건 엣지는 폴백 next 다. 무조건 출구는 하나만 허용한다. */
 
 const sayOnly = (id: string): StoryNode => ({
   id,
   beats: [{ op: "say", who: null, text: `${id} 대사` }],
 });
 
-test("노드에서 나가는 엣지가 여러 개면 거부한다 — 첫 엣지만 살리는 건 의미 파괴", () => {
+test("조건 엣지는 scene.routes 로 컴파일된다 — 문자열 플래그명은 {all:[name]} 으로 읽는다", () => {
+  const script = compileGraph(
+    [sayOnly("a"), sayOnly("b"), sayOnly("c")],
+    [
+      { from: "a", to: "b", when: { all: ["metYuna"] } },
+      { from: "a", to: "c" },
+    ],
+  );
+  const a = script.scenes[0];
+  assert.ok(a);
+  assert.deepEqual(a.routes, [{ next: "b", when: { all: ["metYuna"] } }]);
+  assert.equal(a.next, "c");
+});
+
+test("무조건 엣지가 둘이면 거부한다 — 뒤는 영원히 도달 불가", () => {
   assert.throws(
     () => compileGraph([sayOnly("a"), sayOnly("b"), sayOnly("c")], [{ from: "a", to: "b" }, { from: "a", to: "c" }]),
-    /여러 개/,
+    /무조건 엣지가 여러 개/,
   );
 });
 
-test("엣지 when 조건은 의미 미정이라 거부한다", () => {
+test("표현식형 문자열 when 은 거부한다 — 플래그명 문자열만 {all} 로 읽는다", () => {
   assert.throws(
-    () => compileGraph([sayOnly("a"), sayOnly("b")], [{ from: "a", to: "b", when: "metYuna" }]),
-    /when/,
+    () => compileGraph([sayOnly("a"), sayOnly("b")], [{ from: "a", to: "b", when: "metYuna && !done" } as StoryEdge]),
+    /문자열 when/,
   );
+});
+
+test("엔딩과 조건 경로는 공존한다 — 경로 실패 시 엔딩으로 폴백", () => {
+  const node: StoryNode = {
+    id: "a",
+    beats: [
+      { op: "say", who: null, text: "끝이 보인다" },
+      { op: "ending", title: "조용한 엔딩" },
+    ],
+  };
+  const script = compileGraph([node, sayOnly("b")], [{ from: "a", to: "b", when: { all: ["metYuna"] } }]);
+  const a = script.scenes[0];
+  assert.ok(a);
+  assert.deepEqual(a.routes, [{ next: "b", when: { all: ["metYuna"] } }]);
+  assert.equal(a.ending, "조용한 엔딩");
+  assert.equal(a.next, undefined);
+});
+
+test("엔딩과 무조건 출구가 공존하면 거부한다 — 어느 쪽이든 죽는다", () => {
+  const node: StoryNode = {
+    id: "a",
+    beats: [
+      { op: "say", who: null, text: "끝이 보인다" },
+      { op: "ending", title: "조용한 엔딩" },
+    ],
+  };
+  assert.throws(() => compileGraph([node, sayOnly("b")], [{ from: "a", to: "b" }]), /엔딩과 무조건 출구/);
 });
 
 test("엣지가 없는 노드를 가리키면 거부한다", () => {
@@ -180,21 +221,101 @@ test("엣지가 없는 노드를 가리키면 거부한다", () => {
   );
 });
 
-test("menu.when 은 cond 의미가 미정이라 거부한다", () => {
-  const node: StoryNode = {
-    id: "a",
-    beats: [{ op: "menu", choices: [{ text: "간다", to: "b", when: "metYuna" }] }],
-  };
-  assert.throws(() => compileGraph([node, sayOnly("b")], []), /menu\.when/);
+test("조건 경로가 없는 노드를 가리키면 거부한다", () => {
+  assert.throws(
+    () => compileGraph([sayOnly("a")], [{ from: "a", to: "ghost", when: { all: ["x"] } }]),
+    /없는 노드/,
+  );
 });
 
-test("set 비트는 실행 시점 의미가 미정이라 거부한다 — 전역 폴딩 금지", () => {
+test("선택지와 다른 출구가 공존하면 거부한다 — 분기는 선택지만 정한다", () => {
   const node: StoryNode = {
     id: "a",
     beats: [
-      { op: "say", who: null, text: "대사" },
-      { op: "set", vars: { metYuna: true } },
+      { op: "say", who: null, text: "고른다" },
+      { op: "menu", choices: [{ text: "간다", to: "b" }] },
     ],
   };
-  assert.throws(() => compileGraph([node], []), /set 비트/);
+  assert.throws(() => compileGraph([node, sayOnly("b")], [{ from: "a", to: "b" }]), /선택지와 다른 출구/);
+});
+
+test("menu.when 문자열은 플래그 조건으로, set 비트는 장면 진입 플래그로 컴파일된다", () => {
+  const node: StoryNode = {
+    id: "a",
+    beats: [
+      { op: "say", who: null, text: "고른다" },
+      { op: "set", vars: { visited: true } },
+      { op: "menu", choices: [
+        // 직접 만든 노드는 파서를 우회한다 — 구버전 문자열 when 도 컴파일에서 정규화돼야 한다.
+        { text: "간다", to: "b", when: "metYuna" as unknown as import("../src/index.js").LineCondition },
+        { text: "구조화", to: "c", when: { compare: [{ flag: "score", op: "gte", value: 3 }] } },
+      ] },
+    ],
+  };
+  const script = compileGraph([node, sayOnly("b"), sayOnly("c")], []);
+  const a = script.scenes[0];
+  assert.ok(a);
+  assert.deepEqual(a.set, { visited: true });
+  assert.deepEqual(a.choices?.[0]?.when, { all: ["metYuna"] });
+  assert.deepEqual(a.choices?.[1]?.when, { compare: [{ flag: "score", op: "gte", value: 3 }] });
+});
+
+test("say 비트가 없는 노드는 거부한다 — 빈 장면은 만들 수 없다", () => {
+  const node: StoryNode = {
+    id: "a",
+    beats: [{ op: "menu", choices: [{ text: "간다", to: "b" }] }],
+  };
+  assert.throws(() => compileGraph([node, sayOnly("b")], []), /say 비트/);
+});
+
+test("등록되지 않은 화자는 등장인물로 올려 parseScript 를 통과하게 한다", () => {
+  const script = compileGraph([sayOnly("a")], [], []);
+  assert.equal(script.characters.length, 0);
+  const withSpeaker = compileGraph([{
+    id: "a",
+    beats: [
+      { op: "say", who: "yuna", text: "안녕" },
+      { op: "say", who: "me", text: "나" },
+      { op: "say", who: null, text: "내레이션" },
+    ],
+  }], [], []);
+  assert.deepEqual(withSpeaker.characters.map(actor => actor.id), ["yuna"]);
+});
+
+test("URL 자산 — scene.bg 가 /로 시작하면 backgroundUrl 로 나간다", () => {
+  const url = "/assets/user/" + "a".repeat(64) + ".png";
+  const script = compileGraph([parseNode({
+    id: "u-01",
+    beats: [
+      { op: "scene", bg: url, cg: url },
+      { op: "say", who: null, text: "설치한 배경이다.", bg: url, cg: url },
+      { op: "ending", title: "끝" },
+    ],
+  })], [], []);
+  const scene = script.scenes[0]!;
+  assert.equal(scene.background, "title", "배경 id 자리는 내장 기본값을 유지한다");
+  assert.equal(scene.backgroundUrl, url);
+  assert.equal(scene.cgUrl, url);
+  assert.equal(scene.cg, undefined);
+  assert.equal(scene.lines[0]!.backgroundUrl, url);
+  assert.equal(scene.lines[0]!.cgUrl, url);
+});
+
+test("URL 자산 — 잘못된 주소는 컴파일이 아니라 파싱에서 거부한다", () => {
+  assert.throws(() => parseNode({ id: "x", beats: [{ op: "say", who: null, text: "t", bg: "https://evil.example/x.png" }] }), /say\.bg/);
+  assert.throws(() => parseNode({ id: "x", beats: [{ op: "show", who: "a", slot: "left", expression: "neutral", image: "relative.png" }] }), /show\.image/);
+});
+
+test("show.image 는 스프라이트 poseUrl 로 나간다", () => {
+  const url = "/assets/user/" + "b".repeat(64) + ".webp";
+  const script = compileGraph([parseNode({
+    id: "u-02",
+    beats: [
+      { op: "scene", bg: "title" },
+      { op: "show", who: "yuna", slot: "left", expression: "neutral", image: url },
+      { op: "say", who: "yuna", text: "임의 포즈다." },
+      { op: "ending", title: "끝" },
+    ],
+  })], [], []);
+  assert.equal(script.scenes[0]!.sprites?.[0]?.poseUrl, url);
 });

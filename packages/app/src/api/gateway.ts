@@ -16,7 +16,7 @@ export interface GenerateResponse {
   readonly unofficial: boolean;
 }
 
-async function readJson(res: Response): Promise<Record<string, unknown>> {
+export async function readJson(res: Response): Promise<Record<string, unknown>> {
   const text = await res.text();
   try {
     return JSON.parse(text) as Record<string, unknown>;
@@ -75,6 +75,20 @@ export async function generateLine(prompt?: string, signal?: AbortSignal): Promi
     host: typeof body["host"] === "string" ? body["host"] : "",
     unofficial: body["unofficial"] === true,
   };
+}
+
+/** 게이트웨이 프로젝트 그래프를 컴파일한 원고. issues 는 auditScript 결과다. */
+export interface CompiledProject {
+  readonly script: unknown;
+  readonly issues: readonly { readonly severity?: string; readonly message?: string; readonly sceneId?: string }[];
+}
+
+export async function fetchProjectScript(signal?: AbortSignal): Promise<CompiledProject> {
+  const res = await fetch("/api/project/script", { headers: STUDIO_HEADER, signal: signal ?? AbortSignal.timeout(15_000) });
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(String(body["error"] ?? `project script ${res.status}`));
+  if (body["script"] === null || typeof body["script"] !== "object") throw new Error("컴파일된 원고가 없다");
+  return { script: body["script"], issues: Array.isArray(body["issues"]) ? (body["issues"] as CompiledProject["issues"]) : [] };
 }
 
 export async function saveNode(node: unknown): Promise<string> {

@@ -23,6 +23,8 @@ interface Props {
   /** 씬 ID 변경. 실패 사유를 돌려주면 필드 아래에 표시한다. */
   onRenameScene?: (id: string) => string | null;
   textRef?: RefObject<HTMLTextAreaElement | null>;
+  /** 스토어 설치가 끝난 뒤 프로젝트가 바뀌었는지 가려 내는 시대 값. */
+  projectEpoch?: number;
 }
 
 /** 장면 연결 select 의 옵션 목록. id·제목 서명이 같으면 다시 만들지 않는다 — 장편에서 키 입력마다 256개 option 을 만들 이유가 없다. */
@@ -37,7 +39,7 @@ function SceneIdField({ sceneId, onRename }: { sceneId: string; onRename: (id: s
   return <label className="studio-field">씬 ID<input data-testid="studio-scene-id" aria-label="씬 ID" value={draft} maxLength={64} spellCheck={false} onChange={event => { setDraft(event.target.value); setError(""); }} onBlur={commit} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); commit(); } if (event.key === "Escape") { setDraft(sceneId); setError(""); } }} />{error ? <small role="alert" className="field-error">{error}</small> : <small className="field-help">바꾸면 시작 위치·다음 씬·선택지 연결이 함께 갱신됩니다.</small>}</label>;
 }
 
-export function Inspector({ script, scene, lineIndex, patchScene, patchLine, onChange, onAddLine, onInsertLines, onRenameScene, textRef }: Props) {
+export function Inspector({ script, scene, lineIndex, patchScene, patchLine, onChange, onAddLine, onInsertLines, onRenameScene, textRef, projectEpoch }: Props) {
   const line = scene.lines[lineIndex]!;
   const optionKey = script.scenes.map(row => `${row.id}\u0001${row.chapter ?? ""}`).join("\n");
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 서명이 같으면 옵션 목록이 같다.
@@ -58,7 +60,7 @@ export function Inspector({ script, scene, lineIndex, patchScene, patchLine, onC
       onInsertLines(lines, line.text.trim() === "");
     }} />{remaining <= 2000 && <small className={`capacity-hint ${remaining <= 0 ? "is-full" : ""}`} data-testid="studio-line-capacity">{remaining.toLocaleString()}자 남음 · 최대 {LIMITS.text.toLocaleString()}자</small>}<small className="field-help">Ctrl+Enter 로 다음 줄 · 여러 줄을 붙여넣으면 줄마다 나눕니다</small></label>
     <div className="field-pair"><label className="studio-field">화자<select aria-label="화자" value={line.speaker ?? ""} onChange={event => patchLine({ ...line, speaker: (event.target.value || null) as Line["speaker"] })}><option value="">내레이션</option>{!script.characters.some(actor=>actor.id==="me") && script.scenes.some(row=>row.lines.some(line=>line.speaker==="me")) && <option value="me">기존 주인공 (me)</option>}{script.characters.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}</select></label><label className="studio-field">표정<select aria-label="표정" value={line.expression ?? ""} onChange={event => { const { expression: _expression, ...rest } = line; patchLine(event.target.value ? { ...rest, expression: event.target.value as Expression } : rest); }}><option value="">유지</option>{characterExpressions(script.characters.find(actor=>actor.id===line.speaker)).map(value => <option key={value} value={value}>{expressionLabel(value)}</option>)}</select></label></div>
-    <AudioLibrary script={script} onChange={onChange}/><label className="studio-field">보이스<select aria-label="대사 보이스" value={line.voice??""} onChange={event=>{const {voice:old,...rest}=line;patchLine(event.target.value?{...rest,voice:event.target.value}:rest);}}><option value="">없음</option><AudioOptions script={script} kind="voice" current={line.voice}/></select></label>
+    <AudioLibrary script={script} onChange={onChange} projectEpoch={projectEpoch}/><label className="studio-field">보이스<select aria-label="대사 보이스" value={line.voice??""} onChange={event=>{const {voice:old,...rest}=line;patchLine(event.target.value?{...rest,voice:event.target.value}:rest);}}><option value="">없음</option><AudioOptions script={script} kind="voice" current={line.voice}/></select></label>
     <label className="studio-field">효과음<select aria-label="대사 효과음" value={line.sfx ?? ""} onChange={event => { const { sfx: _sfx, ...rest } = line; patchLine(event.target.value ? { ...rest, sfx: event.target.value } : rest); }}><option value="">없음</option><AudioOptions script={script} kind="sfx" current={line.sfx}/>{Object.entries(SFX).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
     <label className="check-field"><input type="checkbox" checked={line.shake ?? false} onChange={event => patchLine({ ...line, shake: event.target.checked })} />화면 흔들림</label>
     <label className="studio-field" style={{ marginTop: 18 }}>이 대사에서 배경 전환<select aria-label="이 대사에서 배경 전환" data-testid="studio-line-background" value={line.backgroundUrl ?? ""} onChange={event => { const { backgroundUrl: _background, ...rest } = line; patchLine(event.target.value ? { ...rest, backgroundUrl: event.target.value } : rest); }}><option value="">이전 배경 유지</option>{line.backgroundUrl && !script.assets?.some(asset => asset.kind === "background" && asset.url === line.backgroundUrl) && <option value={line.backgroundUrl}>현재 지정된 배경</option>}{script.assets?.filter(asset => asset.kind === "background").map(asset => <option value={asset.url} key={asset.id}>{asset.name}</option>)}</select></label>

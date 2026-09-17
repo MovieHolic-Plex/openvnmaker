@@ -13,8 +13,8 @@ import { LOSIA_FILE_MAX_BYTES, LOSIA_TAKE_MAX, LOSIA_TIMEOUT_MS, losiaBaseUrl } 
 
 const KINDS = new Set(["stage", "character", "sound"]);
 const SORTS = new Set(["new", "use", "name"]);
-/** losia 자산 id 는 소문자 접두사 + 소문자/숫자 본문이다(st…, ch…). 경로로 조립되므로 형식을 좁힌다. */
-const ASSET_ID = /^[a-z]{2}[a-z0-9]{6,40}$/;
+/** losia 자산 id 는 소문자/숫자 slug 다(st…, ch…, 그리고 `164e5130e5` 처럼 접두사 없는 것도 있다). 경로로 조립되므로 형식을 좁힌다. */
+const ASSET_ID = /^[a-z0-9][a-z0-9-]{5,39}$/;
 /** role 은 `expression:슬픔` 처럼 콜론과 한글을 포함한다. 경계만 본다. */
 const ROLE = /^[\p{L}\p{N}_:~\-. ]{1,80}$/u;
 

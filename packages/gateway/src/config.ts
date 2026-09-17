@@ -117,10 +117,27 @@ export function losiaBaseUrl(): string {
   return (process.env.VNMAKER_LOSIA_URL ?? "https://losia.online").replace(/\/+$/, "");
 }
 export const LOSIA_TIMEOUT_MS = Number(process.env.VNMAKER_LOSIA_TIMEOUT_MS ?? 20_000);
+/** 업로드는 다운로드보다 훨씬 오래 걸린다 — 작품 ZIP 이 수백 MB 일 수 있다. */
+export const LOSIA_UPLOAD_TIMEOUT_MS = Number(process.env.VNMAKER_LOSIA_UPLOAD_TIMEOUT_MS ?? 600_000);
 /** 카탈로그 한 번에 받는 최대 개수. 앱은 12~24 정도만 쓴다. */
 export const LOSIA_TAKE_MAX = Number(process.env.VNMAKER_LOSIA_TAKE_MAX ?? 60);
 /** 자산 한 파일 상한(계약: 이미지 10MB). 로컬 프록시가 무한정 메모리를 쓰지 않게 한다. */
 export const LOSIA_FILE_MAX_BYTES = Number(process.env.VNMAKER_LOSIA_FILE_MAX ?? 64 * 1024 * 1024);
+/** 게시 프록시가 받는 작품 ZIP 상한 — losia 계약과 같다(700MB). 스트리밍 전달이라 메모리를 먹지 않는다. */
+export function losiaWorkMaxBytes(): number {
+  return Number(process.env.VNMAKER_LOSIA_WORK_MAX ?? 700 * 1024 * 1024);
+}
+/** 에셋 게시 상한 — 계약은 이미지 32장×10MB·소리 20MB 다. 경계 값에 여유를 둔다. */
+export function losiaAssetMaxBytes(): number {
+  return Number(process.env.VNMAKER_LOSIA_ASSET_MAX ?? 360 * 1024 * 1024);
+}
+/** losia 개인 토큰(la_…)의 로컬 저장 위치. 0600 으로 쓴다. */
+export const LOSIA_TOKEN_FILE = process.env.VNMAKER_LOSIA_TOKEN_FILE ?? join(homedir(), ".vnmaker", "losia-token.json");
+/**
+ * 업로드 스트리밍 경로 — 이 경로들은 4MB 버퍼 상한을 타지 않고 요청 본문을 그대로 흘린다.
+ * vite 미들웨어(packages/app/vite.config.ts)와 데스크톱 서버(packages/desktop/src/server.ts)가 같은 목록을 쓴다.
+ */
+export const LOSIA_UPLOAD_PATHS: ReadonlySet<string> = new Set(["/api/losia/works", "/api/losia/assets"]);
 
 /**
  * 백엔드가 클라이언트 버전으로 모델 게이팅을 한다. version 만 게이트이고 cl 은 검증하지 않는다.

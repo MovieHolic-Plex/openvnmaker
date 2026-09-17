@@ -53,24 +53,24 @@
 
 | # | 결함 | 위치 | 내용 |
 |---|------|------|------|
-| 8 | **`compileGraph` 의미 파괴 (잠재)** | `packages/ir/src/index.ts:419-421,363,373` | `from`당 첫 엣지만 유지 + `when` 폐기. `menu` 선택지의 `when`→`cond` 매핑인데 `cond`는 브라우저에서 **무조건 숨김**(표현식 미평가, `ChoiceMenu.tsx:34`), 네이티브 export는 cond 존재 시 **거부**(`renpyScript.ts:13`). `set` 비트도 컴파일 타임 전역으로 폴딩. **현재 프로덕션 미호출**(`compileNode`만 사용) — 고치기 전에 그래프→스크립트 파이프라인을 연결할 건지 사용자와 확인. 안 쓰면 삭제 |
-| 9 | **버전 기록 프로젝트 미스코프** | `packages/app/src/studio/versions.ts`, `VersionHistory.tsx` | 단일 스토어에 `projectId` 필드 없음, 전 프로젝트 공유 20개. A의 자동 체크포인트가 B의 수동 버전을 밀어내고, 복원 시 다른 프로젝트 원고가 현재 프로젝트에 로드됨. 스토어에 `projectId` 추가 + 조회/삭제 스코프 |
-| 10 | **`xdg-open` 없으면 프로세스 크래시** | `oauth.ts:33-35` | `spawn` 후 `'error'` 리스너 없음 → 비동기 error 이벤트가 unhandled → 게이트웨이 크래시. try/catch는 동기 throw만 잡음. `.on("error",()=>{})` 추가 |
-| 11 | **콜백 HTML 미이스케이프 + state 로그** | `oauth.ts:21-28,81`, `auth.ts:44` | `error_description`을 HTML에 그대로 삽입(인젝션). 동의 URL 전체(state 포함)를 console에 남김 |
-| 12 | **PKCE 없음** | `oauth.ts:55-57` | 문서화된 선택이지만 추가 비용 사실상 0. client_secret이 공개 내장값이라 state만이 방어. 도입하려면 코드 챌린지 생성·검증 추가 |
-| 13 | **바디 크기 제한 없음 + 비대칭 검증** | `packages/gateway/src/app.ts`, `routes/images.ts:33-34,57-59`, `routes/generate.ts:31,49` | bodyLimit 미들웨어 없음 → 로컬 프로세스가 GB급 POST로 OOM. `/image/generate`는 프롬프트 cap 없음(`/generate`의 16000과 비대칭). `model`/`imageSize` 무비판 패스스루 → 임의 모델 쿼터 소진 |
-| 14 | **`POST /project/nodes` 쓰기 검증 느슨** | `project/store.ts:36-50` | `asNode`가 `beats` 배열 여부만 봄 → `{beats:[{op:"bogus"}]}`가 디스크에 기록되고 이후 읽기 경로가 조용히 무시 → 오염 노드가 그래프에서 증발. 쓸 때 `parseBeats`로 검증 |
-| 15 | **autosave 이중 계층 불일치** | `packages/app/src/studio/useProjectAutosave.ts:13`, `projects.ts:7-11` | 매 편집마다 전체 원고 JSON.stringify+localStorage 동기 쓰기(대형 원고 입력 지연). localStorage 성공+IndexedDB 실패 시 두 계층 불일치. `activateProject` 롤백도 quota 소진 상태에서 예외 안전하지 않음 |
-| 16 | **런타임↔네이티브 의미 차이** | `renpyScript.ts:126` 등 | `disable:true` 선택지: 브라우저=비활성 표시, Ren'Py=`if False` 완전 숨김. `eq`/`ne`: JS `===` vs Python `1==True` 타입 관용. `vn_patch`가 `vn_slots`를 제자리 변경 → Ren'Py 롤백이 못 되돌림(주석도 인정) |
+| 8 | **`compileGraph` 의미 파괴 (잠재)** | `packages/ir/src/index.ts` | ~~`from`당 첫 엣지만 유지 + `when` 폐기…~~ **해소(2026-09-16): 아래 "해소" 절 참조 — routes/set 의미를 정의하고 프로덕션에 연결했다** |
+| 9 | ~~**버전 기록 프로젝트 미스코프**~~ | `versions.ts` | **해소**: `ProjectVersion.projectId` + `ownVersions` 스코프 + 레거시 행 정리(`staleVersionIds`) |
+| 10 | ~~**`xdg-open` 없으면 프로세스 크래시**~~ | `oauth.ts` | **해소**: `open` 패키지로 교체(플랫폼 인용+reject 경로), `openBrowser`가 false를 반환해 URL을 로그로 안내 |
+| 11 | ~~**콜백 HTML 미이스케이프 + state 로그**~~ | `oauth.ts` | **해소**: `escapeHtml` 적용, 동의 URL은 브라우저를 못 열었을 때만 로그 |
+| 12 | ~~**PKCE 없음**~~ | `oauth.ts` | **해소**: S256 code_challenge/verifier 생성, 토큰 교환에 `code_verifier` 전달(`tokens.ts:24`), state 16B CSRF 검증 |
+| 13 | ~~**바디 크기 제한 없음 + 비대칭 검증**~~ | `app.ts`, `images.ts` | **해소**: 전역 `bodyLimit`(4MB, losia 업로드 경로만 면제) + `GENERATE_PROMPT_MAX` + `model` 화이트리스트(`IMAGE_MODEL` 또는 codex 토큰 형식) |
+| 14 | ~~**`POST /project/nodes` 쓰기 검증 느슨**~~ | `project/store.ts:79` | **해소**: 쓰기 시 `parseBeats`로 검증 — 잘못된 op는 400 거부 |
+| 15 | ~~**autosave 이중 계층 불일치**~~ | `useProjectAutosave.ts` | **해소**: 600ms 디바운스+직렬화 큐(stringify는 디바운스 안), 사본 쓰기 실패 시 보관함 저장 성공 후 사본 제거로 계층 불일치 정리, pagehide/visibilitychange 플러시는 `ownsQuickRecovery`로 소유 사본만 갱신, 첫 자동 저장은 외부 사본 보호 |
+| 16 | ~~**런타임↔네이티브 의미 차이**~~ | `renpyScript.ts` | **해소**: disable 선택지는 `vn_locked=True` 메뉴 인자 → choice 스크린이 `sensitive False`로 그림(`renpyTheme.ts:71`), `eq`/`ne`는 타입 일치 또는 양쪽 numeric일 때만 비교(`1==True` 불일치), `vn_patch`·`expression` 교체는 새 dict 리바인딩으로 롤백 안전 |
 
-### 🔵 낮음/관찰
+### 🔵 낮음/관찰 — 전부 해소 (확인 2026-09-17)
 
-- `GET /api/image/file/:name` — 인증 없음, `<img>`로 사이트 간 임베드 가능, 타임스탬프 이름 추측 가능.
-- `images/store.ts:69` — `.bin` 등 모르는 확장자를 `image/png`로 서빙.
-- `sanitizeName`이 Windows 예약명(`con`/`nul`/`aux`)을 못 걸러 쓰기 실패 → 루트의 `nul` 파일이 이미 그 흔적.
-- `mountGateway`/`exportRuntimePlugin`에 `configurePreviewServer` 없음 — `vite preview`(4173)에서 `/api/*` 죽는데 CORS는 4173 허용 — 의도와 배선 불일치.
-- `scriptFingerprint`/`initializeEdition`의 FNV-1a 32비트를 변경 판정에 사용 — 자동 체크포인트 스킵이 2^-32로 거짓 음성.
-- `ProjectRecovery`의 `recovery-preserved.<uuid>` 키가 복원마다 누적, 정리 경로 없음 → localStorage quota 누수.
+- ~~`GET /api/image/file/:name`~~ — `sec-fetch-site: cross-site`를 403으로 거부(`images.ts:162`). `<img>`는 헤더를 못 달아 사이트 간 임베드만 차단.
+- ~~`.bin` mime~~ — `readImage`는 모르는 확장자를 `application/octet-stream`으로 서빙(`store.ts:74`).
+- ~~Windows 예약명~~ — `sanitizeName`이 `con/prn/aux/nul/com1-9/lpt1-9`를 빈 문자열로 걸러 timestampName 폴백(`store.ts:35`).
+- ~~preview `/api`~~ — `mountGateway`가 `configureServer`와 `configurePreviewServer` 둘 다 단다(`vite.config.ts:83-88`).
+- ~~FNV-1a 32비트~~ — `scriptFingerprint`(production.ts)·`manuscriptKey`·edition 판정은 전부 64비트. `quickRecoveryHash`(project.ts)의 32비트는 메타↔본문 짝 확인용이라 유지.
+- ~~recovery-preserved 누수~~ — 복원 때 최신 3개만 남기고 나머지 삭제(`ProjectRecovery.tsx:11-12`).
 
 ## 함정 — agy 프로토콜 (토큰/OAuth 코드 건드릴 때)
 
@@ -92,18 +92,32 @@
 - 스튜디오 아트 디렉션의 `losia 스토어` 패널(`StorePanel.tsx`)에서 검색·설치. 설치한 파일은 IndexedDB 보관함(`/assets/user/<sha256>.<ext>`)에 들어가 프로젝트 Artwork/AudioAsset 으로 등록되므로 플레이어와 게임 ZIP 이 기존 자산과 같은 경로로 쓴다.
 - 역할/표정/라이선스 매핑은 `packages/app/src/studio/storeInstall.ts`(순수 계산). 한글 표정 이름은 별칭표로 영문 키에 옮긴다.
 - 검증: `pnpm --filter @vnmaker/{gateway,app} test`, `npx playwright test tests/e2e/store-install.spec.ts`, `node tools/qa/store-live.mjs`(실제 losia.online, 스크린샷 `evidence/store-live/`).
-- 아직 없음: 게시(vnmaker → losia, `POST /api/assets` + 개인 토큰 `la_…`)와 그 UI.
 
-## 권고 작업 순서
+### losia 게시 (2026-09-16)
 
-1. `oauth.ts:33` — 한 줄짜리인데 Windows 로그인이 깨져 있다. 수정 + 수동 확인.
-2. 저장소 원자성 — credentials/project/images에 tmp+rename 적용 + `ensureFreshAccess` single-flight. 회귀 테스트: 크래시 시뮬레이션(중간 truncate), 동시 refresh.
-3. `/api/*`에 `X-VNMaker-Studio` 헤더 요구 + bodyLimit + `/image/generate` 프롬프트 cap. 회귀 테스트: 헤더 없는 POST 거부.
-4. `versions.ts`에 `projectId` 추가. 회귀 테스트: 두 프로젝트 간 복원 격리.
-5. `compileGraph`는 **사용자 확인 후** — 연결할 거면 다중 엣지/`when`/`cond` 의미부터 정의하고, 안 쓸 거면 삭제.
-6. 나머지 중간/낮음 항목은 위 작업과 같은 파일을 건드릴 때 묶어서.
+- 게이트웨이 `packages/gateway/src/routes/losia.ts` — `GET /api/losia/status`, `PUT/DELETE /api/losia/token`, 스트리밍 중계 `POST /api/losia/works`·`POST /api/losia/assets`. 업로드는 버퍼링 없이 바이트를 세며 상한(`VNMAKER_LOSIA_WORK_MAX` 700MB·`VNMAKER_LOSIA_ASSET_MAX` 360MB)을 강제하고, 전역 bodyLimit(4MB)은 이 두 경로만 면제한다.
+- 토큰 저장소 `src/auth/losiaToken.ts` — `~/.vnmaker/losia-token.json`, 원자 쓰기+0600. 등록 전에 형식(`la_`+40hex)과 업스트림 검증(빈 `POST /api/works` → 401이면 거부, 400이면 유효 — losia는 인증을 본문 검사보다 먼저 한다).
+- 스튜디오 `LosiaPublishButton.tsx`("losia에 게시") — 토큰 등록/삭제 → 제목·slug·소개 입력 → `buildExportBundle` → 업로드 → `playUrl` 링크. `fetchLosiaStatus`가 `/api/losia/status` 404면 같은 오리진 `/api/works`를 찔러 **losia 호스팅 스튜디오(`/make`)를 직통 모드**로 인식한다(세션 쿠키, 토큰 불필요). 이때 `buildExportBundle`은 `runtimeBase: "/make/export-runtime"`로 벤더된 런타임을 쓴다.
+- 에셋 게시 (2026-09-17) — `LosiaAssetPublish.tsx` 다이얼로그가 아트 라이브러리(선택 패널)와 오디오 라이브러리(행)에서 사용자 제작 자산을 올린다. multipart 계약: `meta`(JSON)·`roles`(파일 순서와 동일한 JSON 배열)·`files`. 인물은 base 선택지 + "표정 패키지" 체크로 `expression:*` role을 붙인다. 재게시 가드: 내장(`art/bg/sprite`)·losia 유래(provenance.source에 losia 포함) 자산은 버튼이 안 뜬다. 인증 UI는 `LosiaAuth.tsx`로 공용화(작품 다이얼로그와 공유). 실측: prod에 stage 에셋 업로드→GET 200→`PATCH status:hidden` 정리까지 확인.
+- e2e 그래프 격리 (2026-09-17) — playwright.config 의 webServer 에 `VNMAKER_PROJECT_DIR=/tmp/vnmaker-e2e-project`(`VNMAKER_E2E_PROJECT_DIR`로 변경 가능). `PUT /api/project/edges`는 전체 목록을 덮어쓰므로 사용자 프로젝트와 섞이면 데이터가 지워진다. **e2e 포트는 5199 전용** — 5173 재사용은 이 격리를 무력화해 실제 프로젝트에 노드/엣지를 심는다(실제로 라디오부 엣지가 지워진 적 있음. evidence/thursday-radio/story/edges.json으로 복원).
+- 에셋→VN 파이프라인 (2026-09-17) — 스토어 설치 자산이 씬·플레이어·export까지 간다. 오디오 라이브러리에 `StorePanel fixedKind="sound"` 패널 내장("스토어에서 음원 가져오기"). IR에 URL 자산 지원: `scene.bg`/`cg`가 `/`로 시작하면 `backgroundUrl`/`cgUrl`, `say`의 `bg`/`cg`는 줄 단위 URL, `show.image`는 `poseUrl`. 프로젝트 `story/characters.json`·`vnmaker.json`을 컴파일에 반영(한글 표시명·부제). base만 있는 인물 패키지는 base→neutral 폴백. 게이트웨이 자산 id 규칙을 `^[a-z0-9][a-z0-9-]{5,39}$`로 완화(losia에 접두사 없는 id 존재 — `164e5130e5`).
+- 실측 (2026-09-17): prod losia에서 stage·character·sound 실자산 설치→씬 배치→플레이어 렌더 확인(스크린샷 evidence). 게이트웨이 경유 sound(`so…`)+캐릭터 패키지(`cha…`, roles `['base','expression:놀람']`) 업로드→GET→`PATCH status:hidden`→404 정리→로컬 토큰 삭제까지 확인.
+- 에셋 게시 e2e: `tests/e2e/losia-asset-publish.spec.ts` 3개 — 배경 단일·캐릭터 표정 패키지·음원의 multipart 계약(meta/roles/files 순서)을 page.route 캡처로 검증.
+- 플레이키 방지 (2026-09-17): losia 스펙의 `installProject`는 `addInitScript`로 첫 로드 전에 원고를 심는다(goto→심기→reload는 부하 시 부팅이 30초를 넘겼다). `store-install.spec.ts:50`은 `stage` testid 가시를 먼저 기다린 뒤 bg-image를 폴링한다 — 플레이어 부팅 전 폴링이 요소 부재(-1)로 착시되던 문제.
 
-## 미확인 — 사용자 답변 필요
+## 권고 작업 순서 — 리뷰 목록 전부 해소 (2026-09-17 확인)
 
-- 그래프→스크립트(`compileGraph`) 파이프라인을 실제로 연결할 계획인가? (연결 계획에 따라 #8의 처리가 달라진다)
-- `compileGraph`의 `cond` 의미: 조건식 평가를 구현할 것인가, 아니면 필드 자체를 제거할 것인가?
+위 표의 1~16과 🔵 항목은 전부 코드에 반영돼 있다(확인 완료). 남은 알려진 한계:
+
+- `native-*` e2e 6개는 `VNMAKER_RENPY_SDK` 미설정 환경에서는 실행 불가.
+- `editor-crash.spec.ts:38`은 브라우저 프로세스 크래시 시 localStorage 디스크 플러시 타이밍 의존이라 이 환경에서 간헐 실패.
+
+## 해소 — 2026-09-16 그래프 파이프라인 연결
+
+`compileGraph`가 프로덕션에 연결됐다. 결정 사항:
+
+- **엣지 `when` → 구조화 `LineCondition`.** 순수 플래그명 문자열(`"metYuna"`)은 `{all:[name]}`으로 정규화, 표현식형 문자열은 거부 — `cond`를 죽인 방향과 같다.
+- **다중 엣지 → `Scene.routes`.** 조건 경로를 순서대로 평가해 첫 매치로 이동. 무조건 엣지는 최대 1개 → `scene.next`(폴백). 두 번째 무조건 엣지·엔딩+무조건 출구·메뉴+경로 공존은 오류. 엔딩+조건 경로만은 허용(전부 실패 시 엔딩).
+- **`set` 비트 → `Scene.set`** — 씬 진입 시 플래그 적용(새 dict, 롤백 안전). 런타임 leave 순서: choices → routes → ending → next.
+- 파이프라인: 게이트웨이 `GET /api/project/script`(그래프 컴파일 + parseScript 검증) → 스튜디오 "그래프 미리보기" 버튼(`studio-graph-play`) → 기존 previewScript 경로로 재생.
+- `Scene.routes`/`Scene.set`은 스키마·파서·감사·reducer·renpyScript·스튜디오 연산(rename/remove/flag rename)·StoryMap·prefetch 전부에 반영됐다.

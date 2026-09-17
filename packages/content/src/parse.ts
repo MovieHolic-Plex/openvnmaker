@@ -5,7 +5,7 @@ import { choiceAllowed, choiceEffectError, applyChoiceFlags, lineAllowed } from 
 import { validAudioUrl } from "./audio.js";
 
 /** Authoring limits shared by the parser and the studio UI. The parser stays the source of truth; the editor uses these to refuse or cap input before it becomes unsaveable. */
-export const LIMITS = { text: 20_000, sceneLines: 2000, scenes: 300, choices: 8, flags: 100, characters: 200 } as const;
+export const LIMITS = { text: 20_000, sceneLines: 2000, scenes: 300, choices: 8, routes: 16, flags: 100, characters: 200 } as const;
 
 function object(value: unknown, name: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${name}: 객체가 필요합니다.`);
@@ -19,8 +19,12 @@ function member(value: unknown, values: readonly string[], name: string) {
 }
 function characterKey(value: unknown, name: string) { if(!validCharacterKey(value))throw new Error(`${name}: 영문자로 시작하는 64자 이하의 영문·숫자·하이픈·밑줄 ID가 필요합니다.`); }
 
+/** 선택 기억 이름 규칙 — IR 그래프의 when/set 파서도 같은 검증을 쓴다. */
+export function validFlagName(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/i.test(value) && !["constructor", "prototype", "__proto__"].includes(value);
+}
 function flagName(value: unknown) {
-  if (typeof value !== "string" || !/^[a-z][a-z0-9_-]{0,63}$/i.test(value) || ["constructor", "prototype", "__proto__"].includes(value)) throw new Error("선택 기억 이름이 올바르지 않습니다.");
+  if (!validFlagName(value)) throw new Error("선택 기억 이름이 올바르지 않습니다.");
 }
 function flags(value: unknown) {
   const row = object(value, "선택 기억");
@@ -45,6 +49,12 @@ function condition(value: unknown) {
       if(!["eq","ne"].includes(rule["op"] as string)&&typeof rule["value"]!=="number")throw new Error("크기 비교에는 숫자가 필요합니다.");
     }
   }
+}
+
+/** 구조화 표시 조건 {all, none, compare} 를 검증해 돌려준다. IR 그래프의 when 파서도 이걸 쓴다. */
+export function parseCondition(value: unknown): import("./schema.js").LineCondition {
+  condition(value);
+  return value as import("./schema.js").LineCondition;
 }
 function sprites(value: unknown) {
   if (!Array.isArray(value) || value.length > 3) throw new Error("배우 배치가 올바르지 않습니다.");
@@ -112,6 +122,15 @@ export function parseScene(value: unknown): Scene {
   if (row["artBrief"] !== undefined) string(row["artBrief"], "장면 아트 브리프", true);
   if (row["transition"] !== undefined) member(row["transition"], ["none", "fade", "dissolve", "flash", "fadeToBlack"], "전환");
   if (row["sprites"] !== undefined) sprites(row["sprites"]);
+  if (row["set"] !== undefined) flags(row["set"]);
+  if (row["routes"] !== undefined) {
+    if (!Array.isArray(row["routes"]) || row["routes"].length === 0 || row["routes"].length > LIMITS.routes) throw new Error(`조건부 경로는 1~${LIMITS.routes}개입니다.`);
+    for (const item of row["routes"]) {
+      const route = object(item, "조건부 경로");
+      string(route["next"], "경로 연결");
+      if (route["when"] !== undefined) condition(route["when"]);
+    }
+  }
   if (row["choices"] !== undefined) {
     if (!Array.isArray(row["choices"]) || row["choices"].length > LIMITS.choices) throw new Error("선택지는 최대 8개까지 지원합니다.");
     const choiceIds=new Set<string>();
@@ -251,6 +270,13 @@ export function parseScript(value: unknown): VnScript {
 }
 
 export interface StoryIssue { readonly sceneId: string; readonly message: string; readonly severity: "error" | "warning" }
+
+/** 엔진의 출구 우선순위와 같다 — 선택지가 있으면 그것만, 없으면 조건 경로와 기본 next 가 모두 도달 후보다. */
+function exits(scene: Scene): string[] {
+  if (scene.choices?.length) return scene.choices.map(choice => choice.next);
+  return [...(scene.routes ?? []).map(route => route.next), ...(scene.next ? [scene.next] : [])];
+}
+
 export function auditScript(script: VnScript): StoryIssue[] {
   const issues: StoryIssue[] = [];
   const ids = new Set(script.scenes.map(scene => scene.id));
@@ -262,18 +288,21 @@ export function auditScript(script: VnScript): StoryIssue[] {
     reachable.add(id);
     const scene = script.scenes.find(row => row.id === id);
     if (!scene) continue;
-    pending.push(...(scene.choices?.length ? scene.choices.map(choice => choice.next) : scene.ending ? [] : scene.next ? [scene.next] : []));
+    pending.push(...exits(scene));
   }
   for (const scene of script.scenes) {
     const add = (message: string, severity: StoryIssue["severity"] = "error") => issues.push({ sceneId: scene.id, message, severity });
     if (scene.lines.some(line => !line.text.trim())) add("빈 대사가 있습니다.");
-    if (!scene.choices?.length && !scene.next && !scene.ending) add("다음 씬이나 엔딩을 연결하세요.");
+    if (!scene.choices?.length && !scene.routes?.length && !scene.next && !scene.ending) add("다음 씬이나 엔딩을 연결하세요.");
     if (scene.next && !ids.has(scene.next)) add("다음 씬을 찾을 수 없습니다.");
+    for (const route of scene.routes ?? []) {
+      if (!ids.has(route.next)) add("조건부 경로가 없는 씬으로 연결됩니다.");
+    }
     for (const choice of scene.choices ?? []) {
       if (!ids.has(choice.next)) add("선택지가 없는 씬으로 연결됩니다.");
       if (!choice.text.trim()) add("빈 선택지가 있습니다.");
     }
-    if (scene.choices?.length && (scene.next || scene.ending)) add("선택지가 다음 씬·엔딩 설정보다 우선합니다.", "warning");
+    if (scene.choices?.length && (scene.routes?.length || scene.next || scene.ending)) add("선택지가 경로·다음 씬·엔딩 설정보다 우선합니다.", "warning");
     if (!reachable.has(scene.id)) add("시작 씬에서 도달할 수 없습니다.", "warning");
   }
   const canFinish = new Set(script.scenes.filter(scene => scene.ending && !scene.choices?.length).map(scene => scene.id));
@@ -281,15 +310,17 @@ export function auditScript(script: VnScript): StoryIssue[] {
   while (changed) {
     changed = false;
     for (const scene of script.scenes) {
-      const targets = scene.choices?.length ? scene.choices.map(choice => choice.next) : scene.next ? [scene.next] : [];
+      const targets = exits(scene);
       if (!canFinish.has(scene.id) && targets.some(id => canFinish.has(id))) { canFinish.add(scene.id); changed = true; }
     }
   }
   for (const scene of script.scenes) if (reachable.has(scene.id) && !canFinish.has(scene.id)) issues.push({ sceneId: scene.id, message: "이 씬에서 도달 가능한 엔딩이 없습니다.", severity: "warning" });
-  if(script.scenes.some(scene=>scene.choices?.some(choice=>choice.when||choice.disable||choice.add))){
+  if(script.scenes.some(scene=>scene.set||scene.routes?.length||scene.choices?.some(choice=>choice.when||choice.disable||choice.add))){
     const byId=new Map(script.scenes.map(scene=>[scene.id,scene]));
     const seen=new Set<string>(),blocked=new Set<string>();
-    const queue=[{id:script.start,flags:script.flags??{}}];
+    // 진입하는 씬의 set 을 플래그에 합친다 — 엔진의 진입 시점 적용과 같다.
+    const enqueue=(id:string,flags:typeof script.flags)=>({id,flags:{...flags,...byId.get(id)?.set}});
+    const queue=[enqueue(script.start,script.flags??{})];
     while(queue.length&&seen.size<10000){
       const state=queue.pop()!;
       const key=state.id+JSON.stringify(Object.entries(state.flags).sort(([a],[b])=>a.localeCompare(b)));
@@ -299,8 +330,13 @@ export function auditScript(script: VnScript): StoryIssue[] {
         for(const choice of scene.choices){const error=choiceEffectError(choice,state.flags);const key=scene.id+error;if(error&&!choice.disable&&!choice.cond&&lineAllowed(choice,state.flags)&&!blocked.has(key)){blocked.add(key);issues.push({sceneId:scene.id,message:`선택 결과 오류: ${error}`,severity:"error"});}}
         const available=scene.choices.filter(choice=>choiceAllowed(choice,state.flags));
         if(!available.length&&!blocked.has(scene.id)){blocked.add(scene.id);issues.push({sceneId:scene.id,message:"도달 가능한 경로에서 선택지가 모두 닫힙니다. 조건이나 대체 선택지를 확인하세요.",severity:"error"});}
-        for(const choice of available)queue.push({id:choice.next,flags:applyChoiceFlags(state.flags,choice)});
-      }else if(!scene.ending&&scene.next)queue.push({...state,id:scene.next});
+        for(const choice of available)queue.push(enqueue(choice.next,applyChoiceFlags(state.flags,choice)));
+      }else{
+        // 엔진과 같이 처음으로 조건이 맞는 경로만 따라간다. 전부 실패하면 next 로 폴백한다.
+        const taken=(scene.routes??[]).find(route=>lineAllowed(route,state.flags));
+        const follow=taken?.next??(scene.ending?undefined:scene.next);
+        if(follow)queue.push(enqueue(follow,state.flags));
+      }
     }
     if(queue.length)issues.push({sceneId:script.start,message:"분기 상태가 10,000개를 넘어 조건 경로 검사가 일부만 수행되었습니다.",severity:"warning"});
   }

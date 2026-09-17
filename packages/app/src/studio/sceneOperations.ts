@@ -21,7 +21,7 @@ export function renameScene(script: VnScript, from: string, to: string): VnScrip
     ...script, start: script.start===from?to:script.start,
     scenes: script.scenes.map(row=>{
       const next=link(row.next);
-      return {...row, id: row.id===from?to:row.id, ...(next!==undefined?{next}:{}), ...(row.choices?{choices:row.choices.map(choice=>choice.next===from?{...choice,next:to}:choice)}:{})};
+      return {...row, id: row.id===from?to:row.id, ...(next!==undefined?{next}:{}), ...(row.routes?{routes:row.routes.map(route=>route.next===from?{...route,next:to}:route)}:{}) , ...(row.choices?{choices:row.choices.map(choice=>choice.next===from?{...choice,next:to}:choice)}:{})};
     }),
     ...(script.assets?{assets:script.assets.map(asset=>asset.sceneId===from?{...asset,sceneId:to}:asset)}:{}),
   };
@@ -37,8 +37,8 @@ export function moveScene(script: VnScript, sceneId: string, toIndex: number): V
   return {...script,scenes};
 }
 
-type SceneExit = Pick<Scene, "next" | "choices" | "ending">;
-function removalRouting(script: VnScript, sceneId: string, replacement: string): { inheritExit?: SceneExit; choiceTarget?: string } {
+type SceneExit = Pick<Scene, "next" | "choices" | "ending" | "routes">;
+function removalRouting(script: VnScript, sceneId: string, replacement: string): { inheritExit?: SceneExit; choiceTarget?: string; routeTarget?: string } {
   const removed = script.scenes.find(scene => scene.id === sceneId);
   const chosen = script.scenes.find(scene => scene.id === replacement);
   if (script.scenes.length < 2 || replacement === sceneId || !removed || !chosen) throw new Error("삭제 후 연결할 다른 장면을 선택하세요.");
@@ -46,18 +46,34 @@ function removalRouting(script: VnScript, sceneId: string, replacement: string):
   if (branches?.some(choice => choice.next === sceneId)) {
     // A branch can skip a linear bridge, but cannot contain another menu/ending
     // without inventing a scene or changing the other branches' meaning.
-    if (removed.choices?.length || removed.ending || !removed.next) throw new Error("이 장면의 선택지가 자기 자신으로 돌아오게 됩니다. 다른 연결 대상을 선택하세요.");
+    // 조건 경로가 섞인 장면은 선형 다리가 아니라 건너뛸 수 없다.
+    if (removed.choices?.length || removed.routes?.length || removed.ending || !removed.next) throw new Error("이 장면의 선택지가 자기 자신으로 돌아오게 됩니다. 다른 연결 대상을 선택하세요.");
     if (removed.next === sceneId || removed.next === replacement) throw new Error("삭제 후 선택지가 자기 자신으로 돌아옵니다. 다른 연결 대상을 선택하세요.");
     return { choiceTarget: removed.next };
   }
   if (!branches && !chosen.ending && chosen.next === sceneId) {
+    // 이어받기는 출구 전체를 교체한다 — 선택한 장면에 다른 조건 경로가 남아 있으면 같이 지워진다.
+    if (chosen.routes?.length) throw new Error("선택한 장면에 조건 경로가 있어 출구를 이어받으면 그 경로가 사라집니다. 다른 연결 대상을 선택하세요.");
     if (removed.choices?.length) {
       if (removed.choices.some(choice => choice.next === sceneId || choice.next === replacement)) throw new Error("삭제 장면의 분기가 다시 이 장면으로 돌아옵니다. 다른 연결 대상을 선택하세요.");
       return { inheritExit: { choices: structuredClone(removed.choices) } };
     }
     if (removed.ending) return { inheritExit: { ending: removed.ending } };
-    if (removed.next && removed.next !== sceneId && removed.next !== replacement) return { inheritExit: { next: removed.next } };
+    if (removed.routes?.length || removed.next) {
+      if (removed.next === sceneId || removed.next === replacement || (removed.routes ?? []).some(route => route.next === sceneId || route.next === replacement)) {
+        throw new Error("삭제 후 연결이 자기 자신으로 돌아옵니다. 다른 연결 대상을 선택하세요.");
+      }
+      // 조건 경로와 그 폴백 next 는 한 덩어리로 물려준다.
+      return { inheritExit: { ...(removed.routes?.length ? { routes: structuredClone(removed.routes) } : {}), ...(removed.next ? { next: removed.next } : {}) } };
+    }
     throw new Error("이어받을 다음 장면이나 엔딩이 없습니다. 다른 연결 대상을 선택하세요.");
+  }
+  // 선택한 장면의 조건 경로가 삭제 장면을 가리키면 선형 다리(next 만 있는 장면)만 건너뛸 수 있다.
+  if (chosen.routes?.some(route => route.next === sceneId)) {
+    if (removed.choices?.length || removed.routes?.length || removed.ending || !removed.next || removed.next === sceneId || removed.next === replacement) {
+      throw new Error("삭제 후 조건 경로가 자기 자신으로 돌아옵니다. 다른 연결 대상을 선택하세요.");
+    }
+    return { routeTarget: removed.next };
   }
   return {};
 }
@@ -76,7 +92,7 @@ export function removeScene(script: VnScript, sceneId: string, replacement: stri
     ...script, start: script.start === sceneId ? replacement : script.start,
     scenes: script.scenes.filter(scene => scene.id !== sceneId).map(scene => {
       if (scene.id === replacement && routing.inheritExit) {
-        const { choices: _choices, next: _next, ending: _ending, ...body } = scene;
+        const { choices: _choices, next: _next, ending: _ending, routes: _routes, ...body } = scene;
         return { ...body, ...routing.inheritExit };
       }
       const { next: previousNext, ...body } = scene;
@@ -85,6 +101,7 @@ export function removeScene(script: VnScript, sceneId: string, replacement: stri
       const next = previousNext === sceneId ? scene.id === replacement ? undefined : replacement : previousNext;
       return {
         ...body, ...(next !== undefined ? { next } : {}),
+        ...(scene.routes ? { routes: scene.routes.map(route => route.next === sceneId ? { ...route, next: scene.id === replacement ? routing.routeTarget! : replacement } : route) } : {}),
         ...(scene.choices ? { choices: scene.choices.map(choice => choice.next === sceneId ? { ...choice, next: scene.id === replacement ? routing.choiceTarget! : replacement } : choice) } : {}),
       };
     }),

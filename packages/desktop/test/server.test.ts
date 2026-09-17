@@ -147,6 +147,20 @@ test("POST 본문과 헤더가 게이트웨이까지 그대로 전달된다", as
   } finally { await server.close(); }
 });
 
+test("losia 업로드 경로는 본문 상한을 타지 않고 스트림으로 전달된다", async () => {
+  // 작품 ZIP 은 수백 MB 다 — 4MB 버퍼 상한이 업로드를 끊으면 게시가 영원히 실패한다.
+  const gateway = fakeGateway(async (request) => json({ size: (await request.arrayBuffer()).byteLength, streamed: true }));
+  const { server } = await serve({ gateway, bodyMax: 64 });
+  try {
+    const res = await fetch(`${server.url}/api/losia/works`, { method: "POST", body: "x".repeat(4096) });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { size: 4096, streamed: true });
+    // 다른 /api 경로는 여전히 상한을 지킨다 — 우회가 새면 안 된다.
+    const blocked = await fetch(`${server.url}/api/echo`, { method: "POST", body: "x".repeat(4096) });
+    assert.equal(blocked.status, 413);
+  } finally { await server.close(); }
+});
+
 test("/api/native-build 는 게이트웨이보다 먼저 전용 미들웨어가 받는다", async () => {
   let seen = "";
   const gateway = fakeGateway(() => json({ from: "gateway" }));

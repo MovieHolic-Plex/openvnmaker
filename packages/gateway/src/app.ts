@@ -9,9 +9,11 @@ import { generateRoutes } from "./routes/generate.js";
 import { projectRoutes } from "./routes/project.js";
 import { agentRoutes } from "./routes/agent.js";
 import { storeRoutes } from "./routes/store.js";
+import { losiaRoutes } from "./routes/losia.js";
 import { reviewRoutes } from "./routes/review.js";
 import type { generateText } from "./cca/generate.js";
 import type { CredentialStore } from "./auth/credentials.js";
+import type { LosiaTokenStore } from "./auth/losiaToken.js";
 import { createFileProjectStore, type ProjectStore } from "./project/store.js";
 import type { AgentModel } from "./agent/run.js";
 import type { CodexImageParams } from "./codex/images.js";
@@ -25,6 +27,8 @@ export interface GatewayDeps {
   readonly codexImage?: (params: CodexImageParams) => Promise<ImageResult>;
   /** 테스트가 losia.online 없이 스토어 프록시를 검증하는 주입구. */
   readonly losiaFetch?: typeof fetch;
+  /** 테스트가 파일 없이 losia 개인 토큰 저장소를 검증하는 주입구. */
+  readonly losiaTokens?: LosiaTokenStore;
   /** 테스트가 agy 없이 스토리 점검 라우트를 검증하는 주입구. */
   readonly reviewModel?: typeof generateText;
 }
@@ -40,6 +44,7 @@ export function createApp(deps: GatewayDeps): Hono {
     ...(deps.agentModel ? { agentModel: deps.agentModel } : {}),
     ...(deps.codexImage ? { codexImage: deps.codexImage } : {}),
     ...(deps.losiaFetch ? { losiaFetch: deps.losiaFetch } : {}),
+    ...(deps.losiaTokens ? { losiaTokens: deps.losiaTokens } : {}),
     ...(deps.reviewModel ? { reviewModel: deps.reviewModel } : {}),
   };
   const app = new Hono();
@@ -68,7 +73,9 @@ export function createApp(deps: GatewayDeps): Hono {
   });
 
   // 로컬 프로세스가 수 GB 바디로 이 프로세스를 OOM 시키지 못하게 상한을 둔다.
-  app.use("/api/*", bodyLimit({ maxSize: API_BODY_MAX, onError: (c) => c.json({ error: "본문이 너무 크다" }, 413) }));
+  // 단 losia 게시 프록시는 수백 MB 를 스트리밍으로 중계한다 — 라우트가 직접 바이트를 센다.
+  const jsonLimit = bodyLimit({ maxSize: API_BODY_MAX, onError: (c) => c.json({ error: "본문이 너무 크다" }, 413) });
+  app.use("/api/*", (c, next) => (c.req.path === "/api/losia/works" || c.req.path === "/api/losia/assets" ? next() : jsonLimit(c, next)));
 
   app.get("/api/health", (c) => c.json({ ok: true, version: GATEWAY_VERSION }));
   app.route("/api/auth", authRoutes(wired));
@@ -78,6 +85,7 @@ export function createApp(deps: GatewayDeps): Hono {
   app.route("/api", projectRoutes(wired));
   app.route("/api", agentRoutes(wired));
   app.route("/api", storeRoutes(wired));
+  app.route("/api", losiaRoutes(wired));
   app.route("/api", reviewRoutes(wired));
 
   return app;

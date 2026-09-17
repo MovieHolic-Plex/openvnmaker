@@ -91,8 +91,9 @@ export function compareNativeManuscripts(before:VnScript,after:VnScript):Compati
       if(!same(or,nr))add("choice-logic","high",`${scope} · 선택 ${index+1}`,"선택지의 목적지·조건·결과가 변경됐습니다. 기존 상태에서 잠긴 선택지와 누적 결과를 확인하세요.");
       if(ot!==nt)add("choice-caption","review",`${scope} · 선택 ${index+1}`,"선택지 문구가 변경됐습니다. 이전 선택지 저장의 복원 위치를 확인하세요.");
     }
-    if(old.next!==next.next||old.ending!==next.ending)add("scene-exit","high",scope,"장면의 다음 경로 또는 엔딩이 변경됐습니다. 기존 진행 중 세이브의 도달 경로를 확인하세요.");
-    const {lines:ol,choices:ocs,next:on,ending:oe,...oldStage}=old,{lines:nl,choices:ncs,next:nn,ending:ne,...newStage}=next;
+    if(old.next!==next.next||old.ending!==next.ending||!same(old.routes,next.routes))add("scene-exit","high",scope,"장면의 다음 경로·조건 경로·엔딩이 변경됐습니다. 기존 진행 중 세이브의 도달 경로를 확인하세요.");
+    if(!same(old.set,next.set))add("scene-set","high",scope,"장면 진입 변수 설정이 변경됐습니다. 이전 세이브에서 복원한 조건 분기를 확인하세요.");
+    const {lines:ol,choices:ocs,next:on,ending:oe,routes:orr,set:ost,...oldStage}=old,{lines:nl,choices:ncs,next:nn,ending:ne,routes:nrr,set:nst,...newStage}=next;
     if(!same(oldStage,newStage))add("scene-cues","review",scope,"배경·음악·배우 배치 등 장면 설정이 변경됐습니다. 이전 저장의 연출 상태가 그대로 남을 수 있습니다.");
   }
   for(const id of newScenes.keys())if(!oldScenes.has(id))add("scene-added","info",`장면 ${id}`,"새 장면입니다. 기존 세이브에서도 의도한 경로로 도달하는지 확인하세요.");

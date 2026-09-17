@@ -15,7 +15,7 @@ export function layoutStoryMap(script: VnScript): { positions: Map<string, { x: 
   for (let i = 0; i < queue.length; i++) {
     const scene = byId.get(queue[i]!);
     if (!scene) continue;
-    const targets = scene.choices?.length ? scene.choices.map(choice => choice.next) : !scene.ending && scene.next ? [scene.next] : [];
+    const targets = scene.choices?.length ? scene.choices.map(choice => choice.next) : [...(scene.routes ?? []).map(route => route.next), ...(!scene.ending && scene.next ? [scene.next] : [])];
     for (const target of targets) if (!depth.has(target) && byId.has(target)) { depth.set(target, depth.get(scene.id)! + 1); queue.push(target); }
   }
   let unreachable = 0;
@@ -45,7 +45,7 @@ export const StoryMap = memo(function StoryMap({ script, selected, onSelect }: {
   const { positions, width, height } = useMemo(() => layoutStoryMap(script), [script]);
   return <section className="graph-view"><div className="view-heading"><div><p className="eyebrow">EVERY CHOICE MATTERS</p><h2>이야기가 흐르는 길</h2><p>씬을 누르면 해당 장면으로 이동합니다.</p></div><div className="zoom-control"><button aria-label="스토리 맵 축소" onClick={() => setZoom(Math.max(0.45, zoom - 0.1))}>−</button><span>{Math.round(zoom * 100)}%</span><button aria-label="스토리 맵 확대" onClick={() => setZoom(Math.min(1.25, zoom + 0.1))}>+</button></div></div><div className="graph-scroll"><div style={{ width: width * zoom, height: height * zoom }}><div className="graph-canvas" data-testid="graph-canvas" style={{ width, height, transform: `scale(${zoom})` }}><svg className="graph-edges" width={width} height={height} aria-hidden="true"><defs><marker id="edge-arrow" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6" fill="#9a83d8" /></marker></defs>{script.scenes.flatMap(scene => {
     const from = positions.get(scene.id)!;
-    return (scene.choices?.length ? scene.choices.map(choice => choice.next) : !scene.ending && scene.next ? [scene.next] : []).map((id, index) => {
+    return (scene.choices?.length ? scene.choices.map(choice => choice.next) : [...(scene.routes ?? []).map(route => route.next), ...(!scene.ending && scene.next ? [scene.next] : [])]).map((id, index) => {
       const to = positions.get(id); if (!to) return null;
       return <path key={`${scene.id}-${id}-${index}`} d={`M${from.x + 105} ${from.y + 127} C${from.x + 105} ${from.y + 157}, ${to.x + 105} ${to.y - 30}, ${to.x + 105} ${to.y}`} fill="none" stroke={scene.choices?.length ? "#b497ed" : "#66557f"} strokeWidth="1.8" markerEnd="url(#edge-arrow)" />;
     });

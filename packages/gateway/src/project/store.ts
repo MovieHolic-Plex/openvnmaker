@@ -7,7 +7,10 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseBeats } from "@vnmaker/ir";
+import { asCondition, parseBeats } from "@vnmaker/ir";
+import type { LineCondition } from "@vnmaker/ir";
+import { validCharacterKey } from "@vnmaker/content";
+import type { Character } from "@vnmaker/content";
 import { writeFileAtomic } from "../atomic.js";
 import { PROJECT_DIR } from "../config.js";
 
@@ -22,7 +25,14 @@ export interface ProjectNode {
 export interface ProjectEdge {
   readonly from: string;
   readonly to: string;
-  readonly when?: string;
+  /** 구조화 표시 조건 — 구버전의 플래그명 문자열은 읽을 때 {all:[이름]} 으로 정규화된다. */
+  readonly when?: LineCondition;
+}
+
+/** story/characters.json — 그래프가 참조하는 등장인물의 표시명·색·소개. 선택 파일이다. */
+export interface ProjectMeta {
+  readonly title?: string;
+  readonly subtitle?: string;
 }
 
 export interface ProjectStore {
@@ -36,6 +46,10 @@ export interface ProjectStore {
    * 동시 connect 가 한쪽 엣지를 지우지 않게 이 경로로만 수정한다.
    */
   updateEdges(mutate: (edges: readonly ProjectEdge[]) => readonly ProjectEdge[]): Promise<{ path: string; edges: readonly ProjectEdge[] }>;
+  /** 선택 파일 story/characters.json — 없으면 빈 배열, 있으면서 깨졌으면 오류. */
+  readCharacters?(): Promise<readonly Character[]>;
+  /** 선택 파일 vnmaker.json — 컴파일된 원고의 제목·부제를 덮는다. */
+  readMeta?(): Promise<ProjectMeta>;
 }
 
 export function assertSafeNodeId(id: string): string {
@@ -65,6 +79,16 @@ function asWritableNode(value: unknown): ProjectNode {
   return { ...node, beats: parseBeats(node.beats) };
 }
 
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && Object.values(value as Record<string, unknown>).every(entry => typeof entry === "string");
+}
+
+function isOutfitImages(value: unknown): boolean {
+  return isStringRecord(value) === false && value !== null && typeof value === "object" && !Array.isArray(value)
+    && Object.values(value as Record<string, unknown>).every(isStringRecord);
+}
+
 function asEdge(value: unknown): ProjectEdge {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("엣지가 객체가 아니다");
@@ -75,7 +99,7 @@ function asEdge(value: unknown): ProjectEdge {
   return {
     from: assertSafeNodeId(raw["from"]),
     to: assertSafeNodeId(raw["to"]),
-    ...(typeof when === "string" && when !== "" ? { when } : {}),
+    ...(when === undefined || when === "" ? {} : { when: asCondition(when) }),
   };
 }
 
@@ -149,6 +173,21 @@ export function createFileProjectStore(root: string = PROJECT_DIR): ProjectStore
     return { path: "story/edges.json" };
   };
 
+  const readOptionalJson = async (path: string, label: string): Promise<unknown | null> => {
+    let raw: string;
+    try {
+      raw = await readFile(path, "utf8");
+    } catch (error) {
+      if (isMissing(error)) return null;
+      throw error;
+    }
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch (error) {
+      throw new Error(`${label} 이 손상됐다: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   return {
     async writeNode(node) {
       const parsed = asWritableNode(node);
@@ -215,6 +254,38 @@ export function createFileProjectStore(root: string = PROJECT_DIR): ProjectStore
         () => undefined,
       );
       return task;
+    },
+    async readCharacters() {
+      const raw = await readOptionalJson(join(root, "story", "characters.json"), "characters.json");
+      if (raw === null) return [];
+      const rows = (raw as { characters?: unknown })?.characters ?? raw;
+      if (!Array.isArray(rows)) throw new Error("characters.json 이 배열이 아니다");
+      return rows.map((row) => {
+        const item = row as Record<string, unknown>;
+        if (item === null || typeof item !== "object" || !validCharacterKey(item["id"]) || typeof item["name"] !== "string" || item["name"] === "") {
+          throw new Error("characters.json 항목은 영문 id 와 이름이 필요하다");
+        }
+        return {
+          id: item["id"] as Character["id"],
+          name: item["name"],
+          color: typeof item["color"] === "string" ? item["color"] : "#b7c6d4",
+          bio: typeof item["bio"] === "string" ? item["bio"] : "",
+          // 스토어 설치·직접 가져온 표정 그림 — 문자열 맵만 통과시키고 나머지 검증은 parseScript 에 맡긴다.
+          ...(isStringRecord(item["expressionImages"]) ? { expressionImages: item["expressionImages"] as NonNullable<Character["expressionImages"]> } : {}),
+          ...(Array.isArray(item["outfits"]) && item["outfits"].every(row => typeof row === "string") ? { outfits: item["outfits"] as string[] } : {}),
+          ...(isOutfitImages(item["outfitImages"]) ? { outfitImages: item["outfitImages"] as NonNullable<Character["outfitImages"]> } : {}),
+          ...(item["chromaKey"] === "#00ff00" ? { chromaKey: "#00ff00" as const } : {}),
+        };
+      });
+    },
+    async readMeta() {
+      const raw = await readOptionalJson(join(root, "vnmaker.json"), "vnmaker.json");
+      if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return {};
+      const row = raw as Record<string, unknown>;
+      return {
+        ...(typeof row["title"] === "string" && row["title"] !== "" ? { title: row["title"] } : {}),
+        ...(typeof row["subtitle"] === "string" && row["subtitle"] !== "" ? { subtitle: row["subtitle"] } : {}),
+      };
     },
   };
 }

@@ -5,6 +5,7 @@ import {buildExportBundle} from "./exportBundle.js";
 import {Icon} from "./Icon.js";
 import {NativeBaselineSelector,selectedNativeBaseline} from "./NativeBaselineSelector.js";
 import {NativeBuildComparison} from "./NativeCompatibilityReview.js";
+import {fetchHostCapabilities} from "../api/host.js";
 import "./export-bundle.css";
 import "./native-build.css";
 
@@ -17,7 +18,8 @@ async function request(path:string,options?:RequestInit){
   if(!response.ok)throw new Error(result.error??`빌드 서버 오류 ${response.status}`);return result;
 }
 export function NativeBuildButton({script,onChange}:{script:VnScript;onChange:(script:VnScript)=>void}){
-  const[open,setOpen]=useState(false),[ready,setReady]=useState(false),[checking,setChecking]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(""),[preparing,setPreparing]=useState(false),[job,setJob]=useState<Job|null>(null),[jobId,setJobId]=useState<string|null>(()=>localStorage.getItem(KEY));
+  const[open,setOpen]=useState(false),[ready,setReady]=useState(false),[checking,setChecking]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(""),[preparing,setPreparing]=useState(false),[job,setJob]=useState<Job|null>(null),[jobId,setJobId]=useState<string|null>(()=>localStorage.getItem(KEY)),[noGateway,setNoGateway]=useState(false);
+  useEffect(()=>{void fetchHostCapabilities().then(host=>{if(host&&!host.gateway)setNoGateway(true);});},[]);
   const dialog=useRef<HTMLDialogElement>(null),preparation=useRef<AbortController|null>(null);
   const[history,setHistory]=useState<Job[]>([]),[unreadable,setUnreadable]=useState(0),[historyError,setHistoryError]=useState("");
   useEffect(()=>{if(!open)return;let stale=false;void request("/jobs").then(value=>{if(!stale){setHistory(value.jobs);setUnreadable(value.unreadable);setHistoryError("");}}).catch(error=>{if(!stale)setHistoryError(error.message);});return()=>{stale=true;};},[open,job?.phase]);
@@ -50,6 +52,8 @@ export function NativeBuildButton({script,onChange}:{script:VnScript;onChange:(s
     }catch(error){if(!controller.signal.aborted)setError(error instanceof Error?error.message:String(error));}
     finally{preparation.current=null;setPreparing(false);}
   }
+  // 게이트웨이 없는 배포(호스팅 /make)에는 빌드 서버가 없다 — 버튼 자체를 숨긴다.
+  if(noGateway)return null;
   return <><button className="studio-button" type="button" data-testid="studio-native-build" onClick={()=>{setError("");setOpen(true);}}><Icon name="download"/><span>실행 게임</span></button>
     {createPortal(<dialog ref={dialog} className="export-bundle-dialog native-build-dialog" aria-label="네이티브 게임 빌드" onCancel={event=>{if(preparing)event.preventDefault();else setOpen(false);}}>
       <button className="export-bundle-close" disabled={preparing} aria-label="네이티브 빌드 창 닫기" onClick={()=>setOpen(false)}><Icon name="close"/></button>

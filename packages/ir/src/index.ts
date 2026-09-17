@@ -1,4 +1,7 @@
-import type { Character, CharacterId, Choice, Expression, Line, Scene, SpriteSlot, VnScript } from "@vnmaker/content";
+import type { Character, CharacterId, Choice, Expression, Line, LineCondition, Scene, SceneRoute, SpriteSlot, VnScript } from "@vnmaker/content";
+import { parseCondition, validBackgroundUrl, validFlagName } from "@vnmaker/content";
+
+export type { LineCondition } from "@vnmaker/content";
 
 export type SceneBeat = {
   readonly op: "scene";
@@ -15,6 +18,10 @@ export type SayBeat = {
   readonly expression?: string;
   readonly sfx?: string;
   readonly shake?: boolean;
+  /** 이 줄에서 배경을 바꾼다 — 설치한 자산 주소(/assets/user/…)만 받는다. */
+  readonly bg?: string;
+  /** 이 줄에서 전체화면 이미지를 띄운다 — 설치한 자산 주소만 받는다. */
+  readonly cg?: string;
 };
 
 export type ShowBeat = {
@@ -23,6 +30,8 @@ export type ShowBeat = {
   readonly slot: SpriteSlot;
   readonly expression: string;
   readonly outfit?: string;
+  /** 표정 원화 대신 쓸 임의 이미지 주소(/assets/user/…) — poseUrl 로 나간다. */
+  readonly image?: string;
 };
 
 export type HideBeat = {
@@ -33,7 +42,8 @@ export type HideBeat = {
 export interface MenuChoice {
   readonly text: string;
   readonly to: string;
-  readonly when?: string;
+  /** 구조화 표시 조건 {all, none, compare} — 플레이어의 choice.when 과 같다. */
+  readonly when?: LineCondition;
   readonly set?: Record<string, string | number | boolean>;
 }
 
@@ -81,6 +91,7 @@ export interface CompiledChoice extends Choice {
 export interface CompiledScene extends Scene {
   readonly cg?: string;
   readonly choices?: readonly CompiledChoice[];
+  readonly routes?: readonly SceneRoute[];
 }
 
 export interface CompiledScript extends VnScript {
@@ -117,12 +128,28 @@ function asFlagVars(value: unknown, message: string): Record<string, string | nu
   const raw = asRecord(value);
   const vars: Record<string, string | number | boolean> = {};
   for (const [key, entry] of Object.entries(raw)) {
-    if (typeof entry !== "string" && typeof entry !== "number" && typeof entry !== "boolean") {
+    if (!validFlagName(key) || typeof entry !== "string" && typeof entry !== "number" && typeof entry !== "boolean") {
       throw new Error(message);
     }
     vars[key] = entry;
   }
   return vars;
+}
+
+/**
+ * when 을 구조화 조건으로 읽는다. 객체는 {all, none, compare} 여야 한다.
+ * 순수 플래그 이름 문자열("metYuna")은 {all: [이름]} 으로 읽는다 — 문자열 조건식은
+ * 지원하지 않으므로 연산자·공백이 섞인 문자열은 여기서 거부한다.
+ */
+export function asCondition(value: unknown): LineCondition {
+  if (typeof value === "string") {
+    const name = value.trim();
+    if (!validFlagName(name)) {
+      throw new Error(`문자열 when 은 플래그 이름만 된다: ${name} — {all:[...], none:[...], compare:[...]} 형태로 써라`);
+    }
+    return { all: [name] };
+  }
+  return parseCondition(value);
 }
 
 function parseMenuChoice(value: unknown): MenuChoice {
@@ -135,7 +162,7 @@ function parseMenuChoice(value: unknown): MenuChoice {
   return {
     text,
     to,
-    ...(typeof when === "string" && when.trim() !== "" ? { when: when.trim() } : {}),
+    ...(when === undefined || when === "" ? {} : { when: asCondition(when) }),
     ...(set === undefined ? {} : { set: asFlagVars(set, "menu.set 이 잘못됐다") }),
   };
 }
@@ -164,6 +191,10 @@ export function parseBeat(value: unknown): Beat {
     if (who !== null && who !== undefined && typeof who !== "string") throw new Error("say.who 가 잘못됐다");
     const expression = beat["expression"];
     const sfx = beat["sfx"];
+    const bg = beat["bg"];
+    const cg = beat["cg"];
+    if (bg !== undefined && !validBackgroundUrl(bg)) throw new Error("say.bg 는 설치한 자산 주소(/assets/user/…)여야 한다");
+    if (cg !== undefined && !validBackgroundUrl(cg)) throw new Error("say.cg 는 설치한 자산 주소(/assets/user/…)여야 한다");
     return {
       op: "say",
       who: typeof who === "string" && who !== "" ? who : null,
@@ -171,6 +202,8 @@ export function parseBeat(value: unknown): Beat {
       ...(typeof expression === "string" && expression !== "" ? { expression } : {}),
       ...(typeof sfx === "string" && sfx !== "" ? { sfx } : {}),
       ...(beat["shake"] === true ? { shake: true as const } : {}),
+      ...(typeof bg === "string" ? { bg } : {}),
+      ...(typeof cg === "string" ? { cg } : {}),
     };
   }
   if (op === "show") {
@@ -179,12 +212,15 @@ export function parseBeat(value: unknown): Beat {
     if (slot !== "left" && slot !== "center" && slot !== "right") throw new Error("show.slot 이 잘못됐다");
     const expression = asNonEmpty(beat["expression"], "show.expression 이 없다");
     const outfit = beat["outfit"];
+    const image = beat["image"];
+    if (image !== undefined && !validBackgroundUrl(image)) throw new Error("show.image 는 설치한 자산 주소(/assets/user/…)여야 한다");
     return {
       op: "show",
       who,
       slot,
       expression,
       ...(typeof outfit === "string" && outfit !== "" ? { outfit } : {}),
+      ...(typeof image === "string" ? { image } : {}),
     };
   }
   if (op === "hide") {
@@ -302,25 +338,45 @@ export function compileNode(node: StoryNode, characters: readonly Character[]): 
   };
 }
 
-function compileGraphNode(node: StoryNode, edgeTo: string | undefined): CompiledScene {
+/** 노드의 출구 계약: 조건 경로(routes)가 먼저 평가되고, 무조건 출구(next)는 폴백이다. */
+interface NodeExits {
+  readonly routes: readonly SceneRoute[];
+  readonly next?: string;
+}
+
+function compileGraphNode(node: StoryNode, exits: NodeExits): CompiledScene {
   let background = "title";
+  let backgroundUrl: string | undefined;
   let bgm: string | undefined;
   let chapter: string | undefined;
   let cg: string | undefined;
+  let cgUrl: string | undefined;
   let ending: string | undefined;
   let jumpTo: string | undefined;
   let pendingSfx: string | undefined;
   const lines: Line[] = [];
   const choices: CompiledChoice[] = [];
-  const sprites = new Map<string, { slot: SpriteSlot; character: string; expression?: string; outfit?: string }>();
+  const sprites = new Map<string, { slot: SpriteSlot; character: string; expression?: string; outfit?: string; image?: string }>();
+  const entrySet: Record<string, string | number | boolean> = {};
 
   for (const beat of node.beats) {
     switch (beat.op) {
       case "scene":
-        background = beat.bg;
+        // "/…" 주소(스토어 설치·직접 가져온 자산)는 backgroundUrl/cgUrl 로, id 는 내장 자산 키로 나간다.
+        if (beat.bg.startsWith("/")) {
+          if (!validBackgroundUrl(beat.bg)) throw new Error(`노드 ${node.id} 의 scene.bg 주소가 올바르지 않다: ${beat.bg}`);
+          backgroundUrl = beat.bg;
+        } else {
+          background = beat.bg;
+          backgroundUrl = undefined;
+        }
         bgm = beat.bgm;
         chapter = beat.chapter;
-        cg = beat.cg;
+        if (beat.cg === undefined) { cg = undefined; cgUrl = undefined; }
+        else if (beat.cg.startsWith("/")) {
+          if (!validBackgroundUrl(beat.cg)) throw new Error(`노드 ${node.id} 의 scene.cg 주소가 올바르지 않다: ${beat.cg}`);
+          cg = undefined; cgUrl = beat.cg;
+        } else { cg = beat.cg; cgUrl = undefined; }
         break;
       case "say": {
         const sfx = beat.sfx ?? pendingSfx;
@@ -331,6 +387,8 @@ function compileGraphNode(node: StoryNode, edgeTo: string | undefined): Compiled
           ...(beat.expression === undefined ? {} : { expression: beat.expression as Expression }),
           ...(sfx === undefined ? {} : { sfx }),
           ...(beat.shake === true ? { shake: true as const } : {}),
+          ...(beat.bg === undefined ? {} : { backgroundUrl: beat.bg }),
+          ...(beat.cg === undefined ? {} : { cgUrl: beat.cg }),
         });
         break;
       }
@@ -343,6 +401,7 @@ function compileGraphNode(node: StoryNode, edgeTo: string | undefined): Compiled
           character: beat.who,
           ...(beat.expression === undefined ? {} : { expression: beat.expression }),
           ...(beat.outfit === undefined ? {} : { outfit: beat.outfit }),
+          ...(beat.image === undefined ? {} : { image: beat.image }),
         });
         break;
       }
@@ -354,14 +413,11 @@ function compileGraphNode(node: StoryNode, edgeTo: string | undefined): Compiled
       }
       case "menu": {
         for (const choice of beat.choices) {
-          // when 은 표현식 문자열이고 cond 의미는 아직 미정 — 조용히 꿰는 대신 거부한다.
-          // (파서와 네이티브 exporter 모두 cond 를 거부하므로 여기서내도 쓸 수 없다.)
-          if (choice.when !== undefined) {
-            throw new Error(`menu.when 의 조건 표현 의미가 정해지지 않았다 — 노드 ${node.id}`);
-          }
+          // 직접 만든 노드의 문자열 when 도 여기서 구조화 조건으로 읽는다 (parseMenuChoice 와 같은 규칙).
           choices.push({
             text: choice.text,
             next: choice.to,
+            ...(choice.when === undefined ? {} : { when: asCondition(choice.when) }),
             ...(choice.set === undefined ? {} : { set: { ...choice.set } }),
           });
         }
@@ -371,9 +427,13 @@ function compileGraphNode(node: StoryNode, edgeTo: string | undefined): Compiled
         if (jumpTo === undefined) jumpTo = beat.to;
         break;
       case "set":
-        // set 은 노드 실행 시점 적용이어야 한다 — 컴파일 타임 전역 폴딩은 도달 여부와 무관하게
-        // 플래그를 박아 의미를 깬다. 실행 시점 의미가 정해질 때까지 거부한다.
-        throw new Error(`set 비트의 컴파일 의미가 정해지지 않았다 — 노드 ${node.id}`);
+        // 노드 안에는 플래그를 읽는 비트가 없다 — 위치와 무관하게 장면 진입 적용과 같다.
+        // 같은 키를 두 번 세면 뒤가 이긴다. 직접 만든 노드도 파서를 우회할 수 있으니 여기서도 검증한다.
+        for (const [key, entry] of Object.entries(beat.vars)) {
+          if (!validFlagName(key)) throw new Error(`노드 ${node.id} 의 set 변수 이름이 올바르지 않다: ${key}`);
+          entrySet[key] = entry;
+        }
+        break;
       case "play":
         if (beat.kind === "bgm") bgm = beat.sound;
         else pendingSfx = beat.sound;
@@ -386,34 +446,66 @@ function compileGraphNode(node: StoryNode, edgeTo: string | undefined): Compiled
     }
   }
 
+  if (lines.length === 0) throw new Error(`노드 ${node.id} 에 say 비트가 없다 — 장면에는 최소 한 줄이 필요하다`);
+
+  const hasExit = jumpTo !== undefined || exits.next !== undefined || exits.routes.length > 0;
+  if (choices.length > 0 && hasExit) {
+    throw new Error(`노드 ${node.id} 에 선택지와 다른 출구가 함께 있다 — 분기는 선택지만 정한다`);
+  }
+  // jump 와 무조건 엣지가 서로 다른 곳을 가리키면 어느 쪽이 기본 다음인지 모호하다.
+  if (jumpTo !== undefined && exits.next !== undefined && jumpTo !== exits.next) {
+    throw new Error(`노드 ${node.id} 의 jump(${jumpTo})와 엣지(${exits.next})가 서로 다른 다음을 가리킨다`);
+  }
+  const next = jumpTo ?? exits.next;
+  // 엔딩과 무조건 출구가 공존하면 출구가 죽는다 — 조건 경로(충족 시 우선 출구)와 엔딩은 함께 쓸 수 있다.
+  if (ending !== undefined && next !== undefined) {
+    throw new Error(`노드 ${node.id} 에 엔딩과 무조건 출구가 함께 있다 — 어느 쪽도 죽이지 말고 노드를 나눠라`);
+  }
+
   const spriteList = [...sprites.values()].map((dir) => ({
     slot: dir.slot,
     character: dir.character as CharacterId,
     ...(dir.expression === undefined ? {} : { expression: dir.expression as Expression }),
     ...(dir.outfit === undefined ? {} : { outfit: dir.outfit }),
+    ...(dir.image === undefined ? {} : { poseUrl: dir.image }),
   }));
-  // jump 와 엣지가 서로 다른 곳을 가리키면 어느 쪽이 진짜 다음인지 미정 — 조용히 버리지 않는다.
-  if (jumpTo !== undefined && edgeTo !== undefined && jumpTo !== edgeTo) {
-    throw new Error(`노드 ${node.id} 의 jump(${jumpTo})와 엣지(${edgeTo})가 서로 다른 다음을 가리킨다`);
-  }
-  const next = jumpTo ?? edgeTo;
-  // 선택지와 나가는 엣지/jump 가 공존하면 어느 쪽이 다음을 정하는지 미정 — 조용히 버리지 않는다.
-  if (choices.length > 0 && next !== undefined) {
-    throw new Error(`노드 ${node.id} 에 선택지와 다음 엣지가 함께 있다 — 분기 표현이 정해지지 않았다`);
-  }
 
   return {
     id: node.id,
     background,
     lines,
+    ...(backgroundUrl === undefined ? {} : { backgroundUrl }),
     ...(bgm === undefined ? {} : { bgm }),
     ...(chapter === undefined ? {} : { chapter }),
     ...(cg === undefined ? {} : { cg }),
+    ...(cgUrl === undefined ? {} : { cgUrl }),
+    ...(Object.keys(entrySet).length === 0 ? {} : { set: entrySet }),
     ...(spriteList.length === 0 ? {} : { sprites: spriteList }),
     ...(choices.length === 0 ? {} : { choices }),
+    ...(choices.length > 0 || exits.routes.length === 0 ? {} : { routes: exits.routes }),
     ...(choices.length > 0 || next === undefined ? {} : { next }),
     ...(ending === undefined ? {} : { ending }),
   };
+}
+
+/** 모델이 자유롭게 쓰는 화자 id 를 등장인물로 올린다 — 등록되지 않은 화자는 parseScript 가 거부한다. */
+const SYNTH_COLORS = ["#b7c6d4", "#e8c07d", "#9ec9a8", "#d49a9a", "#a9a1d4", "#8fb8c9"];
+
+function collectSpeakers(nodes: readonly StoryNode[], known: ReadonlySet<string>): Character[] {
+  const extra: string[] = [];
+  for (const node of nodes) {
+    for (const beat of node.beats) {
+      const who = beat.op === "say" ? beat.who : beat.op === "show" || beat.op === "hide" ? beat.who : undefined;
+      if (typeof who !== "string" || who === "" || who === "me" || known.has(who) || extra.includes(who)) continue;
+      extra.push(who);
+    }
+  }
+  return extra.map((id, index) => ({
+    id: id as CharacterId,
+    name: id,
+    color: SYNTH_COLORS[index % SYNTH_COLORS.length]!,
+    bio: "",
+  }));
 }
 
 export function compileGraph(
@@ -427,25 +519,34 @@ export function compileGraph(
     if (seen.has(node.id)) throw new Error(`노드 id 가 겹친다: ${node.id}`);
     seen.add(node.id);
   }
-  const edgeNext = new Map<string, string>();
+  // 엣지를 출발 노드별로 나눈다: when 있는 것은 조건 경로, 없는 것은 무조건 출구.
+  // 무조건 출구는 하나만 허용한다 — 둘 이상이면 뒤는 영원히 도달 불가라 거부한다.
+  const exitsByNode = new Map<string, { routes: SceneRoute[]; next?: string }>();
   for (const edge of edges) {
-    // 다중 출발 엣지와 엣지 조건의 표현은 아직 미정 — 첫 엣지만 살리는 건 의미 파괴다.
     if (!seen.has(edge.from) || !seen.has(edge.to)) {
       throw new Error(`엣지가 없는 노드를 가리킨다: ${edge.from} → ${edge.to}`);
     }
+    const bucket = exitsByNode.get(edge.from) ?? { routes: [] };
+    exitsByNode.set(edge.from, bucket);
+    // 저장된 구버전 엣지의 문자열 when 도 여기서 구조화 조건으로 읽는다 (parseEdge 와 같은 규칙).
     if (edge.when !== undefined) {
-      throw new Error(`엣지 조건(when)의 컴파일 의미가 정해지지 않았다: ${edge.from} → ${edge.to}`);
+      bucket.routes.push({ next: edge.to, when: asCondition(edge.when) });
+    } else if (bucket.next !== undefined && bucket.next !== edge.to) {
+      throw new Error(`노드 ${edge.from} 에서 나가는 무조건 엣지가 여러 개다 — 기본 연결은 하나만`);
+    } else {
+      bucket.next = edge.to;
     }
-    if (edgeNext.has(edge.from)) {
-      throw new Error(`노드 ${edge.from} 에서 나가는 엣지가 여러 개다 — 분기 표현이 정해지지 않았다`);
-    }
-    edgeNext.set(edge.from, edge.to);
   }
-  const scenes = nodes.map((node) => compileGraphNode(node, edgeNext.get(node.id)));
-  // 엣지뿐 아니라 jump·menu 선택지의 도착지도 실재해야 한다 — dangling 참조는 여기서 잡는다.
+  const scenes = nodes.map((node) => compileGraphNode(node, exitsByNode.get(node.id) ?? { routes: [] }));
+  // 엣지뿐 아니라 jump·menu 선택지·조건 경로의 도착지도 실재해야 한다 — dangling 참조는 여기서 잡는다.
   for (const scene of scenes) {
     if (scene.next !== undefined && !seen.has(scene.next)) {
       throw new Error(`노드 ${scene.id} 의 next 가 없는 노드를 가리킨다: ${scene.next}`);
+    }
+    for (const route of scene.routes ?? []) {
+      if (!seen.has(route.next)) {
+        throw new Error(`노드 ${scene.id} 의 조건 경로가 없는 노드를 가리킨다: ${route.next}`);
+      }
     }
     for (const choice of scene.choices ?? []) {
       if (!seen.has(choice.next)) {
@@ -455,11 +556,12 @@ export function compileGraph(
   }
   const first = nodes[0];
   if (first === undefined) throw new Error("노드가 없다");
+  const known = new Set(characters.map((actor) => actor.id as string));
   return {
     title: first.label ?? first.id,
     subtitle: "그래프 컴파일",
     start: first.id,
-    characters,
+    characters: [...characters, ...collectSpeakers(nodes, known)],
     scenes,
   };
 }
@@ -467,7 +569,8 @@ export function compileGraph(
 export interface StoryEdge {
   readonly from: string;
   readonly to: string;
-  readonly when?: string;
+  /** 조건 경로 — 없으면 무조건 출구. 순수 플래그명 문자열은 { all: [이름] }으로 읽힌다. */
+  readonly when?: LineCondition;
 }
 
 export function parseBeats(value: unknown): Beat[] {
@@ -490,14 +593,19 @@ export function parseEdge(value: unknown): StoryEdge {
   return {
     from,
     to,
-    ...(typeof when === "string" && when !== "" ? { when } : {}),
+    ...(when === undefined || when === "" ? {} : { when: asCondition(when) }),
   };
 }
 
-export function connectEdges(edges: readonly StoryEdge[], link: { from: string; to: string; when?: string }): StoryEdge[] {
+export function connectEdges(edges: readonly StoryEdge[], link: { from: string; to: string; when?: unknown }): StoryEdge[] {
   const next = parseEdge(link);
-  if (edges.some((edge) => edge.from === next.from && edge.to === next.to && (edge.when ?? "") === (next.when ?? ""))) {
+  const key = (edge: StoryEdge) => (edge.when === undefined ? "" : JSON.stringify(edge.when));
+  if (edges.some((edge) => edge.from === next.from && edge.to === next.to && key(edge) === key(next))) {
     return [...edges];
+  }
+  // 무조건 출구는 노드당 하나 — 둘째는 영원히 도달 불가라 미리 거부한다 (컴파일 규칙과 같다).
+  if (next.when === undefined && edges.some((edge) => edge.from === next.from && edge.when === undefined)) {
+    throw new Error(`노드 ${next.from} 에서 나가는 무조건 엣지가 이미 있다 — 조건 경로로 잇거나 기존 연결을 지워라`);
   }
   return [...edges, next];
 }

@@ -1,0 +1,16 @@
+.losia-token{display:grid;gap:10px;margin-bottom:18px;padding:14px;border:1px solid #b191db30;border-radius:10px;background:#8e6abd14}
+.losia-token p{margin:0;font-size:12px;color:#cbbfd9;line-height:1.7}
+.losia-token a{color:#cbb0f0}
+.losia-token-row{display:flex;gap:8px}
+.losia-token-row input{flex:1;min-width:0;background:#15131d;border:1px solid #b191db55;border-radius:8px;padding:10px;color:#ece4f4;font:12px monospace}
+.losia-token-ok{display:flex;align-items:center;gap:8px;font-size:12px;color:#a5d8b6}
+.losia-token-ok .text-button{margin-left:auto}
+.losia-publish-fields{display:grid;gap:13px;margin-top:18px}
+.losia-publish-fields label{display:grid;gap:7px;font-size:12px;color:#b7adc5}
+.losia-publish-fields input,.losia-publish-fields textarea{box-sizing:border-box;width:100%;background:#15131d;border:1px solid #b191db55;border-radius:8px;padding:10px;color:#ece4f4;font:inherit}
+.losia-publish-fields textarea{min-height:70px;resize:vertical}
+.losia-publish-fields input:focus-visible,.losia-publish-fields textarea:focus-visible,.losia-token-row input:focus-visible{outline:2px solid #ab97ed;outline-offset:2px}
+.losia-publish-fields select{box-sizing:border-box;width:100%;background:#15131d;border:1px solid #b191db55;border-radius:8px;padding:10px;color:#ece4f4;font:inherit}
+.losia-asset-flags{display:flex;gap:14px;flex-wrap:wrap}
+.losia-asset-check{display:flex!important;flex-direction:row;align-items:center;gap:8px;font-size:12px;color:#b7adc5}
+.losia-asset-check input{width:auto!important}
