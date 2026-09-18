@@ -23,6 +23,13 @@ interface Props {
 const KIND_LABELS = { all: "전체", stage: "무대", character: "인물", sound: "소리" } as const;
 const LICENSE_LABELS = { downloadable: "자유 다운로드", attribution: "출처 표시", embedded: "미리보기만" } as const;
 
+/** 무대 변형은 이름이 같다(카페·밤이 넷). 분위기·날씨 facet으로 구분 라벨을 만든다. */
+function variantLabel(item: StoreCatalogItem): string {
+  const f = item.facets;
+  if (!f) return "";
+  return [f.mood, f.weather].filter(Boolean).join(" · ");
+}
+
 /**
  * 에셋 스토어 패널. 출처를 골라 쓴다 — openvnmaker 저장소는 브라우저가 직접 받고,
  * losia.online 은 CORS 때문에 게이트웨이 프록시(/api/store/*)를 지난다.
@@ -158,7 +165,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       {fixedKind === undefined && <label>종류<select aria-label="스토어 종류" data-testid="store-kind" value={kind} onChange={event => setKind(event.target.value as keyof typeof KIND_LABELS)}>{Object.entries(KIND_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
       <label>정렬<select aria-label="스토어 정렬" value={sort} onChange={event => setSort(event.target.value as typeof sort)}><option value="new">최신</option><option value="use">사용순</option><option value="name">이름</option></select></label>
     </div>
-    {kind !== "stage" && kind !== "sound" && <label className="art-store-character">설치할 캐릭터<select aria-label="스토어 캐릭터" data-testid="store-character" value={characterId} onChange={event => setCharacterId(event.target.value)}>{script.characters.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}</select></label>}
+    {kind !== "stage" && kind !== "sound" && <label className="art-store-character">인물 에셋을 입힐 캐릭터<select aria-label="스토어 캐릭터" data-testid="store-character" value={characterId} onChange={event => setCharacterId(event.target.value)}>{script.characters.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}</select></label>}
     <p className="art-store-hint" data-testid="store-hint">{source.hint}</p>
     <div className="art-store-list" data-testid="store-list">
       {items.map(item => <div className="art-store-item" key={item.id} data-testid={`store-item-${item.id}`}>
@@ -167,8 +174,8 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
         </div>
         <div className="art-store-copy">
           <strong>{item.name}</strong>
-          <small>{KIND_LABELS[item.kind]} · {LICENSE_LABELS[item.license]}{item.tags?.length ? ` · ${item.tags.slice(0, 3).join(" ")}` : ""}</small>
-          <span className={`art-store-license is-${item.license}`}>{item.license === "embedded" ? "미리보기만 볼 수 있습니다(설치 불가)" : item.kind === "sound" ? "음원으로 설치" : "이미지로 설치"}</span>
+          <small>{KIND_LABELS[item.kind]} · {LICENSE_LABELS[item.license]}{variantLabel(item) ? ` · ${variantLabel(item)}` : ""}{item.tags?.length ? ` · ${item.tags.slice(0, 3).join(" ")}` : ""}</small>
+          <span className={`art-store-license is-${item.license}`}>{item.license === "embedded" ? "미리보기만 볼 수 있습니다(설치 불가)" : item.kind === "sound" ? "음원으로 설치" : item.kind === "character" ? (characterId ? `‘${script.characters.find(c => c.id === characterId)?.name ?? ""}’의 외형으로 설치` : "선택한 캐릭터의 외형으로 설치") : "이미지로 설치"}</span>
         </div>
         <button type="button" className={`art-primary art-store-install ${busy === item.id ? "is-busy" : ""}`} data-testid={`store-install-${item.id}`} disabled={busy !== "" || item.license === "embedded"} onClick={() => void install(item)}>
           {busy === item.id ? `설치 중 ${progress?.done ?? 0}/${progress?.total ?? 1}` : installedIds.has(`${source.idPrefix}-${item.id}-base`) || installedIds.has(`${source.idPrefix}-${item.id}-audio`) ? "다시 설치" : "설치"}
