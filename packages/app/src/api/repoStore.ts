@@ -170,6 +170,6 @@ export async function downloadRepoFile(id: string, role: string, signal?: AbortS
   } catch (error) {
     throw new Error(`파일을 내려받지 못했습니다. ${error instanceof Error ? error.message : String(error)}`);
   }
-  if (!response.ok) throw new Error(`파일을 내려받지 못했습니다 (HTTP ${response.status}).`);
+  if (!response.ok) throw Object.assign(new Error(`파일을 내려받지 못했습니다 (HTTP ${response.status}).`), { status: response.status });
   return await response.blob();
 }

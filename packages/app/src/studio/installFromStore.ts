@@ -12,6 +12,26 @@ import { artworksFromInstall, assertInstallable, installPlan, type InstallOption
 
 export interface InstallProgress { readonly done: number; readonly total: number }
 
+/** 느린 회선에서 파일 하나가 끊겼다고 전체 설치가 죽지 않게, 네트워크 오류·429·5xx만 다시 받는다. */
+const RETRY_DELAYS = [400, 800, 1200] as const;
+
+function isRetryable(cause: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return false;
+  const status = (cause as { status?: number } | null)?.status;
+  return status === undefined || status === 429 || status >= 500;
+}
+
+export async function downloadWithRetry(source: Pick<StoreSource, "download">, id: string, role: string, signal?: AbortSignal): Promise<Blob> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await source.download(id, role, signal);
+    } catch (cause) {
+      if (attempt >= RETRY_DELAYS.length || !isRetryable(cause, signal)) throw cause;
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+    }
+  }
+}
+
 export interface StoreInstallResult {
   readonly manifest: StoreManifest;
   readonly artworks: readonly Artwork[];
@@ -45,7 +65,7 @@ export async function installStoreAsset(
   let done = 0;
   for (const file of plan.files) {
     if (settings.signal?.aborted) throw new Error("설치를 중단했습니다.");
-    const blob = await source.download(manifest.id, file.role, settings.signal);
+    const blob = await downloadWithRetry(source, manifest.id, file.role, settings.signal);
     if (file.kind === "audio") {
       const described = await describeAudio(blob);
       const duration = await probeAudio(described.blob);

@@ -38,15 +38,20 @@ export interface StoreSearchQuery {
   readonly skip?: number;
 }
 
-async function failure(response: Response): Promise<Error> {
+export interface HttpError extends Error { readonly status?: number }
+
+async function failure(response: Response): Promise<HttpError> {
   const text = await response.text().catch(() => "");
+  let error: HttpError;
   try {
     const body = JSON.parse(text) as { error?: unknown };
-    if (typeof body.error === "string" && body.error !== "") return new Error(body.error);
+    error = typeof body.error === "string" && body.error !== ""
+      ? new Error(body.error)
+      : new Error(`스토어 요청이 실패했습니다 (HTTP ${response.status})`);
   } catch {
-    /* 본문이 JSON 이 아니면 상태 코드로 보고한다. */
+    error = new Error(`스토어 요청이 실패했습니다 (HTTP ${response.status})`);
   }
-  return new Error(`스토어 요청이 실패했습니다 (HTTP ${response.status})`);
+  return Object.assign(error, { status: response.status });
 }
 
 export async function searchStoreAssets(query: StoreSearchQuery = {}, signal?: AbortSignal): Promise<StoreCatalog> {

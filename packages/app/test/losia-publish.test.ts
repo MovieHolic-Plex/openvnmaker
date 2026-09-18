@@ -39,13 +39,36 @@ test("로컬 스튜디오: 게이트웨이 프록시 상태를 읽는다", async
   assert.deepEqual(seen.map(s => s.url), ["/api/losia/status"]);
 });
 
-test("호스팅 스튜디오: 능력 기술서가 gateway:false 면 세션 로그인으로 직통 모드다", async () => {
+test("호스팅 스튜디오: 능력 기술서의 host:losia 가 세션 로그인 직통 모드다", async () => {
   const seen = stubFetch(url =>
-    url === "/.well-known/openvnmaker.json" ? ok({ spec: "openvnmaker-host/1", gateway: false, auth: { authenticated: true, signIn: "/login" } })
+    url === "/.well-known/openvnmaker.json" ? ok({ spec: "openvnmaker-host/1", host: "losia", gateway: true, auth: { authenticated: true, signIn: "/login" } })
       : new Response("nf", { status: 404 }));
   const status = await fetchLosiaStatus();
   assert.deepEqual(status, { reachable: true, configured: true, direct: true, baseUrl: "", signIn: "/login" });
   assert.deepEqual(seen.map(s => s.url), ["/api/losia/status", "/.well-known/openvnmaker.json"]);
+});
+
+test("능력 기술서에 host 식별자가 없으면 직통을 추정하지 않고 엔드포인트를 실측한다", async () => {
+  // gateway:false 문서만으로는 losia 인지 알 수 없다 — 예전에는 이걸 직통으로 보고
+  // /api/works 없는 정적 호스트에서도 direct:true 를 선언해 게시가 조용히 실패했다.
+  const seen = stubFetch(url =>
+    url === "/.well-known/openvnmaker.json" ? ok({ spec: "openvnmaker-host/1", gateway: false, auth: { authenticated: true } })
+      : new Response("nf", { status: 404 }));
+  const status = await fetchLosiaStatus();
+  assert.equal(status.direct, false);
+  assert.deepEqual(seen.map(s => s.url), ["/api/losia/status", "/.well-known/openvnmaker.json", "/api/works?take=1"]);
+});
+
+test("능력 기술서 조회가 실패하면 직통을 추정하지 않고 닫는다", async () => {
+  const seen = stubFetch(url => {
+    if (url === "/api/losia/status") return new Response("nf", { status: 404 });
+    if (url === "/.well-known/openvnmaker.json") throw new Error("network down");
+    return ok({ items: [], total: 0 });
+  });
+  const status = await fetchLosiaStatus();
+  assert.equal(status.reachable, false);
+  assert.equal(status.direct, false);
+  assert.ok(!seen.some(s => s.url === "/api/works?take=1"), "조회 실패 시 스니핑으로 넘어가면 안 된다");
 });
 
 test("호스팅 스튜디오(구형): 기술서가 없으면 /api/works 와 세션으로 직통 모드를 추정한다", async () => {

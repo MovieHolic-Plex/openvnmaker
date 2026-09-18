@@ -140,3 +140,36 @@ test("소리 자산은 재생 길이와 함께 AudioAsset 이 된다", () => {
   assert.deepEqual(audio.map(row => ({ kind: row.kind, url: row.url, duration: row.duration })), [{ kind: "sfx", url: "/assets/user/sound.ogg", duration: 3.5 }]);
   assert.ok(audio[0]?.provenance && (audio[0].provenance as MediaProvenance).source?.includes("losia.online"));
 });
+
+test("다운로드는 네트워크 오류·5xx 를 재시도하고 4xx·중단은 즉시 실패한다", async () => {
+  const { downloadWithRetry } = await import("../src/studio/installFromStore.js");
+  const source = (fail: (calls: number) => Error | null) => {
+    let calls = 0;
+    return {
+      calls: () => calls,
+      download: async () => {
+        calls += 1;
+        const error = fail(calls);
+        if (error) throw error;
+        return new Blob(["x"]);
+      },
+    };
+  };
+
+  const flaky = source(calls => calls < 3 ? new Error("Failed to fetch") : null);
+  await downloadWithRetry(flaky, "id", "base");
+  assert.equal(flaky.calls(), 3);
+
+  const forbidden = source(() => Object.assign(new Error("embedded"), { status: 403 }));
+  await assert.rejects(() => downloadWithRetry(forbidden, "id", "base"), /embedded/);
+  assert.equal(forbidden.calls(), 1);
+
+  const broken = source(() => Object.assign(new Error("HTTP 500"), { status: 500 }));
+  await assert.rejects(() => downloadWithRetry(broken, "id", "base"));
+  assert.equal(broken.calls(), 4);
+
+  const controller = new AbortController();
+  const halted = source(() => { controller.abort(); return new Error("Failed to fetch"); });
+  await assert.rejects(() => downloadWithRetry(halted, "id", "base", controller.signal));
+  assert.equal(halted.calls(), 1);
+});
