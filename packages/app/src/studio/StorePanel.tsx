@@ -19,6 +19,8 @@ interface Props {
   readonly fixedKind?: keyof typeof KIND_LABELS;
   /** 패널이 화면에 둘 이상 있을 때 구분한다. */
   readonly panelTestId?: string;
+  /** 있으면 무대·CG 설치 직후 상태 줄에 '이 장면에 바로 적용' 버튼을 단다(현재 장면은 호출자가 안다). */
+  readonly onApplyToScene?: (artwork: Artwork) => void;
 }
 
 const KIND_LABELS = { all: "전체", stage: "무대", character: "인물", sound: "소리" } as const;
@@ -31,12 +33,15 @@ function variantLabel(item: StoreCatalogItem): string {
   return [f.mood, f.weather].filter(Boolean).join(" · ");
 }
 
+/** 캐릭터 선택의 '새 캐릭터 만들기' 센티넬 — 프로젝트에 캐릭터가 하나도 없어도 인물 에셋을 설치할 수 있다. */
+const NEW_CHARACTER = "__new__";
+
 /**
  * 에셋 스토어 패널. 출처를 골라 쓴다 — openvnmaker 저장소는 브라우저가 직접 받고,
  * losia.online 은 CORS 때문에 게이트웨이 프록시(/api/store/*)를 지난다.
  * 설치는 파일을 브라우저 보관함에 넣고 프로젝트 아트로 등록한다 — 플레이어와 ZIP 번들이 같은 경로를 쓴다.
  */
-export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled, fixedKind, panelTestId = "store-panel" }: Props) {
+export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled, fixedKind, panelTestId = "store-panel", onApplyToScene }: Props) {
   const [sourceId, setSourceId] = useState<string>(STORE_SOURCES[0]!.id);
   const [sources, setSources] = useState<readonly typeof STORE_SOURCES[number][]>(STORE_SOURCES);
   const source = storeSourceById(sourceId);
@@ -57,7 +62,8 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
   const [busy, setBusy] = useState("");
   const [brokenThumbs, setBrokenThumbs] = useState<ReadonlySet<string>>(() => new Set());
   const [progress, setProgress] = useState<InstallProgress | null>(null);
-  const [characterId, setCharacterId] = useState(script.characters[0]?.id ?? "");
+  const [pendingApply, setPendingApply] = useState<Artwork | null>(null);
+  const [characterId, setCharacterId] = useState(script.characters[0]?.id ?? NEW_CHARACTER);
   const scriptRef = useRef(script);
   const epochRef = useRef(projectEpoch);
   // 목록 조회와 설치는 서로 다른 컨트롤러를 쓴다 — 검색 중 재조회가 설치 버튼을 '설치 중'에 가두면 안 된다.
@@ -104,13 +110,16 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
 
   async function install(item: StoreCatalogItem) {
     if (busy) return;
+    // '새 캐릭터' 선택이면 설치 전에 id 를 발급한다 — 파일이 그 id 로 태깅되고 캐릭터가 같은 id 로 생긴다.
+    const wantNew = item.kind === "character" && characterId === NEW_CHARACTER;
+    const targetCharacterId = wantNew ? crypto.randomUUID() : characterId;
     const controller = new AbortController();
     const requestEpoch = projectEpoch;
     installRef.current = controller;
-    setBusy(item.id); setInstallError(""); setMessage(""); setProgress({ done: 0, total: 1 });
+    setBusy(item.id); setInstallError(""); setMessage(""); setPendingApply(null); setProgress({ done: 0, total: 1 });
     try {
       const result = await installStoreAsset(source, item.id, {
-        ...(item.kind === "character" && characterId ? { characterId } : {}),
+        ...(item.kind === "character" && targetCharacterId && targetCharacterId !== NEW_CHARACTER ? { characterId: targetCharacterId } : {}),
         signal: controller.signal,
         onProgress: setProgress,
       });
@@ -130,22 +139,40 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
         const base = result.artworks.find(asset => asset.kind === "character" && asset.expression === undefined);
         if (base) expressions["neutral"] = base.url;
       }
-      const touched = characterId !== "" && result.artworks.some(asset => asset.kind === "character");
+      const touched = targetCharacterId !== "" && targetCharacterId !== NEW_CHARACTER && result.artworks.some(asset => asset.kind === "character");
       const keyed = touched && chroma !== undefined;
+      const newCharacter = wantNew && touched ? {
+        id: targetCharacterId as VnScript["characters"][number]["id"],
+        name: item.name,
+        color: "#b6d7e8",
+        bio: "",
+        ...(Object.keys(expressions).length ? { expressionImages: expressions } : {}),
+        ...(chroma === undefined ? {} : { chromaKey: chroma }),
+      } : null;
       const next = parseScript({
         ...scriptRef.current,
-        ...(touched ? { characters: scriptRef.current.characters.map(character => character.id !== characterId ? character : {
-          ...character,
-          ...(chroma === undefined ? {} : { chromaKey: chroma }),
-          ...(Object.keys(expressions).length ? { expressionImages: { ...character.expressionImages, ...expressions } } : {}),
-        }) } : {}),
+        ...(touched ? { characters: [
+          ...scriptRef.current.characters.map(character => character.id !== targetCharacterId ? character : {
+            ...character,
+            ...(chroma === undefined ? {} : { chromaKey: chroma }),
+            ...(Object.keys(expressions).length ? { expressionImages: { ...character.expressionImages, ...expressions } } : {}),
+          }),
+          ...(newCharacter ? [newCharacter] : []),
+        ] } : {}),
         assets: [...(scriptRef.current.assets ?? []).filter(asset => !artworkIds.has(asset.id)), ...result.artworks],
         audioAssets: [...(scriptRef.current.audioAssets ?? []).filter(asset => !audioIds.has(asset.id)), ...result.audio],
       });
+      if (newCharacter) setCharacterId(newCharacter.id);
       onChange(next);
       onInstalled?.(result.artworks);
+      if (onApplyToScene) setPendingApply(result.artworks.find(asset => asset.kind === "background" || asset.kind === "cg") ?? null);
       const parts = [result.artworks.length ? `이미지 ${result.artworks.length}개` : "", result.audio.length ? `음원 ${result.audio.length}개` : ""].filter(Boolean).join(" · ");
-      setMessage(`‘${item.name}’ 설치 완료 — ${parts}. 라이브러리에서 장면에 적용하세요.${Object.keys(expressions).length ? ` 표정 ${Object.keys(expressions).length}종을 이 캐릭터에 연결했습니다.` : ""}${keyed ? " 원본이 단색 배경이라 배경 제거도 켰습니다." : ""}${result.ignored.length ? ` (지원하지 않는 역할 ${result.ignored.length}개는 건너뛰었습니다)` : ""}`);
+      const linkNote = Object.keys(expressions).length
+        ? newCharacter
+          ? ` ‘${item.name}’ 캐릭터를 새로 만들고 표정 ${Object.keys(expressions).length}종을 연결했습니다.`
+          : ` 표정 ${Object.keys(expressions).length}종을 이 캐릭터에 연결했습니다.`
+        : "";
+      setMessage(`‘${item.name}’ 설치 완료 — ${parts}. 라이브러리에서 장면에 적용하세요.${linkNote}${keyed ? " 원본이 단색 배경이라 배경 제거도 켰습니다." : ""}${result.ignored.length ? ` (지원하지 않는 역할 ${result.ignored.length}개는 건너뛰었습니다)` : ""}`);
     } catch (cause) {
       if (!controller.signal.aborted) setInstallError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -176,7 +203,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       {fixedKind === undefined && <label>종류<select aria-label="스토어 종류" data-testid="store-kind" value={kind} onChange={event => setKind(event.target.value as keyof typeof KIND_LABELS)}>{Object.entries(KIND_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
       <label>정렬<select aria-label="스토어 정렬" value={sort} onChange={event => setSort(event.target.value as typeof sort)}><option value="new">최신</option><option value="use">사용순</option><option value="name">이름</option></select></label>
     </div>
-    {kind !== "stage" && kind !== "sound" && <label className="art-store-character">인물 에셋을 입힐 캐릭터<select aria-label="스토어 캐릭터" data-testid="store-character" value={characterId} onChange={event => setCharacterId(event.target.value)}>{script.characters.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}</select></label>}
+    {kind !== "stage" && kind !== "sound" && <label className="art-store-character">인물 에셋을 입힐 캐릭터<select aria-label="스토어 캐릭터" data-testid="store-character" value={characterId} onChange={event => setCharacterId(event.target.value)}><option value={NEW_CHARACTER}>＋ 이 에셋으로 새 캐릭터</option>{script.characters.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}</select></label>}
     <p className="art-store-hint" data-testid="store-hint">{source.hint}</p>
     <div className="art-store-list" data-testid="store-list">
       {items.map(item => <div className="art-store-item" key={item.id} data-testid={`store-item-${item.id}`}>
@@ -186,7 +213,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
         <div className="art-store-copy">
           <strong>{item.name}</strong>
           <small>{KIND_LABELS[item.kind]} · {LICENSE_LABELS[item.license]}{variantLabel(item) ? ` · ${variantLabel(item)}` : ""}{item.tags?.length ? ` · ${item.tags.slice(0, 3).join(" ")}` : ""}</small>
-          <span className={`art-store-license is-${item.license}`}>{item.license === "embedded" ? "미리보기만 볼 수 있습니다(설치 불가)" : item.kind === "sound" ? "음원으로 설치" : item.kind === "character" ? (characterId ? `‘${script.characters.find(c => c.id === characterId)?.name ?? ""}’의 외형으로 설치` : "선택한 캐릭터의 외형으로 설치") : "이미지로 설치"}</span>
+          <span className={`art-store-license is-${item.license}`}>{item.license === "embedded" ? "미리보기만 볼 수 있습니다(설치 불가)" : item.kind === "sound" ? "음원으로 설치" : item.kind === "character" ? (characterId === NEW_CHARACTER ? "이 에셋으로 새 캐릭터를 만듭니다" : characterId ? `‘${script.characters.find(c => c.id === characterId)?.name ?? ""}’의 외형으로 설치` : "선택한 캐릭터의 외형으로 설치") : "이미지로 설치"}</span>
         </div>
         <button type="button" className={`art-primary art-store-install ${busy === item.id ? "is-busy" : ""}`} data-testid={`store-install-${item.id}`} disabled={busy !== "" || item.license === "embedded"} onClick={() => void install(item)}>
           {busy === item.id ? `설치 중 ${progress?.done ?? 0}/${progress?.total ?? 1}` : installedIds.has(`${source.idPrefix}-${item.id}-base`) || installedIds.has(`${source.idPrefix}-${item.id}-audio`) ? "다시 설치" : "설치"}
@@ -197,6 +224,6 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     </div>
     {error && <p className="art-store-error" role="alert">{error}</p>}
     {installError && <p className="art-store-error" role="alert" data-testid="store-install-error">{installError}</p>}
-    {message && <p className="art-store-message" role="status" data-testid="store-status">{message}</p>}
+    {message && <p className="art-store-message" role="status" data-testid="store-status">{message}{pendingApply && <button type="button" className="art-text-button art-store-apply-now" data-testid="store-apply-now" onClick={() => { const artwork = pendingApply; setPendingApply(null); onApplyToScene?.(artwork); }}>이 장면에 바로 적용</button>}</p>}
   </section>;
 }

@@ -105,6 +105,8 @@
 .art-workbench .art-store-message,.art-workbench .art-store-error { border-radius:8px; padding:12px; margin:12px 0 0; font-size:10px; line-height:1.75; word-break:keep-all; }
 .art-workbench .art-store-message { color:#cdeae2; border:1px solid #36524c; background:#172c2c; }
 .art-workbench .art-store-error { color:#f1b1ab; border:1px solid #693e40; background:#321e26; }
+/* 설치 직후 상태 줄 끝의 '바로 적용' — 완료 안내와 같은 색 계열로 살짝만 강조한다. */
+.art-store-apply-now { margin:6px 0 0; color:#8fd7c4; font-weight:600; border-bottom:1px dotted #4d7d6e; }
 /* 설치 중 버튼은 비활성이지만 진행 문구는 읽을 수 있어야 한다(disabled 의 opacity .42 를 면제). */
 .art-workbench .art-store-install.is-busy:disabled { opacity:1; }
 
