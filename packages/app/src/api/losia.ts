@@ -55,8 +55,10 @@ export async function fetchLosiaStatus(signal?: AbortSignal): Promise<LosiaStatu
   }
   // 게이트웨이 프록시가 없다 — 호스트 능력 기술서로 같은 오리진 losia 인지 확인한다.
   // 문서의 auth.authenticated 가 세션 로그인 여부라 토큰 없이도 configured 를 정직하게 판별한다.
-  const host = await readHostCapabilities(timeout);
-  if (host && !host.gateway) {
+  // losia 는 AI 게이트웨이를 얹으면서 gateway:true 가 되었으므로 !host.gateway 대신
+  // host 식별자로 '이 사이트 자체'를 알아본다. 조회 실패(네트워크)는 null 취급해 스니핑으로.
+  const host = await readHostCapabilities(timeout).catch(() => null);
+  if (host && (host.host === "losia" || !host.gateway)) {
     return { reachable: true, configured: host.authenticated, direct: true, baseUrl: "", signIn: host.signIn };
   }
   // 문서가 없는 구형 losia 배포 — 엔드포인트 스니핑으로 되돌아간다.

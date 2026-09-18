@@ -258,7 +258,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
     try {
       sessionStorage.setItem("vnmaker.previewScript", JSON.stringify(script));
       sessionStorage.setItem("vnmaker.previewPosition", JSON.stringify({ sceneId: scene.id, lineIndex: index, flags: previewFlags }));
-      window.location.href = "/?preview=1";
+      window.location.href = `${import.meta.env.BASE_URL}index.html?preview=1`;
     } catch { setSaveError("미리보기 데이터를 저장하지 못했습니다. 브라우저 저장 공간을 확인하세요."); }
   }
   /** 게이트웨이 프로젝트 그래프(story/)를 컴파일해 처음부터 플레이한다 — 스튜디오 원고와는 별개 세계다. */
@@ -274,7 +274,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
       const parsed = parseScript(compiled.script);
       sessionStorage.setItem("vnmaker.previewScript", JSON.stringify(parsed));
       sessionStorage.setItem("vnmaker.previewPosition", JSON.stringify({ sceneId: parsed.start, lineIndex: 0 }));
-      window.location.href = "/?preview=1";
+      window.location.href = `${import.meta.env.BASE_URL}index.html?preview=1`;
     } catch (err) {
       setNotice(`그래프 미리보기 실패: ${err instanceof Error ? err.message : String(err)}`.slice(0, 240));
     }
@@ -338,7 +338,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
         <label className="scene-search"><Icon name="search" size={13} /><input aria-label="씬 검색" placeholder="장면 찾기…" value={query} onChange={event => setQuery(event.target.value)} /><kbd>⌕</kbd></label>
         <ul className="studio-scene-list" data-testid="studio-scene-list"><SceneRail scenes={railScenes} selectedId={scene.id} query={query} onSelect={openSceneFromRail} onMove={moveSceneTo} /></ul>
         {noSceneMatches && <p className="empty-search">일치하는 장면이 없습니다.</p>}
-        <div className="rail-bottom"><ProjectLibrary script={script} activeId={activeProjectId} onSwitch={(id,next)=>{activateProject(id,next);setActiveProjectId(id);changeProjectEpoch();revisionRef.current+=1;setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setView("stage");setSaveEnabled(true);setNotice("작품을 열었습니다.");}}/><button className="studio-button" type="button" onClick={() => fileInput.current?.click()}><Icon name="upload" />작품 가져오기</button><a href="/" data-testid="studio-to-title">작품 플레이어 <Icon name="arrow" size={12} /></a></div>
+        <div className="rail-bottom"><ProjectLibrary script={script} activeId={activeProjectId} onSwitch={(id,next)=>{activateProject(id,next);setActiveProjectId(id);changeProjectEpoch();revisionRef.current+=1;setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setView("stage");setSaveEnabled(true);setNotice("작품을 열었습니다.");}}/><button className="studio-button" type="button" onClick={() => fileInput.current?.click()}><Icon name="upload" />작품 가져오기</button><a href={`${import.meta.env.BASE_URL}index.html`} data-testid="studio-to-title">작품 플레이어 <Icon name="arrow" size={12} /></a></div>
         <input ref={fileInput} data-testid="studio-import" type="file" accept=".json,application/json" hidden onChange={event => void importProject(event.target.files?.[0])} />
       </aside>
       <main className="studio-center">

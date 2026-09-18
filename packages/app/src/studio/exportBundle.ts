@@ -87,11 +87,24 @@ export async function buildExportBundle(source: VnScript, options: ExportOptions
   const errors = auditScript(script).filter(issue => issue.severity === "error");
   if (errors.length) throw new Error(`배포 전에 원고 연결을 확인하세요.\n${errors.map(issue => `${issue.sceneId}: ${issue.message}`).join("\n")}`);
   const fetcher = options.fetcher ?? fetch;
+  // 느린 회선에서 일시적 전송 실패 한 번이 수백 MB 배포 전체를 죽이지 않게 짧게 재시도한다.
+  // 4xx 는 재시도해도 같으니 즉시 던지고, 네트워크 오류·5xx·429 만 다시 본다.
   const request = async (url: string) => {
-    options.signal?.throwIfAborted();
-    const response = await fetcher(url, { signal: options.signal ?? null, cache: "no-store", redirect: "error" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response;
+    let last: unknown = new Error("요청이 실패했습니다");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      options.signal?.throwIfAborted();
+      try {
+        const response = await fetcher(url, { signal: options.signal ?? null, cache: "no-store", redirect: "error" });
+        if (response.ok) return response;
+        last = new Error(`HTTP ${response.status}`);
+        if (response.status < 500 && response.status !== 429) break;
+      } catch (error) {
+        options.signal?.throwIfAborted();
+        last = error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+    throw last;
   };
   options.onProgress?.({ phase: "player", complete: 0, total: 1 });
   const runtimeBase = (options.runtimeBase ?? "/export-runtime").replace(/\/+$/, "");

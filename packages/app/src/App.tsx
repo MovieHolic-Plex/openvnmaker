@@ -402,7 +402,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   if (state.phase === "ending") {
     return (
       <main className="vn-root">
-        {isStudioPreview && <a className="studio-return" href="/studio.html">← 스튜디오로 돌아가기</a>}
+        {isStudioPreview && <a className="studio-return" href={`${import.meta.env.BASE_URL}studio.html`}>← 스튜디오로 돌아가기</a>}
         <PaperTexture />
         <BgmPlayer fadeSeconds={vnScript.musicFadeSeconds} track={bgmTrack} volume={bgmVolume} unlocked={unlocked} onError={() => onMediaError("배경음악")} />
         {mediaNotice && <p className="player-save-notice media-notice" data-testid="media-notice" aria-live="polite">{mediaNotice}</p>}
@@ -446,7 +446,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
 
   return (
     <main className="vn-root">
-      {isStudioPreview && <a className="studio-return" href="/studio.html" data-testid="studio-return">← 스튜디오로 돌아가기</a>}
+      {isStudioPreview && <a className="studio-return" href={`${import.meta.env.BASE_URL}studio.html`} data-testid="studio-return">← 스튜디오로 돌아가기</a>}
       {saveFeedback && <p className="player-save-notice" role="status">{saveFeedback}</p>}
       {mediaNotice && <p className="player-save-notice media-notice" data-testid="media-notice" aria-live="polite">{mediaNotice}</p>}
       <PaperTexture />

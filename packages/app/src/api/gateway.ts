@@ -11,6 +11,8 @@ export interface AuthStatus {
   readonly provider: string | null;
   /** 로그인해야 할 때 서버가 주는 사이트 경로 — 있으면 그 주소로 이동한다. */
   readonly loginUrl: string | null;
+  /** losia: 로그인은 됐지만 본인 Google 자격 미연결 — loginUrl 은 /settings/ai 를 가리킨다. */
+  readonly needsCredential: boolean;
 }
 
 export interface GenerateResponse {
@@ -35,8 +37,9 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
     const body = await readJson(res);
     const provider = typeof body["provider"] === "string" ? body["provider"] : null;
     const loginUrl = typeof body["loginUrl"] === "string" ? body["loginUrl"] : null;
+    const needsCredential = body["needsCredential"] === true;
     if (!res.ok) {
-      return { reachable: true, authenticated: false, email: null, projectId: null, error: String(body["error"] ?? res.status), provider, loginUrl };
+      return { reachable: true, authenticated: false, email: null, projectId: null, error: String(body["error"] ?? res.status), provider, loginUrl, needsCredential };
     }
     const authenticated = body["authenticated"] === true;
     return {
@@ -47,6 +50,7 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
       error: null,
       provider,
       loginUrl,
+      needsCredential,
     };
   } catch (err) {
     return {
@@ -57,6 +61,7 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
       error: err instanceof Error ? err.message : String(err),
       provider: null,
       loginUrl: null,
+      needsCredential: false,
     };
   }
 }
