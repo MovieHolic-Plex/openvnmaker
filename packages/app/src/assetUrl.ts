@@ -5,6 +5,11 @@
  */
 export function assetUrl(path: string, base?: string): string {
   if (!path.startsWith("/") || path.startsWith("//")) return path;
+  // 절대 경로 base 로 빌드된 호스팅 번들(/make/ 등)은 미디어가 번들 옆이 아니라 오리진 루트의
+  // /assets/ 네임스페이스에 있다(losia 의 rewrite·서비스워커가 루트에서 서빙). baseURI 로
+  // 상대해석하면 /make/assets/ 로 새어 나간다. ./ 로 빌드된 독립 플레이어는 여기에 해당하지 않는다.
+  const bundleBase = import.meta.env?.BASE_URL ?? "/";
+  if (bundleBase.startsWith("/") && bundleBase !== "/") return path;
   const resolved = base ?? (typeof document === "undefined" ? null : document.baseURI);
   if (!resolved) return path;
   try {

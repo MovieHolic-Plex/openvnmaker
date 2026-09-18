@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { parseScript, type Artwork, type VnScript } from "@vnmaker/content";
 import type { StoreCatalogItem } from "../api/store.js";
+import { fetchHostCapabilities } from "../api/host.js";
 import { STORE_SOURCES, storeSourceById } from "../api/storeSource.js";
 import { Icon } from "./Icon.js";
 import { installStoreAsset, type InstallProgress } from "./installFromStore.js";
@@ -37,6 +38,7 @@ function variantLabel(item: StoreCatalogItem): string {
  */
 export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled, fixedKind, panelTestId = "store-panel" }: Props) {
   const [sourceId, setSourceId] = useState<string>(STORE_SOURCES[0]!.id);
+  const [sources, setSources] = useState<readonly typeof STORE_SOURCES[number][]>(STORE_SOURCES);
   const source = storeSourceById(sourceId);
   const [kindChoice, setKind] = useState<keyof typeof KIND_LABELS>(fixedKind ?? "all");
   const kind = fixedKind ?? kindChoice;
@@ -65,6 +67,15 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
   epochRef.current = projectEpoch;
 
   useEffect(() => () => { listRef.current?.abort(); installRef.current?.abort(); }, [projectEpoch]);
+
+  // losia 위에서 열렸다면 losia 카탈로그가 주 출처다 — 첫 탭이 되고 기본 선택도 losia.
+  useEffect(() => {
+    void fetchHostCapabilities().then(caps => {
+      if (caps?.host !== "losia") return;
+      setSources([...STORE_SOURCES].sort((a, b) => Number(b.id === "losia") - Number(a.id === "losia")));
+      setSourceId("losia");
+    });
+  }, []);
 
   useEffect(() => {
     if (!active) return;
@@ -147,7 +158,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
   return <section className="art-section art-store" data-testid={panelTestId}>
     <div className="art-section-title"><Icon name="download" /><h2>에셋 스토어</h2><span className={loading ? "" : error ? "is-error" : "is-connected"}>{loading ? "불러오는 중" : error ? "연결 실패" : `${total}개`}</span></div>
     <div className="art-store-sources" role="tablist" aria-label="에셋 출처">
-      {STORE_SOURCES.map(option => <button
+      {sources.map(option => <button
         key={option.id}
         type="button"
         role="tab"
