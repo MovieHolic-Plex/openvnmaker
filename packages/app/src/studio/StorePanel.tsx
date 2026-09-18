@@ -112,7 +112,8 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     if (busy) return;
     // '새 캐릭터' 선택이면 설치 전에 id 를 발급한다 — 파일이 그 id 로 태깅되고 캐릭터가 같은 id 로 생긴다.
     const wantNew = item.kind === "character" && characterId === NEW_CHARACTER;
-    const targetCharacterId = wantNew ? crypto.randomUUID() : characterId;
+    // 등장인물 id 는 영문자로 시작해야 한다 — uuid 는 숫자로 시작할 수 있으니 접두사를 붙인다.
+    const targetCharacterId = wantNew ? `ch-${crypto.randomUUID()}` : characterId;
     const controller = new AbortController();
     const requestEpoch = projectEpoch;
     installRef.current = controller;
