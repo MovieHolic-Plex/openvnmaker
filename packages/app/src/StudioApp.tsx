@@ -72,6 +72,14 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
   const [sceneId, setSceneId] = useState(position.sceneId ?? initial.script.start);
   const [lineIndex, setLineIndex] = useState(Number.isInteger(position.lineIndex) ? Math.max(0,position.lineIndex!) : 0);
   const [view, setView] = useState<View>(views.some(view=>view.id===position.view) ? position.view as View : "overview");
+  // openvnmaker://install/<id> 또는 /make?store-install=<id> 딥링크 — 읽은 뒤 주소줄에서 지워 재실행을 막는다.
+  const [storeInstallId] = useState(() => {
+    const id = new URLSearchParams(window.location.search).get("store-install") ?? "";
+    if (id) window.history.replaceState(null, "", window.location.pathname);
+    return id;
+  });
+  // 딥링크로 들어왔으면 아트 디렉션으로 바로 연다 — 스토어 패널이 그 자산 설치를 시작한다.
+  useEffect(() => { if (storeInstallId) setView("assets"); }, [storeInstallId]);
   const [previewChoices, setPreviewChoices] = useState<PreviewChoices>(position.choices ?? {});
   const previewFlags = useMemo(() => previewFlagsFor(script, previewChoices), [script, previewChoices]);
   const [artOnly, setArtOnly] = useState(false);
@@ -357,7 +365,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
           <div className="scene-exits"><Icon name={scene.choices?.length ? "graph" : "arrow"} size={13} />{scene.choices?.length ? scene.choices.map((choice, i) => <button key={i} onClick={() => selectScene(choice.next)}>{choice.text}<Icon name="chevron" size={11} /></button>) : scene.ending ? <span>ENDING <b>{scene.ending}</b></span> : <button onClick={() => scene.next && selectScene(scene.next)}>다음 장면 <b>{script.scenes.find(row => row.id === scene.next)?.chapter ?? "미연결"}</b><Icon name="chevron" size={11} /></button>}</div></section>
         </>}
         {view === "graph" && <StoryMap script={script} selected={scene.id} onSelect={openScene} />}
-        <div className="full-workspace art-workspace" hidden={view !== "assets"}><MemoAssetLibrary generationEnabled={true} active={view === "assets"} projectEpoch={projectEpoch} script={view === "assets" ? script : analysisScript} scene={view === "assets" ? scene : analysisScene} onChange={assetChange} onPatchScene={assetPatchScene} /></div>
+        <div className="full-workspace art-workspace" hidden={view !== "assets"}><MemoAssetLibrary generationEnabled={true} active={view === "assets"} projectEpoch={projectEpoch} script={view === "assets" ? script : analysisScript} scene={view === "assets" ? scene : analysisScene} onChange={assetChange} onPatchScene={assetPatchScene} autoInstallId={storeInstallId || undefined} /></div>
         {view === "characters" && <CharacterManager script={script} onChange={edit}/>}
       </main>
       <aside className="studio-inspector"><div className="right-tabs" role="tablist" aria-label="작업 패널"><button type="button" role="tab" aria-selected={rightTab === "ai"} onClick={() => setRightTab("ai")}><Icon name="spark" />AI</button><button type="button" role="tab" aria-selected={rightTab === "inspector"} onClick={() => setRightTab("inspector")}><Icon name="settings" />속성</button></div><div className="right-panel-scroll"><div hidden={rightTab !== "ai"}><MemoAiPanel active={rightTab === "ai"} script={rightTab === "ai" ? script : analysisScript} scene={rightTab === "ai" ? scene : analysisScene} lineIndex={index} onApply={applyAiProposal} /><div className="scene-notes"><p className="eyebrow">SCENE DIRECTION</p><h2>{sceneTitle(scene)}</h2><img src={backgroundSrc(scene)} alt="장면 아트" /><p>{scene.artBrief || "이 장면의 감정과 시각적 방향을 속성 패널에 기록하세요."}</p><div><span>{scene.lines.length}줄</span><span>{scene.cgUrl ? "EVENT CG" : "BACKGROUND"}</span></div><button className="studio-button" onClick={() => setView("assets")}><Icon name="image" />아트 디렉션 열기</button><button className="studio-button" onClick={() => setView("production")}><Icon name="clock" />전체 원고 검수</button></div></div><div hidden={rightTab !== "inspector"}><Inspector script={script} scene={scene} lineIndex={index} patchScene={patchScene} patchLine={patchLine} onChange={edit} onAddLine={addLine} onInsertLines={insertPastedLines} onRenameScene={renameCurrentScene} textRef={lineTextRef} projectEpoch={projectEpoch} /></div></div></aside>

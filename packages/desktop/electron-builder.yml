@@ -12,6 +12,12 @@ files:
   - dist/**/*
   - package.json
 asar: true
+# losia 의 "로컬 앱에서 열기" 버튼이 호출하는 스킴. 설치 시 OS에 등록된다.
+protocols:
+  - name: VN Maker
+    schemes:
+      - openvnmaker
+    role: Viewer
 win:
   target:
     - nsis

@@ -5,6 +5,7 @@ import { fetchHostCapabilities } from "../api/host.js";
 import { STORE_SOURCES, storeSourceById } from "../api/storeSource.js";
 import { Icon } from "./Icon.js";
 import { installStoreAsset, type InstallProgress } from "./installFromStore.js";
+import type { StoreManifest } from "./storeInstall.js";
 import "./assets.css";
 
 interface Props {
@@ -21,6 +22,8 @@ interface Props {
   readonly panelTestId?: string;
   /** 있으면 무대·CG 설치 직후 상태 줄에 '이 장면에 바로 적용' 버튼을 단다(현재 장면은 호출자가 안다). */
   readonly onApplyToScene?: (artwork: Artwork) => void;
+  /** 딥링크(openvnmaker://install/<id> → ?store-install=<id>)로 전달된 losia 자산 id — 패널이 활성화되면 자동 설치한다. */
+  readonly autoInstallId?: string | undefined;
 }
 
 const KIND_LABELS = { all: "전체", stage: "무대", character: "인물", sound: "소리" } as const;
@@ -41,7 +44,7 @@ const NEW_CHARACTER = "__new__";
  * losia.online 은 CORS 때문에 게이트웨이 프록시(/api/store/*)를 지난다.
  * 설치는 파일을 브라우저 보관함에 넣고 프로젝트 아트로 등록한다 — 플레이어와 ZIP 번들이 같은 경로를 쓴다.
  */
-export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled, fixedKind, panelTestId = "store-panel", onApplyToScene }: Props) {
+export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled, fixedKind, panelTestId = "store-panel", onApplyToScene, autoInstallId }: Props) {
   const [sourceId, setSourceId] = useState<string>(STORE_SOURCES[0]!.id);
   const [sources, setSources] = useState<readonly typeof STORE_SOURCES[number][]>(STORE_SOURCES);
   const source = storeSourceById(sourceId);
@@ -108,7 +111,8 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     return () => { alive = false; controller.abort(); };
   }, [active, source, kind, sort, applied, take]);
 
-  async function install(item: StoreCatalogItem) {
+  // 딥링크 자동 설치 — 출처 탭 상태가 렌더에 반영되기 전에 실행되므로 출처를 명시적으로 넘긴다.
+  async function install(item: StoreCatalogItem, useSource = source) {
     if (busy) return;
     // '새 캐릭터' 선택이면 설치 전에 id 를 발급한다 — 파일이 그 id 로 태깅되고 캐릭터가 같은 id 로 생긴다.
     const wantNew = item.kind === "character" && characterId === NEW_CHARACTER;
@@ -119,7 +123,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     installRef.current = controller;
     setBusy(item.id); setInstallError(""); setMessage(""); setPendingApply(null); setProgress({ done: 0, total: 1 });
     try {
-      const result = await installStoreAsset(source, item.id, {
+      const result = await installStoreAsset(useSource, item.id, {
         ...(item.kind === "character" && targetCharacterId && targetCharacterId !== NEW_CHARACTER ? { characterId: targetCharacterId } : {}),
         signal: controller.signal,
         onProgress: setProgress,
@@ -181,6 +185,24 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     }
   }
 
+  // 딥링크(openvnmaker://install/<id>, /make?store-install=<id>) — 매니페스트로 자산을 알아내 바로 설치한다.
+  // id마다 한 번만 실행한다(autoRanRef) — rerender·목록 재조회가 설치를 다시 트리거하지 않게.
+  const autoRanRef = useRef("");
+  const [autoName, setAutoName] = useState("");
+  useEffect(() => {
+    if (!active || !autoInstallId || autoRanRef.current === autoInstallId) return;
+    autoRanRef.current = autoInstallId;
+    const losia = storeSourceById("losia");
+    setSourceId("losia");
+    setAutoName("");
+    void losia.manifest(autoInstallId)
+      .then((manifest: StoreManifest) => {
+        setAutoName(manifest.name);
+        return install({ id: manifest.id, kind: manifest.kind, name: manifest.name, license: manifest.license, tags: manifest.tags ?? [] }, losia);
+      })
+      .catch((cause: unknown) => setInstallError(`스토어에서 자산을 찾지 못했습니다(${autoInstallId}): ${cause instanceof Error ? cause.message : String(cause)}`));
+  }, [active, autoInstallId]); // eslint-disable-line react-hooks/exhaustive-deps -- install은 첫 렌더의 기본값으로 한 번만 부른다
+
   const installedIds = new Set((script.assets ?? []).filter(asset => asset.id.startsWith(`${source.idPrefix}-`)).map(asset => asset.id));
 
   return <section className="art-section art-store" data-testid={panelTestId}>
@@ -223,6 +245,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       {!items.length && !loading && !error && <p className="art-empty-line">조건에 맞는 자산이 없습니다.</p>}
       {items.length > 0 && items.length < total && <button type="button" className="art-text-button" data-testid="store-more" onClick={() => setTake(value => value + 12)}>더 보기 ({items.length}/{total})</button>}
     </div>
+    {busy && busy === autoInstallId && <p className="art-store-message" role="status" data-testid="store-auto-install">‘{autoName || autoInstallId}’을 losia에서 설치하는 중… {progress?.done ?? 0}/{progress?.total ?? 1}</p>}
     {error && <p className="art-store-error" role="alert">{error}</p>}
     {installError && <p className="art-store-error" role="alert" data-testid="store-install-error">{installError}</p>}
     {message && <p className="art-store-message" role="status" data-testid="store-status">{message}{pendingApply && <button type="button" className="art-text-button art-store-apply-now" data-testid="store-apply-now" onClick={() => { const artwork = pendingApply; setPendingApply(null); onApplyToScene?.(artwork); }}>이 장면에 바로 적용</button>}</p>}

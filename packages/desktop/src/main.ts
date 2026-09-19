@@ -25,6 +25,53 @@ const DEV_URL = process.env["VNMAKER_DESKTOP_DEV_URL"];
 let server: DesktopServer | undefined;
 let native: NativeBuildService | undefined;
 let origin = DEV_URL ?? "";
+/** 창이 아직 없을 때 도착한 딥링크의 목적지 — createWindow가 첫 로드에 쓴다. */
+let pendingDeepLink: string | undefined;
+
+const PROTOCOL = "openvnmaker";
+
+/**
+ * losia 의 "로컬 앱에서 열기" 링크. `openvnmaker://install/<assetId>` 는
+ * 스튜디오를 띄워 그 자산 설치를 바로 시작한다 — 스튜디오는 `?store-install=<id>`
+ * 쿼리를 읽어 아트 디렉션의 스토어 설치를 돌린다.
+ */
+function deepLinkTarget(url: string): string | undefined {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== `${PROTOCOL}:`) return undefined;
+    if (u.hostname === "install") {
+      const id = u.pathname.replace(/^\//, "") || u.searchParams.get("id") || "";
+      return `/studio.html${id ? `?store-install=${encodeURIComponent(id)}` : ""}`;
+    }
+    return "/studio.html";
+  } catch {
+    return undefined;
+  }
+}
+
+function focusWindow(): void {
+  const window = BrowserWindow.getAllWindows()[0];
+  if (!window) return;
+  if (window.isMinimized()) window.restore();
+  window.focus();
+}
+
+function openDeepLink(url: string): void {
+  const target = deepLinkTarget(url);
+  if (!target) return;
+  const window = BrowserWindow.getAllWindows()[0];
+  if (!window || !origin) {
+    pendingDeepLink = target;
+    // macOS는 창을 닫아도 앱이 산다 — 닫힌 상태로 딥링크가 오면 창을 새로 만든다(서버가 뜬 뒤에만).
+    if (!window && origin && app.isReady()) createWindow();
+    return;
+  }
+  focusWindow();
+  void window.loadURL(`${origin}${target}`);
+}
+
+// 사이트 링크로 앱이 열리게 한다. 등록은 whenReady 전에 해야 한다.
+app.setAsDefaultProtocolClient(PROTOCOL);
 
 function buildMenu(): void {
   const isMac = process.platform === "darwin";
@@ -97,7 +144,8 @@ function createWindow(): BrowserWindow {
     if (/^https?:/.test(url)) void shell.openExternal(url);
   });
 
-  void window.loadURL(`${origin}/studio.html`);
+  void window.loadURL(`${origin}${pendingDeepLink ?? "/studio.html"}`);
+  pendingDeepLink = undefined;
   return window;
 }
 
@@ -116,6 +164,9 @@ async function boot(): Promise<void> {
     });
     origin = server.url;
   }
+  // Windows·Linux 콜드 스타트 — 딥링크가 argv로 들어온다. macOS는 open-url 이벤트.
+  const argLink = process.argv.find(a => a.startsWith(`${PROTOCOL}:`));
+  if (argLink) pendingDeepLink = deepLinkTarget(argLink) ?? pendingDeepLink;
   buildMenu();
   createWindow();
 }
@@ -124,12 +175,14 @@ if (!app.requestSingleInstanceLock()) {
   // 두 인스턴스가 같은 사용자 데이터와 포트를 두고 싸우면 원고가 위험하다.
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    const window = BrowserWindow.getAllWindows()[0];
-    if (!window) return;
-    if (window.isMinimized()) window.restore();
-    window.focus();
+  app.on("second-instance", (_event, argv) => {
+    // 실행 중인 앱에 도착한 딥링크(Windows·Linux는 argv로 온다).
+    const link = argv.find(a => a.startsWith(`${PROTOCOL}:`));
+    if (link) { openDeepLink(link); return; }
+    focusWindow();
   });
+  // macOS — 실행 중이든 아니든 open-url 로 도착한다.
+  app.on("open-url", (event, url) => { event.preventDefault(); openDeepLink(url); });
 
   app.whenReady().then(boot).catch((error: unknown) => {
     const detail = error instanceof Error ? error.message : String(error);
