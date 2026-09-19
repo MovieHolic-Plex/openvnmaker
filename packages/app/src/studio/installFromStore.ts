@@ -32,6 +32,18 @@ export async function downloadWithRetry(source: Pick<StoreSource, "download">, i
   }
 }
 
+/** 매니페스트 조회도 같은 이유로 재시도한다 — 순간 끊김 한 번에 설치 전체가 죽으면 안 된다. */
+export async function manifestWithRetry(source: Pick<StoreSource, "manifest">, id: string, signal?: AbortSignal): Promise<StoreManifest> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await source.manifest(id, signal);
+    } catch (cause) {
+      if (attempt >= RETRY_DELAYS.length || !isRetryable(cause, signal)) throw cause;
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+    }
+  }
+}
+
 export interface StoreInstallResult {
   readonly manifest: StoreManifest;
   readonly artworks: readonly Artwork[];
@@ -53,7 +65,7 @@ export async function installStoreAsset(
     creditName: options.creditName ?? source.creditName,
     assetPagePrefix: options.assetPagePrefix ?? source.assetPagePrefix,
   };
-  const manifest = await source.manifest(id, settings.signal);
+  const manifest = await manifestWithRetry(source, id, settings.signal);
   const plan = installPlan(manifest);
   // 저장 전에 실패해야 고아 blob 이 남지 않는다.
   assertInstallable(plan, settings);

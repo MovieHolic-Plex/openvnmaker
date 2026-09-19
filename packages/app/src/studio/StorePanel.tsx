@@ -4,7 +4,7 @@ import type { StoreCatalogItem } from "../api/store.js";
 import { fetchHostCapabilities } from "../api/host.js";
 import { STORE_SOURCES, storeSourceById } from "../api/storeSource.js";
 import { Icon } from "./Icon.js";
-import { installStoreAsset, type InstallProgress } from "./installFromStore.js";
+import { installStoreAsset, manifestWithRetry, type InstallProgress } from "./installFromStore.js";
 import type { StoreManifest } from "./storeInstall.js";
 import "./assets.css";
 
@@ -195,7 +195,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
     const losia = storeSourceById("losia");
     setSourceId("losia");
     setAutoName("");
-    void losia.manifest(autoInstallId)
+    void manifestWithRetry(losia, autoInstallId)
       .then((manifest: StoreManifest) => {
         setAutoName(manifest.name);
         return install({ id: manifest.id, kind: manifest.kind, name: manifest.name, license: manifest.license, tags: manifest.tags ?? [] }, losia);
