@@ -66,7 +66,9 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
   const [brokenThumbs, setBrokenThumbs] = useState<ReadonlySet<string>>(() => new Set());
   const [progress, setProgress] = useState<InstallProgress | null>(null);
   const [pendingApply, setPendingApply] = useState<Artwork | null>(null);
-  const [characterId, setCharacterId] = useState(script.characters[0]?.id ?? NEW_CHARACTER);
+  // 기본은 '새 캐릭터' — 기존 캐릭터를 기본값으로 두면 두 번째 인물 에셋 설치가
+  // 첫 캐릭터의 표정 매핑을 조용히 덮어쓴다(기존 캐릭터로의 설치는 명시적 선택이어야 한다).
+  const [characterId, setCharacterId] = useState<string>(NEW_CHARACTER);
   const scriptRef = useRef(script);
   const epochRef = useRef(projectEpoch);
   // 목록 조회와 설치는 서로 다른 컨트롤러를 쓴다 — 검색 중 재조회가 설치 버튼을 '설치 중'에 가두면 안 된다.
