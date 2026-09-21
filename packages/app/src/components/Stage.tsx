@@ -26,6 +26,19 @@ interface Props {
 }
 
 const slotOrder = ["left", "center", "right"] as const;
+
+/** 틴트를 반투명 색으로 환산 — 3/6자리 hex는 기본 알파(0.34), 4/8자리는 작성자 알파를 존중한다. */
+function tintCss(hex: string): string {
+  const h = hex.slice(1);
+  const short = h.length <= 4;
+  const d = (s: string) => parseInt(s.length === 1 ? s + s : s, 16);
+  const r = d(h.slice(0, short ? 1 : 2));
+  const g = d(h.slice(short ? 1 : 2, short ? 2 : 4));
+  const b = d(h.slice(short ? 2 : 4, short ? 3 : 6));
+  const a = h.length === 4 ? d(h.slice(3)) / 255 : h.length === 8 ? d(h.slice(6, 8)) / 255 : 0.34;
+  return `rgba(${r}, ${g}, ${b}, ${Math.round(a * 1000) / 1000})`;
+}
+
 /** 전환 효과별 페이드 길이(ms). global.css 의 keyframes 길이와 같아야 이전 배경을 제때 걷어낸다. */
 const TRANSITION_MS: Record<string, number> = { none: 0, fade: 640, dissolve: 780, flash: 460, fadeToBlack: 820 };
 /** 배경·대체 배경이 모두 없을 때 보여 주는 어두운 판. 네트워크 없이도 그려진다. */
@@ -162,7 +175,7 @@ export function Stage({ background, backgroundUrl, cgUrl, hideSprites, framing =
             </div>
           );
         })}
-        {tint ? <div className="scene-tint" style={{ backgroundColor: tint }} aria-hidden="true" /> : null}
+        {tint ? <div className="scene-tint" style={{ backgroundColor: tintCss(tint) }} aria-hidden="true" /> : null}
         {effect && !eventArt ? <Weather effect={effect} /> : null}
         {(framing === "cinematic" || eventArt) && <div className="cinematic-bars" aria-hidden="true" />}
         {chapter !== null && (
