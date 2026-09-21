@@ -19,6 +19,18 @@ function member(value: unknown, values: readonly string[], name: string) {
 }
 function characterKey(value: unknown, name: string) { if(!validCharacterKey(value))throw new Error(`${name}: 영문자로 시작하는 64자 이하의 영문·숫자·하이픈·밑줄 ID가 필요합니다.`); }
 
+const WEATHER_EFFECTS = ["rain", "snow", "petals", "embers", "dust"] as const;
+/** 틴트는 CSS hex 색만 받는다 — 임의 CSS 를 허용하면 원고가 플레이어 스타일을 주입할 수 있다. */
+const TINT_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+function effect(value: unknown, name: string) { if (value !== null) member(value, WEATHER_EFFECTS, name); }
+function tint(value: unknown, name: string) { if (value !== null && (typeof value !== "string" || !TINT_COLOR.test(value))) throw new Error(`${name}: "#rrggbb" 형태의 색 값이 필요합니다.`); }
+function input(value: unknown) {
+  const row = object(value, "독자 입력");
+  flagName(row["flag"]);
+  for (const key of ["prompt", "placeholder"] as const) if (row[key] !== undefined) string(row[key], `독자 입력 ${key}`, true);
+  if (row["max"] !== undefined && (typeof row["max"] !== "number" || !Number.isInteger(row["max"]) || row["max"] < 1 || row["max"] > 200)) throw new Error("독자 입력 길이는 1~200 사이 정수여야 합니다.");
+}
+
 /** 선택 기억 이름 규칙 — IR 그래프의 when/set 파서도 같은 검증을 쓴다. */
 export function validFlagName(value: unknown): value is string {
   return typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/i.test(value) && !["constructor", "prototype", "__proto__"].includes(value);
@@ -102,6 +114,9 @@ export function parseLines(value: unknown): Line[] {
     if (row["framing"] !== undefined) member(row["framing"], ["wide", "close", "cinematic"], "대사 카메라");
     if (row["bgm"] !== undefined && row["bgm"] !== null && !validAudioUrl(row["bgm"])) member(row["bgm"], Object.keys(BGM), "대사 음악");
     if (row["when"] !== undefined) condition(row["when"]);
+    if (row["effect"] !== undefined) effect(row["effect"], "대사 입자 연출");
+    if (row["tint"] !== undefined) tint(row["tint"], "대사 틴트");
+    if (row["input"] !== undefined) input(row["input"]);
   }
   return value as Line[];
 }
@@ -121,6 +136,8 @@ export function parseScene(value: unknown): Scene {
   if (row["framing"] !== undefined) member(row["framing"], ["wide", "close", "cinematic"], "카메라 프레이밍");
   if (row["artBrief"] !== undefined) string(row["artBrief"], "장면 아트 브리프", true);
   if (row["transition"] !== undefined) member(row["transition"], ["none", "fade", "dissolve", "flash", "fadeToBlack"], "전환");
+  if (row["effect"] !== undefined) member(row["effect"], WEATHER_EFFECTS, "장면 입자 연출");
+  if (row["tint"] !== undefined) tint(row["tint"], "장면 틴트");
   if (row["sprites"] !== undefined) sprites(row["sprites"]);
   if (row["set"] !== undefined) flags(row["set"]);
   if (row["routes"] !== undefined) {

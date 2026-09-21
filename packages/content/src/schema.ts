@@ -20,6 +20,20 @@ export type SpriteSlot = "left" | "center" | "right" | "offstage" | (string & {}
 /** 화면 전환 효과. */
 export type Transition = "none" | "fade" | "dissolve" | "flash" | "fadeToBlack";
 
+/** 장면 위에 떠 있는 입자 연출 — 비·눈·벚꽃·불티·먼지. 배경을 바꾸지 않고 분위기만 얹는다. */
+export type WeatherEffect = "rain" | "snow" | "petals" | "embers" | "dust";
+
+/** 대사 입력 요청 — 이 줄에서 진행이 멈추고 독자가 문자를 넣으면 플래그에 저장된다(주인공 이름 등). */
+export interface LineInput {
+  /** 입력값을 저장할 플래그 이름. 대사 안에서 {flag:이름} 또는 {player}(플래그 player)로 풀어 쓴다. */
+  readonly flag: string;
+  /** 입력창 위에 보이는 안내 문구. */
+  readonly prompt?: string;
+  readonly placeholder?: string;
+  /** 최대 글자 수. 기본 16. */
+  readonly max?: number;
+}
+
 /** 배우 배치 지시. character 가 null 이면 슬롯을 비운다. */
 export interface SpriteDirection {
   readonly slot: SpriteSlot;
@@ -60,6 +74,12 @@ export interface Line {
   readonly sprites?: readonly SpriteDirection[];
   readonly framing?: "wide" | "close" | "cinematic";
   readonly bgm?: string | null;
+  /** 이 줄에서 입자 연출을 바꾼다. null 이면 끈다. */
+  readonly effect?: WeatherEffect | null;
+  /** 이 줄에서 장면 색조(틴트)를 바꾼다 — CSS hex 색("#rgb"~"#rrggbbaa"). null 이면 끈다. */
+  readonly tint?: string | null;
+  /** 있으면 이 줄은 독자 입력을 받는다. 입력을 마칠 때까지 진행이 멈춘다. */
+  readonly input?: LineInput;
 }
 
 export interface Choice {
@@ -107,6 +127,10 @@ export interface Scene {
   /** 이 씬에서 전체화면으로 표시할 CG 에셋 id(assets 항목). cgUrl 과 함께 쓸 수 없다. */
   readonly cg?: string;
   readonly transition?: Transition;
+  /** 장면 내내 떠 있는 입자 연출. 대사의 effect 로 덮어쓰거나 끌 수 있다. */
+  readonly effect?: WeatherEffect;
+  /** 장면 전체에 덮는 색조 — CSS hex 색("#rgb"~"#rrggbbaa"). 석양·심야 같은 시간감을 얹는다. */
+  readonly tint?: string;
   readonly sprites?: readonly SpriteDirection[];
   readonly lines: readonly Line[];
   /** 선택지가 있으면 routes·next·ending 은 무시된다. */
@@ -174,6 +198,8 @@ export interface Artwork {
   readonly sceneId?: string;
   readonly characterId?: CharacterId;
   readonly expression?: Expression;
+  /** 스토어 설치에서 온 의상 소속 표기 — outfits/outfitImages 를 채우는 근거. */
+  readonly outfit?: string;
   readonly createdAt?: string;
 }
 

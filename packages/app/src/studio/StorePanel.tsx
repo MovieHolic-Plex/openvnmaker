@@ -139,12 +139,20 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       // 설치는 어느 캐릭터의 어떤 표정인지 이미 안다. 표정표에 걸어 주지 않으면 그림만 보관함에 쌓이고
       // 무대에는 아무것도 뜨지 않는다 — 원본이 초록 배경이면 그 색도 같이 걸어야 초록 상자가 안 보인다.
       const chroma = result.manifest.chromaKey;
-      const expressions = Object.fromEntries(result.artworks.flatMap(asset => asset.kind === "character" && asset.expression ? [[asset.expression, asset.url]] : []));
+      // 의상이 아닌 표정만 기본 표정표에 올린다 — 의상 표정은 outfitImages 에 간다.
+      const expressions = Object.fromEntries(result.artworks.flatMap(asset => asset.kind === "character" && asset.expression && !asset.outfit ? [[asset.expression, asset.url]] : []));
       // base 만 있고 무표정 표정이 없는 자산은 base 를 neutral 로 채운다 — 안 채우면 스프라이트가
       // 존재하지 않는 내장 경로로 빠져 무대에 아무것도 안 뜬다.
       if (expressions["neutral"] === undefined) {
-        const base = result.artworks.find(asset => asset.kind === "character" && asset.expression === undefined);
+        const base = result.artworks.find(asset => asset.kind === "character" && asset.expression === undefined && !asset.outfit);
         if (base) expressions["neutral"] = base.url;
+      }
+      // 의상 원화 — outfits 목록과 outfitImages[의상][표정] 을 채운다.
+      const outfitIds = [...new Set(result.artworks.flatMap(asset => asset.kind === "character" && asset.outfit ? [asset.outfit] : []))];
+      const outfitImages: Record<string, Record<string, string>> = {};
+      for (const asset of result.artworks) {
+        if (asset.kind !== "character" || !asset.outfit || !asset.expression) continue;
+        (outfitImages[asset.outfit] ??= {})[asset.expression] = asset.url;
       }
       const touched = targetCharacterId !== "" && targetCharacterId !== NEW_CHARACTER && result.artworks.some(asset => asset.kind === "character");
       const keyed = touched && chroma !== undefined;
@@ -154,6 +162,7 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
         color: "#b6d7e8",
         bio: "",
         ...(Object.keys(expressions).length ? { expressionImages: expressions } : {}),
+        ...(outfitIds.length ? { outfits: outfitIds, outfitImages } : {}),
         ...(chroma === undefined ? {} : { chromaKey: chroma }),
       } : null;
       const next = parseScript({
@@ -163,6 +172,10 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
             ...character,
             ...(chroma === undefined ? {} : { chromaKey: chroma }),
             ...(Object.keys(expressions).length ? { expressionImages: { ...character.expressionImages, ...expressions } } : {}),
+            ...(outfitIds.length ? {
+              outfits: [...new Set([...(character.outfits ?? []), ...outfitIds])],
+              outfitImages: Object.fromEntries([...new Set([...Object.keys(character.outfitImages ?? {}), ...Object.keys(outfitImages)])].map(outfit => [outfit, { ...(character.outfitImages?.[outfit] ?? {}), ...(outfitImages[outfit] ?? {}) }])),
+            } : {}),
           }),
           ...(newCharacter ? [newCharacter] : []),
         ] } : {}),

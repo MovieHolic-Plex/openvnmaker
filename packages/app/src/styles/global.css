@@ -707,3 +707,142 @@ body {
   .sprite, .ink-button, .choice-button { transition: none !important; }
   .bg-image.is-incoming.is-ready { opacity: 1; }
 }
+
+/* ---------- 스프라이트 등퇴장 ----------
+   translate 프로퍼티로 움직인다 — transform 은 .sprite--center 의 translateX 와
+   .sprite-image 의 breathe 가 쓰고 있어 건드리면 서로를 지운다. */
+.sprite-enter { animation: sprite-in 520ms cubic-bezier(.22, .9, .32, 1) both; }
+.sprite-exit { animation: sprite-out 600ms ease both; pointer-events: none; z-index: 1; }
+@keyframes sprite-in { from { opacity: 0; translate: 0 30px; } to { opacity: 1; translate: 0 0; } }
+@keyframes sprite-out { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 0 22px; } }
+
+/* ---------- 장면 틴트 · 입자 연출 ---------- */
+.scene-tint {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  transition: background-color 900ms ease;
+}
+
+.weather { position: absolute; inset: -8% -4% 0; overflow: hidden; pointer-events: none; z-index: 4; animation: weather-in 900ms ease both; }
+@keyframes weather-in { from { opacity: 0; } to { opacity: 1; } }
+.weather i { position: absolute; top: -14%; display: block; will-change: transform; }
+
+.weather-rain i {
+  width: 1.5px;
+  background: linear-gradient(180deg, rgba(178, 198, 233, 0) 0%, rgba(178, 198, 233, .5) 55%, rgba(203, 217, 244, .95) 100%);
+  border-radius: 1px;
+  animation-name: weather-rain-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes weather-rain-fall { from { transform: translate3d(0, -14vh, 0) rotate(9deg); } to { transform: translate3d(var(--drift), 122vh, 0) rotate(9deg); } }
+
+.weather-snow i {
+  background: radial-gradient(circle, rgba(238, 244, 255, .95) 0%, rgba(238, 244, 255, 0) 70%);
+  border-radius: 50%;
+  animation-name: weather-drift-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.weather-petals i {
+  background: radial-gradient(ellipse at 30% 30%, rgba(255, 214, 228, .95), rgba(233, 150, 176, .85));
+  border-radius: 62% 38% 58% 42%;
+  animation-name: weather-drift-fall;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes weather-drift-fall {
+  from { transform: translate3d(0, -14vh, 0) rotate(0deg); }
+  50% { transform: translate3d(var(--drift), 52vh, 0) rotate(160deg); }
+  to { transform: translate3d(0, 122vh, 0) rotate(320deg); }
+}
+
+.weather-embers { inset: 0 -4% -10%; }
+.weather-embers i {
+  top: auto; bottom: -4%;
+  background: radial-gradient(circle, rgba(255, 196, 110, .95) 0%, rgba(255, 120, 40, 0) 72%);
+  border-radius: 50%;
+  animation-name: weather-ember-rise;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
+@keyframes weather-ember-rise {
+  from { transform: translate3d(0, 0, 0) scale(1); opacity: 0; }
+  12% { opacity: var(--ember-peak, .9); }
+  to { transform: translate3d(var(--drift), -104vh, 0) scale(.4); opacity: 0; }
+}
+
+.weather-dust i {
+  top: 0;
+  background: radial-gradient(circle, rgba(220, 214, 200, .5) 0%, rgba(220, 214, 200, 0) 70%);
+  border-radius: 50%;
+  animation-name: weather-dust-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes weather-dust-float {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(var(--drift), -9vh, 0); }
+}
+/* 먼지 입자는 떨어지지 않는다 — 세로 위치는 입자별 inline top 이 흩뿌린다. */
+.weather-dust { animation: weather-in 2.4s ease both; }
+
+/* 이벤트 CG 는 화면 전체를 느리게 훑는다 — 정지화면이 박제처럼 멈춰 있지 않게. */
+.stage-layers.cg-drift { animation: cg-drift 26s ease-in-out infinite alternate; will-change: transform; }
+@keyframes cg-drift {
+  from { transform: scale(1.01) translate(0.4%, 0.2%); }
+  to { transform: scale(1.07) translate(-0.8%, -0.7%); }
+}
+
+/* ---------- 대사 인라인 표기 ---------- */
+.tx-bold { font-weight: 700; }
+.tx-italic { font-style: italic; }
+
+/* ---------- 독자 입력 ---------- */
+.line-input {
+  position: absolute;
+  left: 50%;
+  bottom: max(32%, 220px);
+  transform: translateX(-50%);
+  z-index: 8;
+  display: grid;
+  gap: 12px;
+  width: min(400px, 84vw);
+  padding: 22px 24px;
+  background: linear-gradient(180deg, rgba(12, 14, 22, 0.94), rgba(6, 7, 12, 0.97));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 2px solid var(--accent);
+  border-radius: 4px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
+  animation: choice-in 420ms ease both;
+}
+.line-input-label { margin: 0; font-family: var(--font-name); font-size: 0.95rem; letter-spacing: 0.06em; color: var(--ink); }
+.line-input input {
+  padding: 10px 14px;
+  font: 1.05rem/1.5 var(--font-prose);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 3px;
+  outline: none;
+}
+.line-input input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(212, 163, 106, 0.18); }
+.line-input button {
+  padding: 10px 0;
+  font-family: var(--font-name);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  color: #f4ead8;
+  background: linear-gradient(180deg, rgba(212, 163, 106, 0.3), rgba(8, 10, 16, 0.8));
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.line-input button:hover:not(:disabled) { filter: brightness(1.15); }
+.line-input button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sprite-enter, .sprite-exit, .weather, .stage-layers.cg-drift, .line-input { animation: none !important; }
+  .sprite-exit { opacity: 0; }
+  .scene-tint { transition: none !important; }
+}

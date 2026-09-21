@@ -1,5 +1,7 @@
-import type {VnScript} from "@vnmaker/content";
+import type {StoryFlags, VnScript} from "@vnmaker/content";
 import {assetUrl} from "../assetUrl.js";
+import {resolveInline} from "../engine/inlineText.js";
+import {InlineText} from "./InlineText.js";
 import {manuscriptKey} from "../storage/manuscriptKey.js";
 import { useEffect, useMemo, useRef } from "react";
 import type { HistoryEntry } from "../engine/types.js";
@@ -10,12 +12,14 @@ export type BacklogEntry = HistoryEntry;
 
 interface HistoryProps {
   readonly entries: readonly BacklogEntry[];
+  /** 인라인 표기의 {flag:…} 치환에 쓰는 현재 플래그. */
+  readonly flags?: StoryFlags;
   readonly nameOf: (speaker: string | null) => string | null;
   readonly colorOf: (speaker: string | null) => string;
   readonly onClose: () => void;
 }
 
-export function HistoryPanel({ entries, nameOf, colorOf, onClose }: HistoryProps) {
+export function HistoryPanel({ entries, flags = {}, nameOf, colorOf, onClose }: HistoryProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -78,7 +82,7 @@ export function HistoryPanel({ entries, nameOf, colorOf, onClose }: HistoryProps
                     {name}
                   </strong>
                 )}
-                <span>{entry.text}</span>
+                <span><InlineText parts={resolveInline(entry.text, flags).parts} /></span>
               </p>
             </div>
           );

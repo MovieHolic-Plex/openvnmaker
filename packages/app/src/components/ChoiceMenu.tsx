@@ -1,5 +1,6 @@
 import { choiceAllowed, choiceEffectError, lineAllowed, type Choice, type StoryFlags } from "@vnmaker/content";
 import { useState } from "react";
+import { resolveText } from "../engine/inlineText.js";
 
 interface Props {
   readonly choices: readonly Choice[];
@@ -67,7 +68,7 @@ export function ChoiceMenu({ choices, flags = {}, onPick, onHover }: Props) {
               <span className="choice-mark" aria-hidden="true">
                 ◈
               </span>
-              <span className="choice-label">{choice.text}{reason && <small className="choice-reason">{reason}</small>}</span>
+              <span className="choice-label">{resolveText(choice.text, flags)}{reason && <small className="choice-reason">{reason}</small>}</span>
               <span className="choice-key" aria-hidden="true">
                 {index + 1}
               </span>

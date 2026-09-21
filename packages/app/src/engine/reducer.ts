@@ -126,7 +126,21 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
 
     case "advance": {
       if (state.phase !== "scene") return state;
+      // 입력을 받는 줄은 넘기기 전에 값이 와야 한다 — 그냥 넘어가면 {flag:…} 가 빈 채로 풀린다.
+      const scene = findScene(script, state.sceneId);
+      if (scene?.lines[state.lineIndex]?.input) return state;
       return advanceOnce(script, pushPast(state));
+    }
+
+    case "input": {
+      if (state.phase !== "scene") return state;
+      const scene = findScene(script, state.sceneId);
+      const line = scene?.lines[state.lineIndex];
+      // 현재 줄이 이 플래그를 묻는 input 줄일 때만 값을 받는다 — 다른 줄에서 온 입력은 무시한다.
+      if (!scene || line?.input?.flag !== action.flag) return state;
+      const value = action.value.slice(0, line.input.max ?? 16);
+      if (!value.trim()) return state;
+      return advanceOnce(script, { ...pushPast(state), flags: { ...state.flags, [action.flag]: value.trim() } });
     }
 
     case "skipToChoice": {
@@ -143,6 +157,8 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
           // 읽지 않은 대사 앞에서 멈춘다(「읽은 텍스트만 스킵」).
           if (action.readKeys && !action.readKeys.has(readKey(scene.id, upcoming, scene.lines[upcoming]))) break;
           next = advanceOnce(script, next); moved = true;
+          // 입력 줄은 넘길 수 없다 — 스킵이 입력을 대신하지 못하게 그 줄에 도착하면 멈춘다.
+          if (scene.lines[upcoming]!.input) break;
           continue;
         }
         if (scene.ending && !scene.choices?.length) break;

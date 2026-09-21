@@ -47,6 +47,8 @@ export interface PlannedFile {
   readonly kind: "background" | "cg" | "character" | "audio";
   readonly expression?: string;
   readonly label?: string;
+  /** outfit:<id>:… 역할이 붙은 파일 — 기본 복장이 아니라 이 의상의 원화다. */
+  readonly outfit?: string;
   readonly audioKind?: "bgm" | "sfx";
   readonly mime?: string;
 }
@@ -192,6 +194,30 @@ export function installPlan(manifest: StoreManifest): InstallPlan {
       files.push({ role: file.role, kind: "character", name: `${manifest.name} · ${tail}`, ...mime });
       continue;
     }
+    if (head === "outfit" && tail !== "") {
+      // outfit:<의상id>:<base|expression:표정|pose:포즈> — 같은 인물의 다른 복장.
+      const cut = tail.indexOf(":");
+      const outfitId = cut === -1 ? tail : tail.slice(0, cut);
+      const inner = cut === -1 ? "base" : tail.slice(cut + 1);
+      const innerCut = inner.indexOf(":");
+      const innerHead = innerCut === -1 ? inner : inner.slice(0, innerCut);
+      const innerTail = innerCut === -1 ? "" : inner.slice(innerCut + 1);
+      if (innerHead === "expression" && innerTail !== "") {
+        files.push({ role: file.role, kind: "character", name: `${manifest.name} · ${outfitId} · ${innerTail}`, expression: expressionKey(innerTail), label: `${outfitId}:${innerTail}`, outfit: outfitId, ...mime });
+        continue;
+      }
+      if (innerHead === "pose" && innerTail !== "") {
+        files.push({ role: file.role, kind: "character", name: `${manifest.name} · ${outfitId} ${innerTail}`, outfit: outfitId, ...mime });
+        continue;
+      }
+      if (inner === "base") {
+        // 의상 기본 원화는 그 의상의 neutral 표정으로 올라간다 — 의상만 골라도 바로 선다.
+        files.push({ role: file.role, kind: "character", name: `${manifest.name} · ${outfitId}`, expression: "neutral", label: `${outfitId}:base`, outfit: outfitId, ...mime });
+        continue;
+      }
+      ignored.push(file.role);
+      continue;
+    }
     if (/^cg(~|$)/.test(file.role)) {
       const suffix = tail === "" ? "" : ` · ${tail}`;
       files.push({ role: file.role, name: `${manifest.name} · CG${suffix}`, kind: "cg", ...mime });
@@ -260,6 +286,7 @@ export function artworksFromInstall(
         id, name: file.name, kind: "character", url, provenance, createdAt,
         characterId: options.characterId,
         ...(file.expression ? { expression: file.expression } : {}),
+        ...(file.outfit ? { outfit: file.outfit } : {}),
         ...(prompt ? { prompt } : {}),
       });
       continue;

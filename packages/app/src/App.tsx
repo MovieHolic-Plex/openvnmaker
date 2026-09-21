@@ -10,6 +10,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog.js";
 import { DialogueBox } from "./components/DialogueBox.js";
 import { EndingScreen } from "./components/EndingScreen.js";
 import { GalleryPanel, HistoryPanel, SettingsPanel, SlotPicker } from "./components/Panels.js";
+import { LineInputPanel } from "./components/LineInput.js";
 import { PaperTexture } from "./components/PaperTexture.js";
 import { Stage } from "./components/Stage.js";
 import { Toolbar } from "./components/Toolbar.js";
@@ -17,7 +18,8 @@ import { CreditsPanel } from "./components/CreditsPanel.js";
 import { TitleScreen } from "./components/TitleScreen.js";
 import { autoAdvanceDelay, typewriterMsPerChar } from "./engine/pacing.js";
 import { reduce, rollbackLog } from "./engine/reducer.js";
-import { currentLine, currentScene, backgroundAt, bgmAt, cgAt, framingAt, speakerColor, speakerName, spritesAt } from "./engine/selectors.js";
+import { resolveInline, truncateParts } from "./engine/inlineText.js";
+import { currentLine, currentScene, backgroundAt, bgmAt, cgAt, effectAt, framingAt, speakerColor, speakerName, spritesAt, tintAt } from "./engine/selectors.js";
 import { initialState, readKey, ROLLBACK_LIMIT, type SaveData, type VnAction, type VnState } from "./engine/types.js";
 import { useReducedMotion } from "./hooks/useReducedMotion.js";
 import { useScenePrefetch } from "./hooks/useScenePrefetch.js";
@@ -110,7 +112,9 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   const scene = currentScene(vnScript, state);
   const line = currentLine(vnScript, state);
   const text = line?.text ?? "";
-  const { shown, typing, finish } = useTypewriter(text, state.phase === "scene" && !reducedMotion ? typewriterMsPerChar(text.length, settings.textSpeed) : 0);
+  // 표기({c:…}, **…**)를 걷고 플래그를 풀어 쓴 뒤 타이프라이터를 돌린다 — 태그가 반쪽 타이핑되지 않게.
+  const resolved = useMemo(() => resolveInline(text, state.flags), [text, state.flags]);
+  const { shown, typing, finish } = useTypewriter(resolved.plain, state.phase === "scene" && !reducedMotion ? typewriterMsPerChar(resolved.plain.length, settings.textSpeed) : 0);
   useScenePrefetch(vnScript, scene, state.lineIndex, state.flags, state.phase === "scene" || state.phase === "choice");
 
   // 화면에 뜬 대사는 읽은 것으로 기억한다. 「읽은 텍스트만 스킵」의 근거이며 잠시 모아서 저장한다.
@@ -159,7 +163,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
     };
   }, [state, typing, reducedMotion]);
 
-  const snapshot = useCallback((): SlotSave => ({ sceneId:state.sceneId,lineIndex:state.lineIndex,affection:state.affection,flags:state.flags,phase:state.phase,history:state.history,rollback:rollbackLog(state,ROLLBACK_LIMIT),savedAt:Date.now(),script:vnScript,preview:line?.text ?? "",chapter:scene?.chapter ?? null,thumbnail:scene ? cgAt(vnScript,scene,state.lineIndex,state.flags) ?? backgroundAt(scene,state.lineIndex,state.flags) ?? `/assets/bg/${scene.background}.png` : null }),[state,vnScript,line,scene]);
+  const snapshot = useCallback((): SlotSave => ({ sceneId:state.sceneId,lineIndex:state.lineIndex,affection:state.affection,flags:state.flags,phase:state.phase,history:state.history,rollback:rollbackLog(state,ROLLBACK_LIMIT),savedAt:Date.now(),script:vnScript,preview:resolved.plain,chapter:scene?.chapter ?? null,thumbnail:scene ? cgAt(vnScript,scene,state.lineIndex,state.flags) ?? backgroundAt(scene,state.lineIndex,state.flags) ?? `/assets/bg/${scene.background}.png` : null }),[state,vnScript,resolved,scene]);
   const checkpoint = useRef({ state, snapshot });
   checkpoint.current = { state, snapshot };
   // 자동 저장 실패는 한 번만 알린다. 매 진행마다 다시 띄우면 읽기를 방해할 뿐이고, 성공하면 다시 알릴 수 있게 푼다.
@@ -199,8 +203,8 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   }, [settings.skipUnread]);
 
   useEffect(() => {
-    if (!auto || artOnly || state.phase !== "scene" || typing || panel !== "none" || (line?.voice && voiceDone!==`${state.sceneEpoch}:${state.lineIndex}`)) return;
-    const delay = autoAdvanceDelay(text.length, settings.autoSpeed);
+    if (!auto || artOnly || state.phase !== "scene" || typing || panel !== "none" || line?.input || (line?.voice && voiceDone!==`${state.sceneEpoch}:${state.lineIndex}`)) return;
+    const delay = autoAdvanceDelay(resolved.plain.length, settings.autoSpeed);
     autoTimer.current = window.setTimeout(() => dispatch({ type: "advance" }), delay);
     return () => {
       if (autoTimer.current !== null) window.clearTimeout(autoTimer.current);
@@ -252,9 +256,11 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   const nameOf = useCallback(
     (speaker: string | null) => {
       if (speaker === null) return null;
-      return speakerName(vnScript, speaker as never);
+      const name = speakerName(vnScript, speaker as never);
+      // 이름 안의 {flag:…}·{player} 를 풀어 쓴다 — 입력받은 주인공 이름을 띄우는 용도.
+      return name === null ? null : resolveInline(name, state.flags).plain;
     },
-    [vnScript],
+    [vnScript, state.flags],
   );
 
   const bgmTrack = useMemo(() => {
@@ -302,6 +308,8 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
     const step = () => {
       const now = latest.current;
       if (now.panel !== "none" || now.artOnly || now.state.phase !== "scene" || !now.scene) { stop(); return; }
+      // 입력 줄은 빨리 감기로도 건너뛰지 않는다 — 독자가 직접 넣어야 한다.
+      if (now.scene.lines[now.state.lineIndex]?.input) { stop(); return; }
       if (now.typing) { now.finish(); return; }
       const scene = now.scene;
       let upcoming = -1;
@@ -476,6 +484,8 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
           chapter={scene.chapter ?? null}
           sceneEpoch={state.sceneEpoch}
           transition={scene.transition ?? "fade"}
+          effect={effectAt(scene, state.lineIndex, state.flags)}
+          tint={tintAt(scene, state.lineIndex, state.flags)}
           reducedMotion={reducedMotion}
         />
         <button
@@ -516,11 +526,16 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
           <DialogueBox
             speaker={nameOf(speaking)}
             color={speakerColor(vnScript, speaking as never)}
-            text={shown}
-            fullText={text}
+            parts={truncateParts(resolved.parts, shown.length)}
+            textLength={shown.length}
+            fullText={resolved.plain}
             typing={typing}
+            awaitingInput={line?.input !== undefined}
             onAdvance={advance}
           />
+        )}
+        {state.phase === "scene" && !artOnly && line?.input && !typing && (
+          <LineInputPanel key={`${state.sceneEpoch}:${state.lineIndex}`} input={line.input} onSubmit={(value) => dispatch({ type: "input", flag: line.input!.flag, value })} />
         )}
         {state.phase === "choice" && scene.choices && (
           <ChoiceMenu
@@ -534,7 +549,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
           />
         )}
         {panel === "history" && (
-          <HistoryPanel entries={state.history} nameOf={nameOf} colorOf={(speaker) => speakerColor(vnScript, speaker as never)} onClose={() => setPanel("none")} />
+          <HistoryPanel entries={state.history} flags={state.flags} nameOf={nameOf} colorOf={(speaker) => speakerColor(vnScript, speaker as never)} onClose={() => setPanel("none")} />
         )}
         {panel === "settings" && (
           <SettingsPanel onCredits={()=>setPanel("credits")} settings={settings} onChange={updateSettings} onClose={() => setPanel("none")} />

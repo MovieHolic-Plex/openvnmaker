@@ -62,6 +62,8 @@ export type VnAction =
   /** 현재 씬 안에서 이미 읽은 대사를 건너뛴다. readKeys 가 없으면 읽지 않은 대사도 건너뛴다(설정 「모두 스킵」). */
   | { readonly type: "skipToChoice"; readonly readKeys?: ReadonlySet<string> | undefined }
   | { readonly type: "restore"; readonly sceneId: string; readonly lineIndex: number; readonly affection: number; readonly flags?: StoryFlags; readonly phase?: Phase; readonly history?: readonly HistoryEntry[]; readonly rollback?: readonly RollbackEntry[] | undefined }
+  /** input 줄에 독자가 넣은 값을 플래그에 저장하고 다음 줄로 간다. */
+  | { readonly type: "input"; readonly flag: string; readonly value: string }
   | { readonly type: "backToTitle" };
 
 export interface SaveData {

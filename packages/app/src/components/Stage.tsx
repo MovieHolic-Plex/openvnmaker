@@ -1,8 +1,9 @@
-import { characterImage, validBackgroundUrl, type Character, type SpriteDirection } from "@vnmaker/content";
-import { useCallback, useEffect, useState } from "react";
+import { characterImage, validBackgroundUrl, type Character, type SpriteDirection, type WeatherEffect } from "@vnmaker/content";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { assetUrl } from "../assetUrl.js";
 import "./art-stage.css";
 import { ArtImage } from "./ArtImage.js";
+import { Weather } from "./Weather.js";
 
 interface Props {
   readonly background: string;
@@ -16,6 +17,10 @@ interface Props {
   readonly chapter: string | null;
   readonly sceneEpoch: number;
   readonly transition: string;
+  /** 현재 줄까지 반영된 입자 연출. null/undefined 면 표시하지 않는다. */
+  readonly effect?: WeatherEffect | null | undefined;
+  /** 현재 줄까지 반영된 장면 틴트(CSS hex). null/undefined 면 표시하지 않는다. */
+  readonly tint?: string | null | undefined;
   /** 동작 줄이기 — 페이드 없이 즉시 바꾼다. */
   readonly reducedMotion?: boolean | undefined;
 }
@@ -82,36 +87,83 @@ function StageBackground({ src, fallbackSrc, transition, reducedMotion }: { src:
   );
 }
 
-export function Stage({ background, backgroundUrl, cgUrl, hideSprites, framing = "wide", characters, sprites, speaking, chapter, sceneEpoch, transition, reducedMotion = false }: Props) {
+/** 퇴장 애니메이션이 도는 시간(ms). sprite-exit 키프레임 길이와 같아야 한다. */
+const EXIT_MS = 620;
+
+interface DepartedSprite { readonly key: number; readonly dir: SpriteDirection }
+
+function spriteImageOf(dir: SpriteDirection, characters: readonly Character[] | undefined) {
+  const actor = characters?.find(character => character.id === dir.character);
+  const src = dir.poseUrl ?? characterImage(actor ?? { id: dir.character!, name: "", bio: "", color: "#ffffff" }, dir.expression ?? "neutral", dir.outfit);
+  return { actor, src: src && validBackgroundUrl(src) ? src : null };
+}
+
+export function Stage({ background, backgroundUrl, cgUrl, hideSprites, framing = "wide", characters, sprites, speaking, chapter, sceneEpoch, transition, effect, tint, reducedMotion = false }: Props) {
   const eventArt = validBackgroundUrl(cgUrl) ? cgUrl : null;
   const fallback = assetUrl(`/assets/bg/${background}.png`);
   const target = assetUrl(eventArt ?? (validBackgroundUrl(backgroundUrl) ? backgroundUrl : `/assets/bg/${background}.png`));
+
+  // 퇴장 연출 — 레이아웃 이펙트에서 이전 배치와 비교해 사라진 배우를 잠시 ghost 로 남긴다.
+  // 페인트 전에 ghost 가 붙으므로 한 프레임의 팝도 없다.
+  const seen = useRef(new Map<string, SpriteDirection>());
+  const departedSerial = useRef(0);
+  const [departed, setDeparted] = useState<readonly DepartedSprite[]>([]);
+  useLayoutEffect(() => {
+    const previous = seen.current;
+    const next = new Map<string, SpriteDirection>();
+    for (const dir of sprites) if (dir.character !== null) next.set(dir.slot, dir);
+    const gone: DepartedSprite[] = [];
+    for (const [slot, dir] of previous) {
+      const current = next.get(slot);
+      if (!current || current.character !== dir.character) gone.push({ key: ++departedSerial.current, dir });
+    }
+    seen.current = next;
+    if (gone.length && !reducedMotion) setDeparted(list => [...list, ...gone]);
+  }, [sprites, reducedMotion]);
+  useEffect(() => {
+    if (!departed.length) return;
+    const timer = window.setTimeout(() => setDeparted([]), EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [departed]);
+  // 같은 배우가 ghost 수명 안에 돌아오면 ghost 는 바로 걷는다(겹침 방지).
+  const activeKeys = new Set(sprites.filter(dir => dir.character !== null).map(dir => `${dir.slot} ${dir.character}`));
+  const ghosts = departed.filter(item => !activeKeys.has(`${item.dir.slot} ${item.dir.character}`));
+
   return (
-    <div className={`stage-layers framing-${eventArt ? "cinematic" : framing} ${eventArt ? "has-event-cg" : ""}`}>
+    <div className={`stage-layers framing-${eventArt ? "cinematic" : framing} ${eventArt ? "has-event-cg" : ""} ${eventArt && !reducedMotion ? "cg-drift" : ""}`}>
       <StageBackground src={target} fallbackSrc={fallback} transition={transition} reducedMotion={reducedMotion} />
       <div className="bg-wash" />
       <div className={`scene-content transition-${reducedMotion ? "none" : transition}`} key={sceneEpoch}>
         {!hideSprites && !eventArt && slotOrder.map((slot) => {
           const dir = sprites.find((s) => s.slot === slot);
           if (!dir || dir.character === null) return null;
-          const expression = dir.expression ?? "neutral";
-          const actor = characters?.find(character => character.id === dir.character);
-          const customImage = dir.poseUrl ?? characterImage(actor ?? {id:dir.character,name:"",bio:"",color:"#ffffff"},expression,dir.outfit);
-          if(!customImage || !validBackgroundUrl(customImage))return null;
+          const { actor, src } = spriteImageOf(dir, characters);
+          if (!src) return null;
           const active = speaking === dir.character;
           const dim = speaking !== null && !active;
           return (
-            <div key={slot} className={`sprite sprite--${slot} ${dim ? "is-dim" : "is-active"}`}>
+            <div key={`${slot}:${dir.character}`} className={`sprite sprite--${slot} ${reducedMotion ? "" : "sprite-enter"} ${dim ? "is-dim" : "is-active"}`}>
               <ArtImage
                 className="sprite-image"
                 testId={`sprite-${slot}`}
                 chromaKey={actor?.chromaKey}
-                src={customImage}
+                src={src}
                 alt=""
               />
             </div>
           );
         })}
+        {!hideSprites && !eventArt && ghosts.map(item => {
+          const { actor, src } = spriteImageOf(item.dir, characters);
+          if (!src) return null;
+          return (
+            <div key={`ghost-${item.key}`} className={`sprite sprite--${item.dir.slot} sprite-exit`} aria-hidden="true">
+              <ArtImage className="sprite-image" chromaKey={actor?.chromaKey} src={src} alt="" />
+            </div>
+          );
+        })}
+        {tint ? <div className="scene-tint" style={{ backgroundColor: tint }} aria-hidden="true" /> : null}
+        {effect && !eventArt ? <Weather effect={effect} /> : null}
         {(framing === "cinematic" || eventArt) && <div className="cinematic-bars" aria-hidden="true" />}
         {chapter !== null && (
           <div className="chapter-label" data-testid="chapter-label">

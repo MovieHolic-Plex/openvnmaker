@@ -1,4 +1,4 @@
-import { lineAllowed, type Line, type Scene, type SpriteDirection, type StoryFlags, type VnScript } from "@vnmaker/content";
+import { lineAllowed, type Line, type Scene, type SpriteDirection, type StoryFlags, type VnScript, type WeatherEffect } from "@vnmaker/content";
 import { findScene, type VnState } from "./types.js";
 
 export function currentScene(script: VnScript, state: VnState): Scene | null {
@@ -63,6 +63,20 @@ export function framingAt(scene: Scene, lineIndex: number, flags: StoryFlags = {
 export function bgmAt(scene: Scene, lineIndex: number, flags: StoryFlags = {}): string | null {
   let result = scene.bgm ?? null;
   for (const line of scene.lines.slice(0,lineIndex+1)) if (lineAllowed(line,flags) && line.bgm !== undefined) result = line.bgm;
+  return result;
+}
+
+/** 현재 줄까지 반영한 입자 연출. line.effect=null 이 끄기, undefined 는 이전 값 유지. */
+export function effectAt(scene: Scene, lineIndex: number, flags: StoryFlags = {}): WeatherEffect | null {
+  let result = scene.effect ?? null;
+  for (const line of scene.lines.slice(0, lineIndex + 1)) if (lineAllowed(line, flags) && line.effect !== undefined) result = line.effect;
+  return result;
+}
+
+/** 현재 줄까지 반영한 장면 틴트. line.tint=null 이 끄기, undefined 는 이전 값 유지. */
+export function tintAt(scene: Scene, lineIndex: number, flags: StoryFlags = {}): string | null {
+  let result = scene.tint ?? null;
+  for (const line of scene.lines.slice(0, lineIndex + 1)) if (lineAllowed(line, flags) && line.tint !== undefined) result = line.tint;
   return result;
 }
 
