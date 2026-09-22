@@ -83,6 +83,8 @@ const EXPRESSION_ALIASES: Readonly<Record<string, string>> = {
   "울음": "cry", "눈물": "cry", cry: "cry",
   "부끄러움": "shy", "수줍음": "shy", shy: "shy",
   "기쁨": "happy", "즐거움": "happy", happy: "happy",
+  "진지": "serious", serious: "serious",
+  "활짝": "beaming", "활짝웃음": "beaming", beaming: "beaming",
 };
 
 /** 같은 라벨은 언제나 같은 키가 되어야 한다 — 새로고침/재설치에도 표정 매핑이 흔들리지 않게. */

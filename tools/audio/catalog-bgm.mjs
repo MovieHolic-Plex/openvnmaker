@@ -30,6 +30,8 @@ function shaped(dur, fn) {
   for (let i = 0; i < out.length; i += 1) out[i] = fn(i / SR, dur);
   return out;
 }
+/** 서브소닉(30Hz 미만) 베이스는 실제로 안 들리고 피크만 먹는다 — G#1 아래는 올린다. */
+const bassNote = (midi) => Math.max(midi, 32);
 
 /* ── 긴장: A minor, 100 BPM — 8분 저음 펄스 + 간헐적 스타카토 ── */
 export function tension() {
@@ -40,7 +42,7 @@ export function tension() {
   for (let pass = 0; pass < 2; pass++) {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
-      for (let k = 0; k < 8; k++) events.push({ at: at + k * beat / 2, dur: beat * 0.42, midi: notes[0] - 12, vel: 0.62, voice: bass });
+      for (let k = 0; k < 8; k++) events.push({ at: at + k * beat / 2, dur: beat * 0.42, midi: bassNote(notes[0] - 12), vel: 0.62, voice: bass });
       notes.forEach(m => events.push({ at, dur: bar * 0.96, midi: m + 12, vel: 0.4, voice: pad }));
       if (pass === 1) [0.75, 2.5].forEach(d => events.push({ at: at + d * beat, dur: beat * 0.5, midi: notes[2] + 24, vel: 0.5, voice: pluck }));
     });
@@ -59,7 +61,7 @@ export function mystery() {
       const at = pass * bar * prog.length + i * bar;
       events.push(...arpeggio(notes.map(m => m + 12), at, beat / 2, 6, bell, 0.7));
       notes.forEach(m => events.push({ at, dur: bar * 1.1, midi: m, vel: 0.4, voice: pad }));
-      events.push({ at, dur: bar, midi: notes[0] - 24, vel: 0.5, voice: bass });
+      events.push({ at, dur: bar, midi: bassNote(notes[0] - 24), vel: 0.5, voice: bass });
     });
   }
   const tune = [[0, 86, 1.5], [1.5, 84, 0.5], [2, 81, 1], [3, 79, 2], [6, 81, 1], [7, 84, 1], [8, 86, 1], [9, 89, 3], [12, 86, 1.5], [13.5, 84, 0.5], [14, 81, 1], [15, 77, 3]];
@@ -77,8 +79,8 @@ export function comic() {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
       [0, 1.5, 2, 3.5].forEach((d, k) => events.push({ at: at + d * beat, dur: beat * 0.3, midi: notes[k % notes.length] + 12, vel: 0.75, voice: pluck }));
-      events.push({ at, dur: beat * 0.5, midi: notes[0] - 12, vel: 0.8, voice: bass });
-      events.push({ at: at + 2 * beat, dur: beat * 0.5, midi: notes[0] - 5, vel: 0.7, voice: bass });
+      events.push({ at, dur: beat * 0.5, midi: bassNote(notes[0] - 12), vel: 0.8, voice: bass });
+      events.push({ at: at + 2 * beat, dur: beat * 0.5, midi: bassNote(notes[0] - 5), vel: 0.7, voice: bass });
     });
   }
   const tune = [[0, 84, 0.5], [0.5, 79, 0.5], [1, 84, 0.5], [1.5, 88, 0.5], [2, 84, 1], [4, 82, 0.5], [4.5, 79, 0.5], [5, 76, 1], [6, 78, 1], [8, 81, 0.5], [8.5, 84, 0.5], [9, 88, 1], [10, 84, 2], [12, 79, 0.5], [12.5, 82, 0.5], [13, 85, 0.5], [13.5, 82, 0.5], [14, 79, 2]];
@@ -91,9 +93,9 @@ export function comic() {
 export function farewell() {
   const beat = 60 / 56, bar = beat * 4;
   const prog = [chord(52, "min"), chord(48, "maj"), chord(55, "maj"), chord(50, "maj7")];
-  const total = bar * prog.length * 3;
+  const total = bar * prog.length * 4; // 멜로디 2번째 진술(비트 32~)의 종지 64까지 닿게 4패스
   const events = [];
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 4; pass++) {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
       notes.forEach(m => events.push({ at, dur: bar * 1.08, midi: m + 12, vel: 0.42 + pass * 0.08, voice: pad }));
@@ -113,12 +115,12 @@ export function farewell() {
 export function waltz() {
   const beat = 60 / 108, bar = beat * 3;
   const prog = [chord(53, "maj"), chord(58, "maj"), chord(55, "min7"), chord(60, "dom7")];
-  const total = bar * prog.length * 6;
+  const total = bar * prog.length * 8; // 멜로디 2번째 진술(비트 48~)의 종지 78까지 닿게 8패스
   const events = [];
-  for (let pass = 0; pass < 6; pass++) {
+  for (let pass = 0; pass < 8; pass++) {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
-      events.push({ at, dur: beat * 0.9, midi: notes[0] - 12, vel: 0.85, voice: bass });
+      events.push({ at, dur: beat * 0.9, midi: bassNote(notes[0] - 12), vel: 0.85, voice: bass });
       [1, 2].forEach(d => notes.slice(1).forEach(m => events.push({ at: at + d * beat, dur: beat * 0.8, midi: m + 12, vel: 0.5, voice: epiano })));
     });
   }
@@ -141,7 +143,7 @@ export function chase() {
   for (let pass = 0; pass < 2; pass++) {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
-      for (let k = 0; k < 8; k++) events.push({ at: at + k * beat / 2, dur: beat * 0.38, midi: notes[0] - 12 + (k === 7 ? 2 : 0), vel: 0.72, voice: bass });
+      for (let k = 0; k < 8; k++) events.push({ at: at + k * beat / 2, dur: beat * 0.38, midi: bassNote(notes[0] - 12 + (k === 7 ? 2 : 0)), vel: 0.72, voice: bass });
       notes.forEach((m, k) => events.push({ at: at + k * 0.008, dur: bar * 0.5, midi: m + 24, vel: 0.45, voice: pad }));
       [0, 2].forEach(d => events.push({ at: at + d * beat, dur: beat * 0.25, midi: notes[0] + 24, vel: 0.7, voice: pluck }));
     });
@@ -165,7 +167,7 @@ export function fantasy() {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
       notes.forEach(m => events.push({ at, dur: bar * 1.02, midi: m + 12, vel: 0.5, voice: pad }));
-      events.push({ at, dur: bar * 0.9, midi: notes[0] - 24, vel: 0.62, voice: bass });
+      events.push({ at, dur: bar * 0.9, midi: bassNote(notes[0] - 24), vel: 0.62, voice: bass });
       [0.5, 1.5, 2.5, 3.5].forEach((d, k) => events.push({ at: at + d * beat, dur: beat, midi: notes[k % notes.length] + 24, vel: 0.5, voice: bell }));
     });
   }
@@ -183,7 +185,7 @@ export function dread() {
   for (let pass = 0; pass < 3; pass++) {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
-      events.push({ at, dur: bar * 1.1, midi: notes[0] - 12, vel: 0.75, voice: bass });
+      events.push({ at, dur: bar * 1.1, midi: bassNote(notes[0] - 12), vel: 0.75, voice: bass });
       notes.forEach(m => events.push({ at, dur: bar * 1.05, midi: m + 12, vel: 0.3, voice: pad }));
       if (random() > 0.4) events.push({ at: at + random() * bar * 0.7, dur: beat * 2, midi: notes[1] + 36 + (random() > 0.5 ? 1 : 0), vel: 0.4, voice: bell });
     });
@@ -203,7 +205,7 @@ export function lullaby() {
   for (let pass = 0; pass < 5; pass++) {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
-      events.push({ at, dur: beat * 0.9, midi: notes[0] - 12, vel: 0.5, voice: bass });
+      events.push({ at, dur: beat * 0.9, midi: bassNote(notes[0] - 12), vel: 0.5, voice: bass });
       events.push(...arpeggio(notes, at, beat / 2, 6, bell, 0.45));
       notes.forEach(m => events.push({ at, dur: bar * 1.05, midi: m + 12, vel: 0.3, voice: pad }));
     });
@@ -224,7 +226,7 @@ export function nostalgia() {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
       notes.forEach((m, k) => events.push({ at: at + k * 0.014, dur: bar * 0.85, midi: m + 12, vel: 0.55, voice: epiano }));
-      events.push({ at, dur: bar * 0.9, midi: notes[0] - 24, vel: 0.55, voice: bass });
+      events.push({ at, dur: bar * 0.9, midi: bassNote(notes[0] - 24), vel: 0.55, voice: bass });
       if (pass >= 1) [1, 3].forEach(d => events.push({ at: at + d * beat, dur: beat * 0.8, midi: notes[3] + 24, vel: 0.4, voice: epiano }));
     });
   }
@@ -243,8 +245,8 @@ export function festival() {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
       events.push(...arpeggio(notes.map(m => m + 12), at, beat / 2, 8, pluck, 0.65));
-      events.push({ at, dur: beat * 0.5, midi: notes[0] - 12, vel: 0.75, voice: bass });
-      events.push({ at: at + 2 * beat, dur: beat * 0.5, midi: notes[0] - 12, vel: 0.7, voice: bass });
+      events.push({ at, dur: beat * 0.5, midi: bassNote(notes[0] - 12), vel: 0.75, voice: bass });
+      events.push({ at: at + 2 * beat, dur: beat * 0.5, midi: bassNote(notes[0] - 12), vel: 0.7, voice: bass });
       [1, 3].forEach(d => notes.forEach(m => events.push({ at: at + d * beat, dur: beat * 0.4, midi: m + 12, vel: 0.45, voice: epiano })));
     });
   }
@@ -264,7 +266,7 @@ export function resolve2() {
     prog.forEach((notes, i) => {
       const at = pass * bar * prog.length + i * bar;
       notes.forEach(m => events.push({ at, dur: bar * 0.95, midi: m + 12, vel: level * 0.5, voice: pad }));
-      for (let k = 0; k < 8; k++) events.push({ at: at + k * beat / 2, dur: beat * 0.45, midi: notes[0] - 12, vel: level * 0.7, voice: bass });
+      for (let k = 0; k < 8; k++) events.push({ at: at + k * beat / 2, dur: beat * 0.45, midi: bassNote(notes[0] - 12), vel: level * 0.7, voice: bass });
       events.push(...arpeggio(notes, at, beat / 2, 8, piano, level * 0.55));
     });
   }
