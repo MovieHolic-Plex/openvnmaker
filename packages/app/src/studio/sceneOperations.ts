@@ -19,8 +19,8 @@ export function insertSceneAfter(script: VnScript, scene: Scene, newId: string):
   const { choices, ending, routes, next: nextId, ...rest } = scene;
   const { id: _id, chapter: _chapter, lines: _lines, set: _set, cg: _cg, cgUrl: _cgUrl, artBrief: _brief, ...stage } = rest;
   // 출구가 여럿 섞여 있으면 런타임 우선순위(선택지 > 조건 경로 > 엔딩 > 다음 씬)의 승자만 옮긴다.
-  // 조건 경로와 그 폴백 next 는 한 덩어리다 — 경로만 옮기면 어느 조건도 안 맞을 때 새 장면이 막힌다.
-  const exit = choices?.length ? { choices } : routes?.length ? { routes, ...(nextId !== undefined ? { next: nextId } : {}) } : ending !== undefined ? { ending } : nextId !== undefined ? { next: nextId } : {};
+  // 조건 경로와 그 폴백(엔딩 또는 next)은 한 덩어리다 — 폴백을 놓치면 어느 조건도 안 맞을 때 새 장면이 막힌다.
+  const exit = choices?.length ? { choices } : routes?.length ? { routes, ...(ending !== undefined ? { ending } : {}), ...(nextId !== undefined ? { next: nextId } : {}) } : ending !== undefined ? { ending } : nextId !== undefined ? { next: nextId } : {};
   const next: Scene = { ...stage, ...exit, id: newId, chapter: "새로운 장면", lines: [{ speaker: null, text: "이곳에서 새로운 이야기가 시작된다." }] };
   const movedExit = choices?.length ? "선택지" : routes?.length ? "조건 연결" : ending !== undefined ? "엔딩" : nextId !== undefined ? "다음 씬 연결" : null;
   return { movedExit, script: { ...script, scenes: script.scenes.flatMap(row => row.id === scene.id ? [{ ...rest, next: newId }, next] : [row]) } };

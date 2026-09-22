@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { parseScript, setExportedScript } from "./export-content.js";
 import { App } from "../App.js";
+import { ErrorBoundary } from "../components/ErrorBoundary.js";
 import "../styles/global.css";
 import "../styles/rain-player.css";
 
@@ -14,7 +15,7 @@ async function boot() {
   if (typeof manifest.projectNamespace !== "string" || !/^bundle-[a-f0-9]{16}$/.test(manifest.projectNamespace)) throw new Error("배포 정보가 올바르지 않습니다.");
   setExportedScript(script);
   document.title = script.title;
-  createRoot(document.getElementById("root")!).render(<App initialScript={script} standalone projectNamespace={manifest.projectNamespace} />);
+  createRoot(document.getElementById("root")!).render(<ErrorBoundary><App initialScript={script} standalone projectNamespace={manifest.projectNamespace} /></ErrorBoundary>);
 }
 
 void boot().catch((error: unknown) => {

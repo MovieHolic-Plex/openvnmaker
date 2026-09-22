@@ -1,14 +1,22 @@
 import { parseScript, type Choice, type FlagComparison, type Line, type LineCondition, type VnScript } from "@vnmaker/content";
 
 const conditionFlags = (condition: LineCondition | undefined, into: Set<string>) => { condition?.all?.forEach(key => into.add(key)); condition?.none?.forEach(key => into.add(key)); condition?.compare?.forEach(rule => into.add(rule.flag)); };
-/** 원고를 한 번 훑어 참조 중인 변수 집합을 만든다. renameFlag 가 갱신하는 모든 자리를 센다 — 대사·선택지·조건 경로의 조건, 선택 결과, 장면 진입 변수, 입력 저장 변수. */
+const TOKEN_FLAG = /\{flag:([^{}]{1,80})\}/g;
+/** {flag:이름}·{player} 텍스트 토큰이 참조하는 변수를 센다 — renameFlag 와 같은 범위여야 삭제 가드가 정직하다. */
+const tokenFlags = (text: string | undefined, into: Set<string>) => {
+  if (!text) return;
+  for (const match of text.matchAll(TOKEN_FLAG)) into.add(match[1]!);
+  if (text.includes("{player}")) into.add("player");
+};
+/** 원고를 한 번 훑어 참조 중인 변수 집합을 만든다. renameFlag 가 갱신하는 모든 자리를 센다 — 대사·선택지·조건 경로의 조건, 선택 결과, 장면 진입 변수, 입력 저장 변수, 본문·문구·배우 이름의 {flag} 토큰. */
 export function referencedFlags(script: VnScript): Set<string> {
   const into = new Set<string>();
+  for (const actor of script.characters) tokenFlags(actor.name, into);
   for (const scene of script.scenes) {
     for (const key of Object.keys(scene.set ?? {})) into.add(key);
     for (const route of scene.routes ?? []) conditionFlags(route.when, into);
-    for (const line of scene.lines) { conditionFlags(line.when, into); if (line.input) into.add(line.input.flag); }
-    for (const choice of scene.choices ?? []) { conditionFlags(choice.when, into); for (const key of Object.keys(choice.set ?? {})) into.add(key); for (const key of Object.keys(choice.add ?? {})) into.add(key); }
+    for (const line of scene.lines) { conditionFlags(line.when, into); tokenFlags(line.text, into); if (line.input) { into.add(line.input.flag); tokenFlags(line.input.prompt, into); tokenFlags(line.input.placeholder, into); } }
+    for (const choice of scene.choices ?? []) { conditionFlags(choice.when, into); tokenFlags(choice.text, into); for (const key of Object.keys(choice.set ?? {})) into.add(key); for (const key of Object.keys(choice.add ?? {})) into.add(key); }
   }
   return into;
 }
@@ -36,6 +44,10 @@ export function renameFlag(script: VnScript, from: string, to: string): VnScript
   if (from === to) return script;
   if (!validFlagName(to)) throw new Error("영문자로 시작하는 64자 이하의 영문·숫자·밑줄·하이픈 이름을 사용하세요.");
   if (Object.hasOwn(flags, to)) throw new Error("이미 사용 중인 변수 이름입니다.");
+  // 같은 set/add 맵에 두 이름이 함께 있으면 키 재명명이 한 항목을 조용히 삼킨다 — 미리 거부한다.
+  const maps: (Record<string, unknown> | undefined)[] = [];
+  for (const scene of script.scenes) { maps.push(scene.set); for (const choice of scene.choices ?? []) { maps.push(choice.set); maps.push(choice.add); } }
+  if (maps.some(map => map && Object.hasOwn(map, from) && Object.hasOwn(map, to))) throw new Error(`‘${from}’과(와) ‘${to}’을(를) 한 곳에서 함께 쓰고 있어 이름을 바꿀 수 없습니다. 먼저 겹치는 쓰기를 정리하세요.`);
   // {flag:이름}·{player} 토큰도 참조다 — 본문을 안 고치면 이름을 바꾼 뒤 그 자리가 빈 문자열로 렌더된다.
   const renameTokens = (text: string): string => {
     let next = text.replaceAll(`{flag:${from}}`, `{flag:${to}}`);

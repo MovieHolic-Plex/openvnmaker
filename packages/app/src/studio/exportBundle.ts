@@ -24,7 +24,8 @@ export function collectProjectAssets(script: VnScript): string[] {
     image(characterImage(actor,expression));
   };
   const placement = (sprites: readonly SpriteDirection[] | undefined) => {
-    for (const sprite of sprites ?? []) if (sprite.character) { image(sprite.poseUrl); expression(sprite.character, sprite.expression); }
+    // poseUrl 은 캐릭터 없는 독립 배치에도 붙는다 — 캐릭터 유무와 무관하게 수집해야보낸 ZIP 이 그 파일을 잃지 않는다.
+    for (const sprite of sprites ?? []) { image(sprite.poseUrl); if (sprite.character) expression(sprite.character, sprite.expression); }
   };
   for (const asset of script.assets ?? []) image(asset.url);
   for (const asset of script.audioAssets ?? []) paths.add(asset.url);

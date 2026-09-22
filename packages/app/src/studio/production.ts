@@ -13,8 +13,9 @@ export const scriptFingerprint = (script: VnScript) => {
   return hash.toString(36);
 };
 
-type GraphScene = Pick<Scene, "id" | "next" | "choices" | "ending">;
-const exits = (scene: GraphScene) => scene.choices?.length ? scene.choices.map(choice => choice.next) : scene.ending ? [] : scene.next ? [scene.next] : [];
+type GraphScene = Pick<Scene, "id" | "next" | "choices" | "ending" | "routes" | "set">;
+// 런타임 우선순위(선택지 > 조건 경로 > 엔딩 > 다음 씬)와 같다 — 경로가 있으면 경로+폴백이 출구 후보다.
+const exits = (scene: GraphScene) => scene.choices?.length ? scene.choices.map(choice => choice.next) : scene.routes?.length ? [...scene.routes.map(route => route.next), ...(scene.ending ? [] : scene.next ? [scene.next] : [])] : scene.ending ? [] : scene.next ? [scene.next] : [];
 
 /** Shortest ending path and longest DAG path. Positive cycles make the upper bound unknown. */
 function pathRange(scenes: readonly GraphScene[], start: string, weights: ReadonlyMap<string, number>) {
@@ -90,9 +91,24 @@ export function estimateScriptDuration(script: VnScript, charsPerMinute = DEFAUL
       if (++states > 10000) { incomplete = true; return null; }
       const scene = byId.get(id);
       if (!scene) { incomplete = true; return null; }
+      // 진입 시점 set 을 먼저 합친다 — 런타임과 감사가 같은 규칙으로 조건 줄·경로를 평가한다.
+      const merged = scene.set ? { ...flags, ...scene.set } : flags;
       const counts = lineWeights.get(scene.id)!;
-      const own = scene.lines.reduce((sum, line, index) => lineAllowed(line, flags) ? sum + counts[index]! : sum, 0);
-      const tails = scene.choices?.length ? scene.choices.filter(choice=>choiceAllowed(choice,flags)).map(choice=>range(choice.next,applyChoiceFlags(flags,choice))) : scene.ending ? [{min:0,max:0}] : scene.next ? [range(scene.next,flags)] : [];
+      const own = scene.lines.reduce((sum, line, index) => lineAllowed(line, merged) ? sum + counts[index]! : sum, 0);
+      let tails: ({ min: number; max: number } | null)[];
+      if (scene.choices?.length) tails = scene.choices.filter(choice=>choiceAllowed(choice,merged)).map(choice=>range(choice.next,applyChoiceFlags(merged,choice)));
+      else if (scene.routes?.length) {
+        // 처음으로 조건이 맞는 경로로 간다 — 무조건 경로는 이후 경로와 폴백(엔딩·next)을 가린다.
+        tails = [];
+        let open = true;
+        for (const route of scene.routes) {
+          if (!open) break;
+          if (lineAllowed(route, merged)) tails.push(range(route.next, merged));
+          if (!route.when) open = false;
+        }
+        if (open) tails.push(scene.ending ? { min: 0, max: 0 } : scene.next ? range(scene.next, merged) : null);
+      }
+      else tails = scene.ending ? [{min:0,max:0}] : scene.next ? [range(scene.next,merged)] : [];
       if (!tails.length || tails.some(tail=>tail===null)) incomplete = true;
       const valid = tails.filter((tail): tail is {min:number;max:number}=>tail!==null);
       const value = valid.length ? {min:own+Math.min(...valid.map(tail=>tail.min)),max:own+Math.max(...valid.map(tail=>tail.max))} : null;

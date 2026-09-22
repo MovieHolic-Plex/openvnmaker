@@ -289,10 +289,11 @@ export function parseScript(value: unknown): VnScript {
 
 export interface StoryIssue { readonly sceneId: string; readonly message: string; readonly severity: "error" | "warning" }
 
-/** 엔진의 출구 우선순위와 같다 — 선택지가 있으면 그것만, 없으면 조건 경로와 기본 next 가 모두 도달 후보다. */
+/** 엔진의 출구 우선순위와 같다 — 선택지가 있으면 그것만, 없으면 조건 경로와 폴백(엔딩은 종료라 next 만)이 도달 후보다. */
 function exits(scene: Scene): string[] {
   if (scene.choices?.length) return scene.choices.map(choice => choice.next);
-  return [...(scene.routes ?? []).map(route => route.next), ...(scene.next ? [scene.next] : [])];
+  // 런타임은 경로를 다 실패하면 ending → next 순으로 폴백한다. ending 이 있으면 next 는 죽은 출구다.
+  return [...(scene.routes ?? []).map(route => route.next), ...(scene.ending ? [] : scene.next ? [scene.next] : [])];
 }
 
 export function auditScript(script: VnScript): StoryIssue[] {
@@ -350,12 +351,15 @@ export function auditScript(script: VnScript): StoryIssue[] {
       // "플래그가 세팅됐다"고 가정한 경로만 믿는 거짓 통과와 그 반대를 모두 피한다.
       const outFlags={...state.flags};
       // input 은 실행 시 항상 문자열을 쓴다 — 이미 선언된 플래그라도 덮어쓰므로 "?"로 둔다.
-      for(const line of scene.lines)if(line.input&&line.when===undefined)outFlags[line.input.flag]="?";
+      const always=[...new Set(scene.lines.flatMap(line=>line.input&&line.when===undefined?[line.input.flag]:[]))];
+      for(const flag of always)outFlags[flag]="?";
       const maybes=[...new Set(scene.lines.flatMap(line=>line.input&&line.when!==undefined?[line.input.flag]:[]))];
       const variants=[outFlags];
       if(maybes.length<=4){
         for(const flag of maybes)for(const base of variants.slice())variants.push({...base,[flag]:"?"});
       }else for(const flag of maybes)outFlags[flag]="?"; // 조건 입력이 많으면 세팅된 쪽으로 본다
+      // 독자가 "0"을 넣으면 플래그는 숫자 0(falsy)이 된다 — truthy 만 가정한 경로는 조건부 데드엔드다.
+      if(always.length<=3)for(const flag of always)for(const base of variants.slice())variants.push({...base,[flag]:0});
       if(scene.choices?.length){
         let deadCount=0;
         for(const flags of variants){

@@ -18,8 +18,10 @@ export function layoutStoryMap(script: VnScript): { positions: Map<string, { x: 
     const targets = scene.choices?.length ? scene.choices.map(choice => choice.next) : [...(scene.routes ?? []).map(route => route.next), ...(!scene.ending && scene.next ? [scene.next] : [])];
     for (const target of targets) if (!depth.has(target) && byId.has(target)) { depth.set(target, depth.get(scene.id)! + 1); queue.push(target); }
   }
+  // 도달 불가 씬은 도달 영역 아래 고정 폭의 행에 쌓는다 — depth 누적치를 다시 더하면 k² 로 폭이 폭증한다.
   let unreachable = 0;
-  for (const scene of script.scenes) if (!depth.has(scene.id)) depth.set(scene.id, ++unreachable + Math.max(-1, ...depth.values()));
+  const unreachableBase = Math.max(-1, ...depth.values()) + 1;
+  for (const scene of script.scenes) if (!depth.has(scene.id)) depth.set(scene.id, unreachableBase + Math.floor(unreachable++ / 8));
   const levels = Math.max(1, ...[...depth.values()].map(value => value + 1));
   const rowsPerBand = Math.max(4, Math.min(levels, Math.ceil(Math.sqrt(levels * 1.5))));
   const siblings = new Map<number, number>();

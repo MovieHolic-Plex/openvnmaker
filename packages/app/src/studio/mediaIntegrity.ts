@@ -22,6 +22,8 @@ export function collectMediaReferences(script: VnScript): MediaReference[] {
     if (!isLocal(url) || seen.has(url)) return;
     seen.add(url); refs.push({ url, kind, label, ...(sceneId ? { sceneId } : {}) });
   };
+  // 타이틀 음악도 수집한다 — 커스텀 업로드가 빠지면 검사가 통과해도 게임 시작이 묵음이다.
+  add(audioUrl(script.titleBgm), "bgm", "타이틀 배경음악");
   for (const scene of script.scenes) {
     const where = scene.chapter || scene.id;
     add(scene.backgroundUrl, "background", `${where} · 장면 배경`, scene.id);

@@ -23,7 +23,7 @@ export function ProjectLibrary({script,activeId,onSwitch}:{script:VnScript;activ
     try{
       const directory=await pickProjectFolder(action==="save"?"readwrite":"read");
       if(action==="save"){const name=await saveProjectFolder(directory,before,progress);setFolderStatus(`저장 완료 · ${name}`);}
-      else{const next=await openProjectFolder(directory,progress);if(latest.current!==before)throw new Error("가져오는 중 원고가 변경되어 전환을 중단했습니다.");await switchProject(crypto.randomUUID(),next);setFolderStatus("");}
+      else{const next=await openProjectFolder(directory,progress);if(latest.current!==before){await removeUnreferencedAssets(collectProjectAssets(next).filter(path=>path.startsWith("/assets/user/")),{id:activeId,script:latest.current}).catch(()=>({removed:[],kept:[]}));throw new Error("가져오는 중 원고가 변경되어 전환을 중단했습니다.");}const folderOthers=(await listProjects()).projects.map(row=>row.script);const {script:folderNext,stripped:folderStripped}=stripSharedNativeSaveId(next,[...folderOthers,before]);if(folderStripped)setNotice("같은 네이티브 배포 ID를 쓰는 작품이 이미 있어 가져온 작품의 배포 ID를 비웠습니다. 기존 작품의 세이브 폴더와 섞이지 않습니다.");await switchProject(crypto.randomUUID(),folderNext);setFolderStatus("");}
     }catch(error){setFolderStatus("");if(!(error instanceof DOMException&&error.name==="AbortError"))setError(`폴더 작업 실패: ${error instanceof Error?error.message:String(error)}`);}
     finally{setBusy(false);}
   }
@@ -42,13 +42,22 @@ export function ProjectLibrary({script,activeId,onSwitch}:{script:VnScript;activ
         if(isLibraryArchive(value)){
           // 보관함 원본: 모든 정상 기록을 새 작품으로 들여오고 가장 최근 것으로 전환한다.
           const result=await restoreLibraryArchive(text);
-          setNotice(`보관함 원본에서 작품 ${result.restored.length}개를 들여왔습니다.${result.skipped?` 읽을 수 없는 기록 ${result.skipped}개는 건너뛰었습니다.`:""}`);
+          setNotice(`보관함 원본에서 작품 ${result.restored.length}개를 들여왔습니다.${result.skipped?` 읽을 수 없는 기록 ${result.skipped}개는 건너뛰었습니다.`:""}${result.stripped?` 배포 ID가 겹치는 원고 ${result.stripped}개는 ID를 비웠습니다.`:""}`);
           const latestRow=result.restored[0]!;await switchProject(latestRow.id,latestRow.script);return;
         }
-        await switchProject(crypto.randomUUID(),parseScript(value));return;
+        const parsed=parseScript(value);
+        if(latest.current!==before)throw new Error("복원 중 원고가 변경되어 전환을 중단했습니다.");
+        const jsonOthers=(await listProjects()).projects.map(row=>row.script);
+        const {script:jsonNext,stripped:jsonStripped}=stripSharedNativeSaveId(parsed,[...jsonOthers,before]);
+        if(jsonStripped)setNotice("같은 네이티브 배포 ID를 쓰는 작품이 이미 있어 복원본의 배포 ID를 비웠습니다. 기존 작품의 세이브 폴더와 섞이지 않습니다.");
+        await switchProject(crypto.randomUUID(),jsonNext);return;
       }
       const restored=await restoreProjectBundle(file);
-      if(latest.current!==before)throw new Error("복원 중 원고가 변경되어 전환을 중단했습니다.");
+      if(latest.current!==before){
+        // 번들 복원이 먼저 IndexedDB 에 블롭을 커밋한다 — 전환을 멈추면 아무도 참조하지 않는 파일만 지운다.
+        await removeUnreferencedAssets(collectProjectAssets(restored).filter(path=>path.startsWith("/assets/user/")),{id:activeId,script:latest.current}).catch(()=>({removed:[],kept:[]}));
+        throw new Error("복원 중 원고가 변경되어 전환을 중단했습니다.");
+      }
       const others=(await listProjects()).projects.map(row=>row.script);
       const {script:next,stripped}=stripSharedNativeSaveId(restored,[...others,before]);
       if(stripped)setNotice("같은 네이티브 배포 ID를 쓰는 작품이 이미 있어 복원본의 배포 ID를 비웠습니다. 기존 작품의 세이브 폴더와 섞이지 않습니다.");

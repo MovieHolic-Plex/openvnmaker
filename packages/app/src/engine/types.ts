@@ -19,6 +19,8 @@ export interface PastSnapshot {
   readonly phase: Phase;
   readonly endingTitle: string | null;
   readonly history: readonly HistoryEntry[];
+  /** 독자가 input 줄로 직접 넣은 플래그 — 씬 진입 set 이 이 키들을 덮어쓰지 않는다. */
+  readonly inputFlags: readonly string[];
 }
 
 export interface VnState {
@@ -35,6 +37,8 @@ export interface VnState {
   readonly error: string | null;
   /** 씬이 바뀔 때마다 증가한다. 전환 애니메이션 트리거. */
   readonly sceneEpoch: number;
+  /** 독자가 input 줄로 직접 넣은 플래그 — 씬 진입 set 보다 우선한다. */
+  readonly inputFlags: readonly string[];
 }
 
 /** 세이브에 담는 압축 롤백 기록 — 불러온 뒤에도 「이전」이 동작하게 한다. history 는 길이만 남기고 앞부분을 잘라 복원한다. */
@@ -45,6 +49,7 @@ export interface RollbackEntry {
   readonly flags: StoryFlags;
   readonly phase: Phase;
   readonly historyLength: number;
+  readonly inputFlags?: readonly string[] | undefined;
 }
 /** 세이브에 남기는 롤백 기록 개수 상한. */
 export const ROLLBACK_LIMIT = 30;
@@ -54,6 +59,11 @@ export function readKey(sceneId: string, index: number, line?: Pick<Line, "id"> 
   return `${sceneId}#${line?.id !== undefined ? `id:${line.id}` : index}`;
 }
 
+/** 읽음 기록 조회 — 줄에 id 가 생기기 전 저장본은 위치 키(`씬#3`)로 기록됐으므로 둘 다 본다. */
+export function hasReadKey(set: ReadonlySet<string>, sceneId: string, index: number, line?: Pick<Line, "id"> | undefined): boolean {
+  return set.has(readKey(sceneId, index, line)) || (line?.id !== undefined && set.has(`${sceneId}#${index}`));
+}
+
 export type VnAction =
   | { readonly type: "start" }
   | { readonly type: "advance" }
@@ -61,7 +71,7 @@ export type VnAction =
   | { readonly type: "choose"; readonly index: number }
   /** 현재 씬 안에서 이미 읽은 대사를 건너뛴다. readKeys 가 없으면 읽지 않은 대사도 건너뛴다(설정 「모두 스킵」). */
   | { readonly type: "skipToChoice"; readonly readKeys?: ReadonlySet<string> | undefined }
-  | { readonly type: "restore"; readonly sceneId: string; readonly lineIndex: number; readonly affection: number; readonly flags?: StoryFlags; readonly phase?: Phase; readonly history?: readonly HistoryEntry[]; readonly rollback?: readonly RollbackEntry[] | undefined }
+  | { readonly type: "restore"; readonly sceneId: string; readonly lineIndex: number; readonly affection: number; readonly flags?: StoryFlags; readonly phase?: Phase; readonly history?: readonly HistoryEntry[]; readonly rollback?: readonly RollbackEntry[] | undefined; readonly inputFlags?: readonly string[] | undefined }
   /** input 줄에 독자가 넣은 값을 플래그에 저장하고 다음 줄로 간다. */
   | { readonly type: "input"; readonly flag: string; readonly value: string }
   | { readonly type: "backToTitle" };
@@ -78,6 +88,7 @@ export interface SaveData {
   readonly phase?: Phase;
   readonly history?: readonly HistoryEntry[];
   readonly rollback?: readonly RollbackEntry[];
+  readonly inputFlags?: readonly string[] | undefined;
 }
 
 export function initialState(script: VnScript): VnState {
@@ -92,6 +103,7 @@ export function initialState(script: VnScript): VnState {
     endingTitle: null,
     error: null,
     sceneEpoch: 0,
+    inputFlags: [],
   };
 }
 

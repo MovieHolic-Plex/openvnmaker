@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { openModal } from "./modal.js";
 import type { VnScript } from "@vnmaker/content";
 import "../styles/credits.css";
 
@@ -7,7 +8,7 @@ export function CreditsPanel({script, standalone, onClose}: {script: VnScript; s
   useEffect(() => {
     const previous = document.activeElement;
     const node = dialog.current;
-    node?.showModal();
+    openModal(node);
     return () => { node?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
   }, []);
   const records = [...(script.assets ?? []), ...(script.audioAssets ?? [])].filter(asset => {

@@ -58,7 +58,7 @@ export function loadProject(storage: Storage = localStorage): { script: VnScript
   }
 }
 
-const LIMITS = { text: 20_000, lines: 2_000, scenes: 300, choices: 8, characters: 200, assets: 2_000, audio: 5_000 } as const;
+const LIMITS = { text: 20_000, lines: 2_000, scenes: 300, choices: 8, characters: 200, assets: 2_000, audio: 5_000, flags: 100, routes: 16 } as const;
 const clipText = (value: unknown, max: number) => typeof value === "string" && value.length > max ? value.slice(0, max) : value;
 /**
  * 검증 상한(대사 20,000자·씬당 2,000줄·300씬 등)을 넘어 읽을 수 없게 된 원고를 상한에 맞춰 잘라 되살린다.
@@ -79,6 +79,10 @@ export function salvageScript(raw: unknown): { script: VnScript; changes: string
     return rows.slice(0, max);
   };
   clip(source, "title", "작품 제목"); clip(source, "subtitle", "작품 설명"); clip(source, "artDirection", "아트 디렉션");
+  if (source["flags"] && typeof source["flags"] === "object" && !Array.isArray(source["flags"]) && Object.keys(source["flags"]).length > LIMITS.flags) {
+    source["flags"] = Object.fromEntries(Object.entries(source["flags"]).slice(0, LIMITS.flags));
+    changes.push(`상태 변수를 처음 ${LIMITS.flags}개만 남겼습니다.`);
+  }
   source["characters"] = truncate(source["characters"], LIMITS.characters, "등장인물");
   source["assets"] = truncate(source["assets"], LIMITS.assets, "아트 에셋");
   source["audioAssets"] = truncate(source["audioAssets"], LIMITS.audio, "음원");
@@ -91,6 +95,7 @@ export function salvageScript(raw: unknown): { script: VnScript; changes: string
     scene["lines"] = truncate(scene["lines"], LIMITS.lines, `${name}의 대사`);
     if (Array.isArray(scene["lines"])) for (const [lineIndex, line] of scene["lines"].entries()) if (line && typeof line === "object") clip(line as Record<string, unknown>, "text", `${name} ${lineIndex + 1}번째 대사`);
     scene["choices"] = truncate(scene["choices"], LIMITS.choices, `${name}의 선택지`);
+    scene["routes"] = truncate(scene["routes"], LIMITS.routes, `${name}의 조건 경로`);
     if (Array.isArray(scene["choices"])) for (const choice of scene["choices"]) if (choice && typeof choice === "object") { clip(choice as Record<string, unknown>, "text", `${name}의 선택지 문구`); clip(choice as Record<string, unknown>, "next", `${name}의 선택지 연결`); }
   }
   for (const key of ["characters", "assets", "audioAssets"] as const) if (source[key] === undefined) delete source[key];
@@ -116,7 +121,8 @@ export function historyReducer(state: HistoryState, action: HistoryAction): Hist
     return next ? { past: [...state.past, state.present], present: next, future: state.future.slice(1) } : state;
   }
   if (action.type !== "edit" || action.script === state.present) return state;
-  const grouped = action.group && action.group === state.group && action.at - (state.at ?? 0) < 1200;
+  // 시계가 거꾸로 간 타임스탬프(음수 차)도 그룹으로 합쳐지면 실행 취소 경계가 하나 지워진다 — 앞으로만 합친다.
+  const grouped = action.group && action.group === state.group && action.at - (state.at ?? 0) >= 0 && action.at - (state.at ?? 0) < 1200;
   return { past: grouped ? state.past : [...state.past.slice(-59), state.present], present: action.script, future: [], group: action.group, at: action.at };
 }
 
@@ -186,11 +192,32 @@ export function parseProposal(text: string, mode: Exclude<AiMode, "image">, base
       const branch = item as Record<string, unknown>;
       if (typeof branch["text"] !== "string" || !branch["text"].trim()) throw new Error("선택지 문구가 비어 있습니다.");
       const parsed = parseScene(branch["scene"]);
-      const { next: _next, choices: _choices, ending: _ending, backgroundUrl: _url, ...rest } = parsed;
-      const newScene: Scene = { ...rest, id: newSceneId(), ...(scene.next ? { next: scene.next } : { ending: parsed.chapter || branch["text"] }) };
+      // 화이트리스트로 옮긴다 — AI가 지어낸 routes·set·선택지·artBrief·입력줄은 미리보기에 보이지 않는 채
+      // 원고에 들어가고, 댕글링 route 는 독자에게 치명 오류를 낸다. 표현 필드만 허용한다.
+      const lines = parsed.lines.map(line => {
+        const { when: _when, input: _input, id: _lid, ...rest } = line;
+        return rest;
+      });
+      const newScene: Scene = parseScene({
+        id: newSceneId(),
+        ...(parsed.chapter ? { chapter: parsed.chapter } : {}),
+        background: parsed.background,
+        ...(parsed.backgroundUrl ? { backgroundUrl: parsed.backgroundUrl } : {}),
+        ...(parsed.cg ? { cg: parsed.cg } : {}),
+        ...(parsed.cgUrl ? { cgUrl: parsed.cgUrl } : {}),
+        ...(parsed.hideSprites ? { hideSprites: parsed.hideSprites } : {}),
+        ...(parsed.framing ? { framing: parsed.framing } : {}),
+        ...(parsed.bgm ? { bgm: parsed.bgm } : {}),
+        ...(parsed.transition ? { transition: parsed.transition } : {}),
+        ...(parsed.effect ? { effect: parsed.effect } : {}),
+        ...(parsed.tint ? { tint: parsed.tint } : {}),
+        ...(parsed.sprites ? { sprites: parsed.sprites } : {}),
+        lines,
+        ...(scene.next ? { next: scene.next } : { ending: parsed.chapter || branch["text"] }),
+      });
       return { text: branch["text"], scene: newScene };
     });
-    const { next: _next, ending: _ending, ...rest } = scene;
+    const { next: _next, ending: _ending, routes: _routes, ...rest } = scene;
     const updated = { ...rest, choices: branches.map(branch => ({ text: branch.text, next: branch.scene.id })) };
     next = { ...base, scenes: [...base.scenes.map(row => row.id === scene.id ? updated : row), ...branches.map(branch => branch.scene)] };
     title = "두 갈래의 새로운 이야기";

@@ -5,7 +5,10 @@ export function addCharacter(script:VnScript,id:string,name:string):VnScript {
   if(script.characters.some(actor=>actor.id===id))throw new Error("이미 사용 중인 캐릭터 ID입니다.");
   return parseScript({...script,characters:[...script.characters,{id,name:name.trim(),bio:"",color:"#b6d7e8",expressionImages:{}}]});
 }
-export function updateCharacter(script:VnScript,next:Character):VnScript { return parseScript({...script,characters:script.characters.map(actor=>actor.id===next.id?next:actor)}); }
+export function updateCharacter(script:VnScript,next:Character):VnScript {
+  if(!script.characters.some(actor=>actor.id===next.id))throw new Error("수정할 캐릭터를 찾을 수 없습니다.");
+  return parseScript({...script,characters:script.characters.map(actor=>actor.id===next.id?next:actor)});
+}
 /** The confirmation UI explicitly describes conversion to narration and actor exits. */
 export function removeCharacter(script:VnScript,id:string):VnScript {
   const remove=(rows:readonly SpriteDirection[]|undefined)=>rows?.map(row=>row.character===id?{slot:row.slot,character:null}:row);

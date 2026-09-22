@@ -6,6 +6,7 @@ import {describeAudio,probeAudio} from "../storage/projectAudio.js";
 
 export interface FolderHandle {
   getDirectoryHandle(name:string,options?:{create?:boolean}):Promise<FolderHandle>;
+  removeEntry?(name:string,options?:{recursive?:boolean}):Promise<void>;
   getFileHandle(name:string,options?:{create?:boolean}):Promise<{
     getFile():Promise<File>;
     createWritable():Promise<{write(data:Blob|string):Promise<void>;close():Promise<void>;abort():Promise<void>}>;
@@ -46,22 +47,28 @@ export async function saveProjectFolder(root:FolderHandle,source:VnScript,onProg
   if(paths.length>12000)throw new Error("작품 파일은 12,000개까지 저장할 수 있습니다.");
   const name=`vnmaker-${new Date().toISOString().replace(/[:.]/g,"-")}-${crypto.randomUUID()}`;
   const folder=await root.getDirectoryHandle(name,{create:true}),files:Entry[]=[],replacements=new Map<string,string>();let complete=0;
-  for(const path of paths){
-    onProgress?.({phase:"save",complete:complete++,total:paths.length});
-    let relative=path.slice(1);const generated=/^\/api\/image\/file\/[a-zA-Z0-9][a-zA-Z0-9._-]*\.(png|jpe?g|webp)$/i.test(path);
-    if(!safePath(relative)&&!generated)throw new Error(`지원하지 않는 작품 경로입니다: ${path}`);
-    const response=await fetcher(path,{cache:"no-store",redirect:"error"});if(!response.ok)throw new Error(`파일을 읽지 못했습니다: ${path}`);
-    if(Number(response.headers.get("Content-Length"))>MAX_FILE)throw new Error(`파일 크기 제한 초과: ${path}`);
-    const blob=await response.blob();if(!blob.size||blob.size>MAX_FILE)throw new Error(`파일 크기 제한 초과: ${path}`);
-    const asset=await describe(relative,blob,false);
-    if(generated){relative=asset.path.slice(1);replacements.set(path,asset.path);}
-    if(files.some(file=>file.path===relative))continue;
-    const entry={path:relative,size:blob.size,sha256:await hash(blob)};
-    await write(await fileHandle(folder,relative,true),blob);files.push(entry);
+  try{
+    for(const path of paths){
+      onProgress?.({phase:"save",complete:complete++,total:paths.length});
+      let relative=path.slice(1);const generated=/^\/api\/image\/file\/[a-zA-Z0-9][a-zA-Z0-9._-]*\.(png|jpe?g|webp)$/i.test(path);
+      if(!safePath(relative)&&!generated)throw new Error(`지원하지 않는 작품 경로입니다: ${path}`);
+      const response=await fetcher(path,{cache:"no-store",redirect:"error"});if(!response.ok)throw new Error(`파일을 읽지 못했습니다: ${path}`);
+      if(Number(response.headers.get("Content-Length"))>MAX_FILE)throw new Error(`파일 크기 제한 초과: ${path}`);
+      const blob=await response.blob();if(!blob.size||blob.size>MAX_FILE)throw new Error(`파일 크기 제한 초과: ${path}`);
+      const asset=await describe(relative,blob,false);
+      if(generated){relative=asset.path.slice(1);replacements.set(path,asset.path);}
+      if(files.some(file=>file.path===relative))continue;
+      const entry={path:relative,size:blob.size,sha256:await hash(blob)};
+      await write(await fileHandle(folder,relative,true),blob);files.push(entry);
+    }
+    const manifest:Manifest={format:"vnmaker-folder",version:1,script:rebaseProjectAssets(script,replacements),files};
+    const json=JSON.stringify(manifest,null,2);if(new Blob([json]).size>8*1024*1024)throw new Error("작품 목록과 원고는 8MB 이하여야 합니다.");
+    await write(await folder.getFileHandle("vnmaker-project.json",{create:true}),json);
+  }catch(error){
+    // 중간 실패는 반쯤 쓰인 폴더를 남긴다 — 지원하는 한 지우고, 못 지우면 다음 저장이 새 이름을 쓰므로 덮이지 않는다.
+    await root.removeEntry?.(name,{recursive:true}).catch(()=>undefined);
+    throw error;
   }
-  const manifest:Manifest={format:"vnmaker-folder",version:1,script:rebaseProjectAssets(script,replacements),files};
-  const json=JSON.stringify(manifest,null,2);if(new Blob([json]).size>8*1024*1024)throw new Error("작품 목록과 원고는 8MB 이하여야 합니다.");
-  await write(await folder.getFileHandle("vnmaker-project.json",{create:true}),json);
   onProgress?.({phase:"save",complete:paths.length,total:paths.length});return name;
 }
 

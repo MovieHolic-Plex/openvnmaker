@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import type { Artwork, VnScript } from "@vnmaker/content";
 import { importImages } from "../storage/projectAssets.js";
 import { dedupeImportedArtwork } from "./assets.js";
+import { removeUnreferencedAssets } from "./assetCleanup.js";
+import { readActiveProjectId } from "./projects.js";
 import { Icon } from "./Icon.js";
 
 export function ArtImportButton({script,onImport,getLiveScript}:{script:VnScript;onImport:(assets:Artwork[])=>void;getLiveScript?:(()=>VnScript)|undefined}){
@@ -19,7 +21,11 @@ export function ArtImportButton({script,onImport,getLiveScript}:{script:VnScript
       if(kind==="character" && !script.characters.some(actor=>actor.id===character))throw new Error("원화를 사용할 캐릭터를 먼저 선택하세요.");
       if(kind==="character" && expression && !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(expression))throw new Error("표정 ID는 영문자로 시작하는 영문·숫자·하이픈·밑줄을 사용하세요.");
       const rows=await importImages(Array.from(files));
-      if(live()!==before)throw new Error("가져오는 동안 원고가 변경됐습니다. 원화 파일은 보관했으며 현재 작품에는 적용하지 않았습니다. 다시 가져와 등록하세요.");
+      if(live()!==before){
+        // 보관은 이미 커밋됐다 — 아무도 참조하지 않는 업로드만 정리한다(같은 해시 파일을 다른 작품이 쓰면 남는다).
+        await removeUnreferencedAssets(rows.map(row=>row.path),{id:readActiveProjectId(),script:live()}).catch(()=>({removed:[],kept:[]}));
+        throw new Error("가져오는 동안 원고가 변경됐습니다. 원화는 현재 작품에 적용하지 않고 보관함에서 정리했습니다. 다시 가져와 등록하세요.");
+      }
       const {fresh,skipped}=dedupeImportedArtwork(before,rows,kind,kind==="character"?character:undefined,kind==="character"?expression||undefined:undefined);
       if(skipped)setNotice(`이미 라이브러리에 있는 원화 ${skipped}개는 다시 등록하지 않았습니다.`);
       if(fresh.length)onImport(fresh.map(row=>({id:`user-${crypto.randomUUID()}`,name:row.originalName.replace(/\.[^.]+$/,""),kind,url:row.path,createdAt:new Date(row.createdAt).toISOString(),...(kind==="character"?{characterId:character,...(expression?{expression}:{})}:{})})));

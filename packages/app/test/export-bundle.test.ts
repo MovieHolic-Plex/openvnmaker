@@ -170,3 +170,13 @@ test("packaged asset paths resolve relative to the deployed folder, not the doma
   assert.equal(assetUrl("//cdn.example.com/a.png", "https://example.com/sub/"), "//cdn.example.com/a.png");
   assert.equal(assetUrl("assets/bg/title.png", "https://example.com/sub/"), "assets/bg/title.png");
 });
+
+test("collectProjectAssets includes a poseUrl on a characterless sprite", () => {
+  const withPose = parseScript({
+    ...fixture, scenes: [{ ...fixture.scenes[0]!, lines: [
+      { speaker: null, text: "조형물", sprites: [{ slot: "left", character: null, poseUrl: "/assets/user/" + "9".repeat(64) + ".png" }] },
+    ] }],
+  });
+  assert.ok(collectProjectAssets(withPose).includes("/assets/user/" + "9".repeat(64) + ".png"),
+    "a sprite with no character still ships its pose image");
+});

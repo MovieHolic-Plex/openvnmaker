@@ -56,9 +56,13 @@ export function insertLines(scene: Scene, afterIndex: number, lines: readonly Li
 
 const SPEAKER_PREFIX = /^([^:：]{1,40}?)\s*[:：]\s*(.+)$/s;
 
-function speakerLookup(characters: readonly Character[]): ReadonlyMap<string, string> {
-  const byName = new Map<string, string>();
-  for (const actor of characters) { byName.set(actor.name.trim().toLocaleLowerCase(), actor.id); byName.set(actor.id.toLocaleLowerCase(), actor.id); }
+function speakerLookup(characters: readonly Character[]): ReadonlyMap<string, string | null> {
+  // 같은 이름의 배우가 둘이면 어느 쪽에도 귀속하지 않는다(null = 모호) — 마지막 항목에 조용히 몰아주면 대사가 엉뚱한 배우에게 간다.
+  const byName = new Map<string, string | null>();
+  for (const actor of characters) for (const key of [actor.name.trim().toLocaleLowerCase(), actor.id.toLocaleLowerCase()]) {
+    const prev = byName.get(key);
+    byName.set(key, prev === undefined ? actor.id : prev === actor.id ? prev : null);
+  }
   return byName;
 }
 
@@ -75,7 +79,8 @@ export function splitPastedText(text: string, characters: readonly Character[]):
     if (!row) continue;
     const match = SPEAKER_PREFIX.exec(row);
     const speaker = match ? byName.get(match[1]!.trim().toLocaleLowerCase()) : undefined;
-    lines.push(speaker !== undefined && match ? { speaker, text: match[2]!.trim() } : { speaker: null, text: row });
+    // null 은 모호한 이름 — 어느 배우에도 붙이지 않고 접두를 남긴 내레이션으로 둔다.
+    lines.push(speaker && match ? { speaker, text: match[2]!.trim() } : { speaker: null, text: row });
   }
   return lines;
 }
@@ -93,7 +98,8 @@ export function unrecognizedSpeakers(text: string, characters: readonly Characte
     const match = SPEAKER_PREFIX.exec(row);
     if (!match) continue;
     const name = match[1]!.trim();
-    if (!byName.has(name.toLocaleLowerCase())) unknown.add(name);
+    // 모호한 이름(null)도 경고한다 — 사용자는 배우를 의도했을 수 있다.
+    if (!byName.get(name.toLocaleLowerCase())) unknown.add(name);
   }
   return [...unknown];
 }

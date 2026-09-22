@@ -40,14 +40,18 @@ export function spritesAt(scene: Scene, lineIndex: number, flags: StoryFlags = {
   for (const dir of scene.sprites ?? []) base.set(dir.slot, dir);
   for (const line of scene.lines.slice(0, lineIndex + 1)) {
     if (!lineAllowed(line, flags)) continue;
+    // 같은 줄의 명시적 표정 지정이 화자 표현 단축키보다 우선한다.
+    const directed = new Map<string, SpriteDirection>();
     for (const direction of line.sprites ?? []) {
       const previous = base.get(direction.slot);
-      base.set(direction.slot, previous?.character === direction.character ? { ...previous, ...direction } : { ...direction });
+      const merged = previous?.character === direction.character ? { ...previous, ...direction } : { ...direction };
+      base.set(direction.slot, merged);
+      directed.set(direction.slot, merged);
     }
     const speaking = line.speaker;
     if (line.expression && speaking) {
       for (const [slot, dir] of base) {
-        if (dir.character === speaking) base.set(slot, { ...dir, expression: line.expression });
+        if (dir.character === speaking && directed.get(slot)?.expression === undefined) base.set(slot, { ...dir, expression: line.expression });
       }
     }
   }

@@ -94,9 +94,12 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
   const [sessionSaveError, setSaveError] = useState(initial.error);
   const [saveEnabled, setSaveEnabled] = useState(!initial.error);
   const [saveRetry,setSaveRetry]=useState(0);
+  // 손상 로드 후에는 샘플 원고가 마운트돼 있다 — 저장을 켜면 샘플이 빠른 사본과 보관함 기록을 모두 덮어쓴다.
+  // 이 상태에서는 저장 버튼·Ctrl+S 를 열지 않고 보관함 복구(ProjectRecovery)만 허용한다.
+  const [unsafeToSave,setUnsafeToSave]=useState(Boolean(initial.error));
   const autosave=useProjectAutosave(activeProjectId,script,saveEnabled,saveRetry);
   const saveError=sessionSaveError||autosave.error;
-  function retrySave(){setSaveError(null);setSaveEnabled(true);setSaveRetry(value=>value+1);}
+  function retrySave(){if(unsafeToSave)return;setSaveError(null);setSaveEnabled(true);setSaveRetry(value=>value+1);}
   const [showIssues, setShowIssues] = useState(false);
   const [previewGate, setPreviewGate] = useState<"blocked" | "warning" | null>(null);
   const [showScenes, setShowScenes] = useState(false);
@@ -251,7 +254,9 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
   function insertPastedLines(lines: readonly Line[], replaceCurrent: boolean) {
     if (scene.lines.length + lines.length - (replaceCurrent ? 1 : 0) > LIMITS.sceneLines) { setNotice(`붙여넣으면 씬당 ${LIMITS.sceneLines.toLocaleString()}줄 상한을 넘습니다. 씬을 나누세요.`); return; }
     const [first, ...rest] = lines;
-    const base = replaceCurrent && first ? { ...scene, lines: scene.lines.map((row, i) => i === index ? { ...row, speaker: first.speaker, text: first.text } : row) } : scene;
+    // 교체는 내용을 통째로 바꾼다 — 줄의 입력·조건·연출 같은 숨은 메타데이터를 유지하면
+    // 붙여넣은 내레이션이 입력을 요구하거나 보이지 않게 된다. id(읽기 추적용)만 남긴다.
+    const base = replaceCurrent && first ? { ...scene, lines: scene.lines.map((row, i) => i === index ? { ...(row.id ? { id: row.id } : {}), speaker: first.speaker, text: first.text } : row) } : scene;
     if (patchScene(insertLines(base, index, replaceCurrent ? rest : lines))) setNotice(`${lines.length}줄로 나눠 넣었습니다. 화자 인식 ${lines.filter(row => row.speaker).length}줄.`);
   }
   function renameCurrentScene(nextId: string): string | null {
@@ -338,8 +343,8 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
       <div className="project-heading"><Icon name="file" size={15} /><input aria-label="작품 제목" value={titleDraft} maxLength={200} onChange={event => { setTitleDraft(event.target.value); if (event.target.value.trim()) edit({ ...script, title: event.target.value }, "title"); }} onBlur={() => { if (!titleDraft.trim()) setTitleDraft(script.title); }} /><span className={`save-state ${saveError ? "has-error" : ""}`} data-testid="studio-save-state"><Icon name={saveError ? "warning" : "check"} size={13} />{saveError ? "저장 확인 필요" : autosave.pending ? "저장 중…" : "로컬 저장됨"}</span></div>
       <div className="top-actions"><VersionHistory script={script} projectId={activeProjectId} onRestore={next=>{changeProjectEpoch();setPreviewChoices({});edit(next);selectScene(next.start);setView("stage");setNotice("백업한 버전으로 복원했습니다. 직전 작업은 버전 기록에 보관했습니다.");}}/><button type="button" className="icon-button" title="실행 취소 (Ctrl+Z)" aria-label="실행 취소" data-testid="studio-undo" disabled={!history.past.length} onClick={() => undoRedo("undo")}><Icon name="undo" /></button><button type="button" className="icon-button" title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행" disabled={!history.future.length} onClick={() => undoRedo("redo")}><Icon name="redo" /></button><span className="action-divider" /><button type="button" className="studio-button export-button" onClick={exportProject} data-testid="studio-export"><Icon name="download" /><span>JSON</span></button><ExportBundleButton script={script}/><LosiaPublishButton script={script}/><NativeBuildButton script={script} onChange={next=>edit(next)}/>{hostCaps?.gateway !== false && hostCaps?.graph !== false && <button type="button" className="icon-button" title="에이전트 그래프(게이트웨이 story 프로젝트)를 컴파일해 처음부터 플레이" aria-label="그래프 미리보기" data-testid="studio-graph-play" onClick={() => void previewGraph()}><Icon name="graph" /></button>}<button type="button" className="studio-button primary" onClick={play} data-testid="studio-play"><Icon name="play" size={14} /><span>여기서 플레이</span></button></div>
     </header>
-    {saveError && <div className="save-alert" role="alert">{saveError}<button onClick={retrySave}>{saveEnabled ? "다시 저장" : "현재 작품 저장"}</button></div>}
-    {!saveEnabled && initial.error && <ProjectRecovery id={activeProjectId} onRestore={next=>{changeProjectEpoch();setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setSaveError(null);setSaveEnabled(true);setNotice("작품 보관함 원고로 복구했습니다.");}}/>}
+    {saveError && <div className="save-alert" role="alert">{saveError}{!unsafeToSave && <button onClick={retrySave}>{saveEnabled ? "다시 저장" : "현재 작품 저장"}</button>}</div>}
+    {!saveEnabled && initial.error && <ProjectRecovery id={activeProjectId} onRestore={next=>{changeProjectEpoch();setPreviewChoices({});dispatch({type:"reset",script:next});selectScene(next.start);setSaveError(null);setSaveEnabled(true);setUnsafeToSave(false);setNotice("작품 보관함 원고로 복구했습니다.");}}/>}
     <div className="studio-work">
       <aside className={`studio-rail ${showScenes ? "is-open" : ""}`}>
         <div className="project-cover"><img src={backgroundSrc(script.scenes.find(scene => scene.id === script.start) ?? script.scenes[0]!)} alt="" /><div><span>YOUR VISUAL NOVEL</span><strong>{script.title}</strong><small>{script.scenes.length}개 장면 · 예상 {scriptDuration}</small></div></div>

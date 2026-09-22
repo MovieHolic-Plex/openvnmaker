@@ -29,3 +29,18 @@ test("projectId 없는 레거시 행은 마이그레이션 대상이다", () => 
   const stale = staleVersionIds([legacy, row("a", "proj-a", 2)], "proj-a");
   assert.deepEqual(stale, ["old"]);
 });
+
+test("깨진 버전 행은 목록에서 빠지고 정리 대상에도 오른다", () => {
+  const good = row("ok", "proj-a", 5);
+  const bad = [
+    { ...row("nan", "proj-a", 1), createdAt: Number.NaN },
+    { ...row("inf", "proj-a", 1), createdAt: Infinity },
+    { ...row("null", "proj-a", 1), script: null },
+    { ...row("badlabel", "proj-a", 1), label: 42 },
+    { ...row("noscript", "proj-a", 1), script: { title: 5 } },
+  ] as unknown as ProjectVersion[];
+  assert.deepEqual(ownVersions([...bad, good], "proj-a").map(v => v.id), ["ok"], "invalid rows never reach the version list");
+  const stale = staleVersionIds([...bad, good], "proj-a");
+  for (const id of ["nan", "inf", "null", "badlabel", "noscript"]) assert.ok(stale.includes(id), id);
+  assert.ok(!stale.includes("ok"));
+});

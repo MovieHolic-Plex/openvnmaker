@@ -87,28 +87,33 @@ export async function readLibraryArchive():Promise<string>{
   });
   return serializeLibraryArchive(records);
 }
-export interface ArchiveRestoreResult {restored:SavedProject[];skipped:number}
+export interface ArchiveRestoreResult {restored:SavedProject[];skipped:number;stripped:number}
 /**
  * 「보관함 원본 JSON」을 다시 들여온다. 읽을 수 있는 기록만 새 작품으로 저장하고, 기존 기록(손상 포함)은 절대 덮어쓰지 않는다.
  * 같은 id 가 이미 있으면 새 id 를 준다. 저장 시각은 원본 기록의 값을 유지한다.
+ * 들여온 원고의 네이티브 배포 ID 가 기존(또는 함께 들어온) 작품과 겹치면 비운다 — 같은 저장 폴더를 나눠 쓰면 세이브가 섞인다.
  */
 export async function restoreLibraryArchive(text:string):Promise<ArchiveRestoreResult>{
   const archive=parseLibraryArchive(text);
   const existing=new Set((await new Promise<string[]>(async(resolve,reject)=>{try{const db=await database();const tx=db.transaction("projects","readonly"),request=tx.objectStore("projects").getAllKeys();tx.oncomplete=()=>{db.close();resolve(request.result.map(String));};tx.onabort=tx.onerror=()=>{db.close();reject(tx.error);};}catch(error){reject(error);}})));
+  const taken=(await listProjects()).projects.map(row=>row.script);
   const restored:SavedProject[]=[];
-  let skipped=0;
+  let skipped=0,stripped=0;
   for(const record of archive.records){
     let row:SavedProject;
     try{row=validatedProject(record);}catch{skipped++;continue;}
     const id=existing.has(row.id)?crypto.randomUUID():row.id;
     existing.add(id);
-    const saved={id,script:structuredClone(row.script),updatedAt:row.updatedAt};
+    const {script:script2,stripped:hit}=stripSharedNativeSaveId(row.script,taken);
+    if(hit)stripped++;
+    const saved={id,script:structuredClone(script2),updatedAt:row.updatedAt};
     await putProject(saved);
+    taken.push(saved.script);
     restored.push(saved);
   }
   if(!restored.length)throw new Error(skipped?`보관함 원본의 기록 ${skipped}개를 모두 읽지 못했습니다.`:"보관함 원본에 작품 기록이 없습니다.");
   restored.sort((a,b)=>b.updatedAt-a.updatedAt);
-  return {restored,skipped};
+  return {restored,skipped,stripped};
 }
 
 export type StartupProject={kind:"library-recovery";damagedCount:number}|{kind:"editor";initial:{script:VnScript;error:string|null}};
@@ -147,7 +152,10 @@ export async function resolveStartupProject():Promise<StartupProject>{
   const loaded=loadProject();
   if(loaded.error)return {kind:"editor",initial:loaded};
   let durable:SavedProject|null=null;
-  try{durable=await readSavedProject(readActiveProjectId());}catch{durable=null;}
+  try{durable=await readSavedProject(readActiveProjectId());}catch{
+    // 보관함 레코드가 읽기 불가면 조용히 사본을 여는 대신 알린다 — 모르면 다음 자동 저장이 손상 기록을 덮어써도 사용자가 눈치채지 못한다.
+    return {kind:"editor",initial:{script:loaded.script,error:"작품 보관함의 저장본을 읽지 못했습니다(손상되었을 수 있습니다). 빠른 복구 사본을 열었습니다. 내용을 확인한 뒤 저장하면 보관함 기록이 이 원고로 교체됩니다."}};
+  }
   if(!durable)return {kind:"editor",initial:loaded};
   let current:string|null=null;
   try{current=localStorage.getItem(PROJECT_KEY);}catch{current=null;}

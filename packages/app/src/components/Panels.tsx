@@ -3,7 +3,8 @@ import {assetUrl} from "../assetUrl.js";
 import {resolveInline} from "../engine/inlineText.js";
 import {InlineText} from "./InlineText.js";
 import {manuscriptKey} from "../storage/manuscriptKey.js";
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
+import { openModal } from "./modal.js";
 import type { HistoryEntry } from "../engine/types.js";
 import type { Settings } from "../storage/persist.js";
 import { formatSlotDate, type GalleryUnlocks, type SlotSave } from "../storage/persist.js";
@@ -19,14 +20,14 @@ interface HistoryProps {
   readonly onClose: () => void;
 }
 
-export function HistoryPanel({ entries, flags = {}, nameOf, colorOf, onClose }: HistoryProps) {
+export const HistoryPanel = memo(function HistoryPanel({ entries, flags = {}, nameOf, colorOf, onClose }: HistoryProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const previous = document.activeElement;
     const node = dialog.current;
-    node?.showModal();
+    openModal(node);
     closeButton.current?.focus();
     return () => { node?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
   }, []);
@@ -90,7 +91,7 @@ export function HistoryPanel({ entries, flags = {}, nameOf, colorOf, onClose }: 
       </div>
     </dialog>
   );
-}
+});
 
 export type SlotPickerMode = "save" | "load";
 
@@ -127,12 +128,13 @@ export function SlotPicker({ mode, slots, autoSlot, quickSlot = null, onPick, on
     return {slots:slots.map(note),auto:note(autoSlot),quick:note(quickSlot)};
   },[slots,autoSlot,quickSlot,currentKey]);
   const dialog=useRef<HTMLDialogElement>(null);
-  useEffect(()=>{dialog.current?.showModal();const node=dialog.current;return()=>node?.close();},[]);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useEffect(()=>{const previous=document.activeElement;const node=dialog.current;openModal(node);closeButton.current?.focus();return()=>{node?.close();if(previous instanceof HTMLElement&&previous.isConnected)previous.focus();};},[]);
   return (
     <dialog ref={dialog} className="slot-picker" data-testid="slot-picker" aria-label={mode === "save" ? "플레이 저장" : "저장 불러오기"} onCancel={event=>{event.preventDefault();onClose();}} onClick={(e) => e.stopPropagation()}>
       <header className="slot-picker-head">
         <h3>{mode === "save" ? "어디에 저장할까" : "어디서 이어할까"}</h3>
-        <button type="button" onClick={onClose}>닫기</button>
+        <button ref={closeButton} type="button" onClick={onClose}>닫기</button>
       </header>
       <p className="slot-help">작품 원고·읽던 위치·선택 기록을 함께 보관합니다. 자동 저장은 수동 슬롯을 덮어쓰지 않습니다. 원고가 다른 저장본은 최신 수정 내용을 합치지 않고 저장 당시 원고로 재생합니다. 이미지·음원 파일 자체는 세이브에 포함되지 않습니다.</p>
       {error && <p className="slot-error" role="alert">{error}</p>}
@@ -209,14 +211,15 @@ interface GalleryProps {
 
 export function GalleryPanel({ script, gallery, onClose }: GalleryProps) {
   const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { const node = dialog.current; node?.showModal(); return () => { node?.close(); }; }, []);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { const previous = document.activeElement; const node = dialog.current; openModal(node); closeButton.current?.focus(); return () => { node?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); }; }, []);
   const cgs = collectCgPool(script);
   const endings = [...new Set(script.scenes.flatMap((scene) => scene.ending ? [scene.ending] : []))];
   return (
     <dialog ref={dialog} className="gallery-dialog" aria-label="갤러리" data-testid="gallery-panel" onCancel={event => { event.preventDefault(); onClose(); }} onClick={(e) => e.stopPropagation()}>
       <header className="backlog-head">
         <div><p>ARCHIVE</p><h3>갤러리 <span>CG {gallery.cgs.length}/{cgs.length} · 결말 {gallery.endings.length}/{endings.length}</span></h3></div>
-        <button type="button" data-testid="gallery-close" onClick={onClose}>닫기</button>
+        <button ref={closeButton} type="button" data-testid="gallery-close" onClick={onClose}>닫기</button>
       </header>
       <div className="gallery-scroll">
         <h4 className="gallery-section">이벤트 CG</h4>
@@ -249,7 +252,7 @@ export function SettingsPanel({ settings, onChange, onClose, onCredits }: Settin
   useEffect(() => {
     const previous = document.activeElement;
     const node = dialog.current;
-    node?.showModal();
+    openModal(node);
     closeButton.current?.focus();
     return () => { node?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
   }, []);

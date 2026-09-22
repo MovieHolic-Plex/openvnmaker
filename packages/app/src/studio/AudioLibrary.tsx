@@ -23,7 +23,12 @@ export function AudioLibrary({script,onChange,projectEpoch=0,undoTrail}:{script:
   const used=(url:string)=>audioInUse(script,url);
   async function add(files:FileList|null){if(!files?.length)return;const before=script;setBusy(true);setError("");try{
     if((script.audioAssets?.length??0)+files.length>5000)throw new Error("음원은 최대 5,000개까지 등록할 수 있습니다.");
-    const rows=await importAudio(Array.from(files));if(latest.current!==before)throw new Error("가져오는 동안 작품이 변경됐습니다. 파일은 보관했으며 현재 작품에는 적용하지 않았습니다. 다시 등록하세요.");
+    const rows=await importAudio(Array.from(files));
+    if(latest.current!==before){
+      // 보관은 이미 커밋됐다 — 아무도 참조하지 않는 업로드만 정리한다(같은 해시 파일을 다른 작품이 쓰면 남는다).
+      await removeUnreferencedAssets(rows.map(row=>row.path),{id:readActiveProjectId(),script:latest.current}).catch(()=>({removed:[],kept:[]}));
+      throw new Error("가져오는 동안 작품이 변경됐습니다. 파일은 현재 작품에 적용하지 않고 보관함에서 정리했습니다. 다시 등록하세요.");
+    }
     onChange({...script,audioAssets:[...(script.audioAssets??[]),...rows.map(row=>({id:crypto.randomUUID(),name:row.originalName,kind,url:row.path,duration:row.duration}))]});
   }catch(error){setError(error instanceof Error?error.message:String(error));}finally{setBusy(false);if(input.current)input.current.value="";}}
   /** 목록에서 빼고, 어떤 작품·버전도 더 쓰지 않는 보관함 파일이면 지운다. 이전에는 IndexedDB blob 이 영원히 남았다. */

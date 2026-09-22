@@ -50,11 +50,13 @@ export function audioInUse(script: VnScript, url: string): boolean {
 
 export function assetUsage(script: VnScript, asset: Artwork): number {
   if (asset.kind === "character") return script.characters.filter(character => Object.values(character.expressionImages ?? {}).includes(asset.url)).length + script.scenes.filter(scene=>scene.sprites?.some(sprite=>sprite.poseUrl===asset.url)||scene.lines.some(line=>line.sprites?.some(sprite=>sprite.poseUrl===asset.url))).length;
-  return script.scenes.filter(scene => scene.backgroundUrl === asset.url || scene.cgUrl === asset.url || scene.lines.some(line=>line.cgUrl === asset.url || line.backgroundUrl === asset.url) || (!scene.backgroundUrl && asset.url === `/assets/bg/${scene.background}.png`)).length;
+  return script.scenes.filter(scene => scene.cg === asset.id || scene.backgroundUrl === asset.url || scene.cgUrl === asset.url || scene.lines.some(line=>line.cgUrl === asset.url || line.backgroundUrl === asset.url) || (!scene.backgroundUrl && asset.url === `/assets/bg/${scene.background}.png`)).length;
 }
 
 /** 라이브러리 카드만 뺀다. 장면·배우가 아직 쓰는 이미지는 호출자가 assetUsage 로 먼저 막는다. 파일 정리는 assetCleanup 이 맡는다. */
 export function unregisterArtwork(script: VnScript, assetId: string): VnScript {
+  // 장면에 cg(에셋 id)로 묶인 카드를 지우면 parseScript 가 「CG 에셋을 찾을 수 없습니다」로 실패한다 — 먼저 친절한 오류를 낸다.
+  if (script.scenes.some(scene => scene.cg === assetId)) throw new Error("장면에 연결된 이벤트 CG입니다. 먼저 장면의 CG 연결을 해제하세요.");
   return parseScript({ ...script, assets: (script.assets ?? []).filter(row => row.id !== assetId) });
 }
 
@@ -94,8 +96,9 @@ export function applyArtwork(script: VnScript, sceneId: string, asset: Artwork):
     if (!script.scenes.some(scene => scene.id === sceneId)) throw new Error("이미지를 적용할 장면을 찾을 수 없습니다.");
     next = { ...next, scenes: next.scenes.map(scene => {
       if (scene.id !== sceneId) return scene;
-      if (asset.kind === "cg") return { ...scene, cgUrl: asset.url, framing: "cinematic" as const };
-      const { cgUrl: _cg, hideSprites: _hidden, ...rest } = scene;
+      if (asset.kind === "cg") { const { cg: _cgId, ...rest } = scene; return { ...rest, cgUrl: asset.url, framing: "cinematic" as const }; }
+      // cg(에셋 id)·cgUrl(주소) 두 형태의 이벤트 CG 를 모두 걷는다 — 남겨두면 옛 CG 가 새 배경을 덮는다.
+      const { cg: _cgId2, cgUrl: _cg, hideSprites: _hidden, ...rest } = scene;
       return { ...rest, backgroundUrl: asset.url };
     }) };
   }
@@ -116,7 +119,7 @@ export function artPrompt(script: VnScript, scene: Scene, kind: Artwork["kind"],
 }
 
 export function pendingArtScenes(script: VnScript): Scene[] {
-  return script.scenes.filter(scene => !scene.backgroundUrl && !scene.cgUrl && !script.assets?.some(asset => asset.sceneId === scene.id && asset.kind !== "character"));
+  return script.scenes.filter(scene => !scene.backgroundUrl && !scene.cgUrl && !scene.cg && !script.assets?.some(asset => asset.sceneId === scene.id && asset.kind !== "character"));
 }
 
 export function createGeneratedArtwork(kind: Artwork["kind"], scene: Scene, result: { url: string; name: string }, prompt: string, characterId?: Artwork["characterId"], expression?: Artwork["expression"]): Artwork {

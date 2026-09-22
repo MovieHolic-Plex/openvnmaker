@@ -103,7 +103,7 @@ function StageBackground({ src, fallbackSrc, transition, reducedMotion }: { src:
 /** 퇴장 애니메이션이 도는 시간(ms). sprite-exit 키프레임 길이와 같아야 한다. */
 const EXIT_MS = 620;
 
-interface DepartedSprite { readonly key: number; readonly dir: SpriteDirection }
+interface DepartedSprite { readonly key: number; readonly dir: SpriteDirection; readonly at: number }
 
 function spriteImageOf(dir: SpriteDirection, characters: readonly Character[] | undefined) {
   const actor = characters?.find(character => character.id === dir.character);
@@ -128,14 +128,19 @@ export function Stage({ background, backgroundUrl, cgUrl, hideSprites, framing =
     const gone: DepartedSprite[] = [];
     for (const [slot, dir] of previous) {
       const current = next.get(slot);
-      if (!current || current.character !== dir.character) gone.push({ key: ++departedSerial.current, dir });
+      if (!current || current.character !== dir.character) gone.push({ key: ++departedSerial.current, dir, at: Date.now() });
     }
     seen.current = next;
     if (gone.length && !reducedMotion) setDeparted(list => [...list, ...gone]);
   }, [sprites, reducedMotion]);
   useEffect(() => {
     if (!departed.length) return;
-    const timer = window.setTimeout(() => setDeparted([]), EXIT_MS);
+    // ghost 마다 수명이 다르다 — 가장 오래된 것이 만료될 때 지금까지 만료된 것만 걷어낸다.
+    const wait = departed[0]!.at + EXIT_MS - Date.now();
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      setDeparted(list => list.filter(item => item.at + EXIT_MS > now));
+    }, Math.max(0, wait));
     return () => window.clearTimeout(timer);
   }, [departed]);
   // 같은 배우가 ghost 수명 안에 돌아오면 ghost 는 바로 걷는다(겹침 방지).

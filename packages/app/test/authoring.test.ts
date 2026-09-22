@@ -76,3 +76,17 @@ test("adding narrative identities does not masquerade as a cue or choice logic c
   const swapped={...after,scenes:[{...after.scenes[0]!,lines:[...after.scenes[0]!.lines,{speaker:null,text:"Second",id:"second"}].reverse()}]};
   const checked=withNarrativeIds(swapped);assert.equal(checked.scenes[0]!.lines[1]!.id,after.scenes[0]!.lines[0]!.id);
 });
+
+test("undo grouping — 시간이 뒤로 간 편집은 같은 그룹으로 합쳐지지 않는다", () => {
+  let state = { past: [] as VnScript[], present: story, future: [] as VnScript[] };
+  state = historyReducer(state, { type: "edit", script: { ...story, title: "g1" }, group: "line-a-0", at: 50_000 });
+  state = historyReducer(state, { type: "edit", script: { ...story, title: "g2" }, group: "line-a-0", at: 1_000 });
+  assert.equal(state.past.length, 2, "a backward-dated edit opens a new group instead of merging");
+  state = historyReducer(state, { type: "undo" });
+  assert.equal(state.present.title, "g1");
+  // 정상적인 빠른 연속 편집은 여전히 한 그룹이다
+  let quick = { past: [] as VnScript[], present: story, future: [] as VnScript[] };
+  quick = historyReducer(quick, { type: "edit", script: { ...story, title: "q1" }, group: "g", at: 100 });
+  quick = historyReducer(quick, { type: "edit", script: { ...story, title: "q2" }, group: "g", at: 900 });
+  assert.equal(quick.past.length, 1);
+});

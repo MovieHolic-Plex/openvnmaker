@@ -5,6 +5,8 @@ import { fetchHostCapabilities } from "../api/host.js";
 import { STORE_SOURCES, storeSourceById } from "../api/storeSource.js";
 import { Icon } from "./Icon.js";
 import { installStoreAsset, manifestWithRetry, type InstallProgress } from "./installFromStore.js";
+import { removeUnreferencedAssets } from "./assetCleanup.js";
+import { readActiveProjectId } from "./projects.js";
 import type { StoreManifest } from "./storeInstall.js";
 import "./assets.css";
 
@@ -133,7 +135,10 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
         onProgress: setProgress,
       });
       if (controller.signal.aborted || epochRef.current !== requestEpoch) {
-        setMessage("작품이 변경되어 자동 등록을 중단했습니다. 파일은 브라우저 보관함에 남아 있습니다.");
+        // 다운로드 블롭은 이미 보관함에 커밋됐다 — 아무도 참조하지 않는 파일만 정리한다.
+        const orphanUrls = [...result.artworks, ...result.audio].map(asset => asset.url).filter(url => url.startsWith("/assets/user/"));
+        await removeUnreferencedAssets(orphanUrls, { id: readActiveProjectId(), script: getLiveScript?.() ?? scriptRef.current }).catch(() => ({ removed: [], kept: [] }));
+        setMessage("작품이 변경되어 자동 등록을 중단했습니다. 받은 파일은 보관함에서 정리했습니다.");
         return;
       }
       const artworkIds = new Set(result.artworks.map(asset => asset.id));

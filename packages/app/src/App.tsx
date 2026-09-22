@@ -20,7 +20,7 @@ import { autoAdvanceDelay, typewriterMsPerChar } from "./engine/pacing.js";
 import { reduce, rollbackLog } from "./engine/reducer.js";
 import { resolveInline, resolveText, truncateParts } from "./engine/inlineText.js";
 import { currentLine, currentScene, backgroundAt, bgmAt, cgAt, effectAt, framingAt, speakerColor, speakerName, spritesAt, tintAt } from "./engine/selectors.js";
-import { initialState, readKey, ROLLBACK_LIMIT, type SaveData, type VnAction, type VnState } from "./engine/types.js";
+import { hasReadKey, initialState, readKey, ROLLBACK_LIMIT, type SaveData, type VnAction, type VnState } from "./engine/types.js";
 import { useReducedMotion } from "./hooks/useReducedMotion.js";
 import { useScenePrefetch } from "./hooks/useScenePrefetch.js";
 import { useTypewriter } from "./hooks/useTypewriter.js";
@@ -79,6 +79,10 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   const [saveRevision, setSaveRevision] = useState(0);
   const autoTimer = useRef<number | null>(null);
   const wheelAcc = useRef(0);
+  const wheelAt = useRef(0);
+  /** 오버레이(선택지·입력·대화상자)가 막 닫힌 직후 — 더블클릭의 두 번째 클릭이 click-layer 에 떨어져 다음 대사를 건너뛰지 않게 이 시각까지 클릭을 삼킨다. */
+  const swallowUntil = useRef(0);
+  const swallowClicks = useCallback(() => { swallowUntil.current = Date.now() + 350; }, []);
   const reducedMotion = useReducedMotion();
   const readKeys = useRef<Set<string>>(new Set());
   const unsavedRead = useRef<Set<string>>(new Set());
@@ -91,7 +95,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
     readKeys.current = readLineKeys(saveScope);
   }, [isStudioPreview,projectNamespace,saveScope,settingsScope]);
 
-  useEffect(() => { document.title = `${vnScript.title} — VN Maker`; }, [vnScript.title]);
+  useEffect(() => { document.title = standalone ? vnScript.title : `${vnScript.title} — VN Maker`; }, [vnScript.title, standalone]);
   useEffect(() => {
     if (!saveFeedback) return;
     const timer = window.setTimeout(() => setSaveFeedback(null), 4000);
@@ -163,7 +167,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
     };
   }, [state, typing, reducedMotion]);
 
-  const snapshot = useCallback((): SlotSave => ({ sceneId:state.sceneId,lineIndex:state.lineIndex,affection:state.affection,flags:state.flags,phase:state.phase,history:state.history,rollback:rollbackLog(state,ROLLBACK_LIMIT),savedAt:Date.now(),script:vnScript,preview:resolved.plain,chapter:scene?.chapter ?? null,thumbnail:scene ? cgAt(vnScript,scene,state.lineIndex,state.flags) ?? backgroundAt(scene,state.lineIndex,state.flags) ?? `/assets/bg/${scene.background}.png` : null }),[state,vnScript,resolved,scene]);
+  const snapshot = useCallback((): SlotSave => ({ sceneId:state.sceneId,lineIndex:state.lineIndex,affection:state.affection,flags:state.flags,phase:state.phase,history:state.history,rollback:rollbackLog(state,ROLLBACK_LIMIT),savedAt:Date.now(),script:vnScript,inputFlags:state.inputFlags,preview:resolved.plain,chapter:scene?.chapter ?? null,thumbnail:scene ? cgAt(vnScript,scene,state.lineIndex,state.flags) ?? backgroundAt(scene,state.lineIndex,state.flags) ?? `/assets/bg/${scene.background}.png` : null }),[state,vnScript,resolved,scene]);
   const checkpoint = useRef({ state, snapshot });
   checkpoint.current = { state, snapshot };
   // 자동 저장 실패는 한 번만 알린다. 매 진행마다 다시 띄우면 읽기를 방해할 뿐이고, 성공하면 다시 알릴 수 있게 푼다.
@@ -203,7 +207,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   }, [settings.skipUnread]);
 
   useEffect(() => {
-    if (!auto || artOnly || state.phase !== "scene" || typing || panel !== "none" || line?.input || (line?.voice && voiceDone!==`${state.sceneEpoch}:${state.lineIndex}`)) return;
+    if (!auto || artOnly || state.error !== null || state.phase !== "scene" || typing || panel !== "none" || line?.input || (line?.voice && voiceDone!==`${state.sceneEpoch}:${state.lineIndex}`)) return;
     const delay = autoAdvanceDelay(resolved.plain.length, settings.autoSpeed);
     autoTimer.current = window.setTimeout(() => dispatch({ type: "advance" }), delay);
     return () => {
@@ -248,11 +252,10 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   }, [bootScript, isStudioPreview]);
 
   const backToTitle = useCallback(() => {
-    scriptRef.current = script;
-    setVnScript(script);
+    // scriptRef/vnScript 는 유지한다 — 미리보기 원고나 이어읽기로 불러온 원고를 타이틀에서도 잃지 않는다.
     setAuto(false); setArtOnly(false); setPanel("none");
     dispatch({ type: "backToTitle" });
-  }, [script]);
+  }, []);
 
   const nameOf = useCallback(
     (speaker: string | null) => {
@@ -265,9 +268,9 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   );
 
   const bgmTrack = useMemo(() => {
-    if (state.phase === "title") return script.titleBgm ?? "main-theme";
+    if (state.phase === "title") return vnScript.titleBgm ?? "main-theme";
     return scene ? bgmAt(scene,state.lineIndex,state.flags) : null;
-  }, [state.phase,state.lineIndex,state.flags,scene,script.titleBgm]);
+  }, [state.phase,state.lineIndex,state.flags,scene,vnScript.titleBgm]);
 
   const onSave = useCallback(() => {
     const data = snapshot();
@@ -286,7 +289,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
     setVnScript(savedScript);
     // 원고를 내장하지 않은 저장은 여기서 타입을 맞춘다(내장 저장은 persist 가 이미 맞췼다).
     const flags = reconcileFlags(save.flags, savedScript.flags);
-    dispatch({ type: "restore", sceneId: save.sceneId, lineIndex: save.lineIndex, affection: save.affection, ...(flags?{flags}:{}), ...(save.phase?{phase:save.phase}:{}), ...(save.history?{history:save.history}:{}), ...(save.rollback?{rollback:save.rollback}:{}) });
+    dispatch({ type: "restore", sceneId: save.sceneId, lineIndex: save.lineIndex, affection: save.affection, ...(flags?{flags}:{}), ...(save.phase?{phase:save.phase}:{}), ...(save.history?{history:save.history}:{}), ...(save.rollback?{rollback:save.rollback}:{}), ...(save.inputFlags?{inputFlags:save.inputFlags}:{}) });
     setPanel("none"); setUnlocked(true);
   }, [vnScript,script]);
   const onLoad = useCallback(() => restoreSave(latestSave(isStudioPreview,projectNamespace)), [restoreSave, isStudioPreview, projectNamespace]);
@@ -316,7 +319,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
       let upcoming = -1;
       for (let index = now.state.lineIndex + 1; index < scene.lines.length; index += 1) if (lineAllowed(scene.lines[index]!, now.state.flags)) { upcoming = index; break; }
       if (upcoming < 0 && scene.ending && !scene.choices?.length) { stop(); return; }
-      if (!now.settings.skipUnread && upcoming >= 0 && !readKeys.current.has(readKey(scene.id, upcoming, scene.lines[upcoming]))) { stop(); return; }
+      if (!now.settings.skipUnread && upcoming >= 0 && !hasReadKey(readKeys.current, scene.id, upcoming, scene.lines[upcoming])) { stop(); return; }
       dispatch({ type: "advance" });
     };
     const onDown = (event: KeyboardEvent) => {
@@ -331,13 +334,15 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
+      // 꾹 누른 키의 연속 발화는 여기서 끊는다 — PageUp 홀드가 되돌리기를, F5 홀드가 저장 쓰기를 폭주시키면 안 된다.
+      if (event.repeat) return;
       if (event.key === "Escape") {
         setArtOnly(false);
         setPanel("none");
         return;
       }
       if (event.key === "PageUp") {
-        if (panel === "none" && (state.phase === "scene" || state.phase === "choice" || state.phase === "ending")) { event.preventDefault(); dispatch({ type: "back" }); }
+        if (panel === "none" && !artOnly && (state.phase === "scene" || state.phase === "choice" || state.phase === "ending")) { event.preventDefault(); dispatch({ type: "back" }); }
         return;
       }
       if ((event.key === "F5" || event.key === "F9") && panel === "none" && (state.phase === "scene" || state.phase === "choice")) {
@@ -352,6 +357,8 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
       if (event.key.toLowerCase() === "h" && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); setArtOnly(value=>!value); return; }
       if (event.key === " " || event.key === "Enter") {
         event.preventDefault();
+        // 오버레이가 막 닫힌 직후의 포커스 키 입력도 클릭과 같이 삼킨다.
+        if (Date.now() < swallowUntil.current) return;
         if (artOnly) setArtOnly(false); else advance();
       }
     };
@@ -364,17 +371,19 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
 
   // 저장 창이 열린 동안에도 타이프라이터가 프레임마다 다시 그린다 — 슬롯 목록은 저장이 바뀔 때만 다시 읽는다.
   const slotList = useMemo(() => (panel === "save" || panel === "load") ? { slots: listSlots(saveScope), auto: readAutoSlot(saveScope), quick: readQuickSlot(saveScope) } : null, [panel, saveScope, saveRevision]);
-  const saveDialog = slotList && (panel === "save" || panel === "load") && <SlotPicker currentScript={vnScript} mode={panel} error={saveFeedback?.includes("못했") ? saveFeedback : null} slots={slotList.slots} autoSlot={slotList.auto} quickSlot={slotList.quick} onClose={()=>setPanel("none")} onPickAuto={()=>restoreSave(readAutoSlot(saveScope))} onPickQuick={()=>restoreSave(readQuickSlot(saveScope))} onPick={slot=>{
+  const closePanel = useCallback(() => { swallowClicks(); setPanel("none"); }, [swallowClicks]);
+  const colorOf = useCallback((speaker: string | null) => speakerColor(vnScript, speaker as never), [vnScript]);
+  const saveDialog = slotList && (panel === "save" || panel === "load") && <SlotPicker currentScript={vnScript} mode={panel} error={saveFeedback?.includes("못했") ? saveFeedback : null} slots={slotList.slots} autoSlot={slotList.auto} quickSlot={slotList.quick} onClose={closePanel} onPickAuto={()=>restoreSave(readAutoSlot(saveScope))} onPickQuick={()=>restoreSave(readQuickSlot(saveScope))} onPick={slot=>{
     if(panel==="load") {restoreSave(readSlot(slot,saveScope));return;}
     const data=snapshot();
     if(writeSlot(slot,data,saveScope)){setSavedAt(data.savedAt);setSaveRevision(value=>value+1);setSaveFeedback(`슬롯 ${slot+1}에 작품과 선택 기록을 저장했습니다.`);setPanel("none");}
     else setSaveFeedback("슬롯에 저장하지 못했습니다. 기존 저장은 유지됩니다.");
   }}/>;
 
-  const creditsDialog = panel === "credits" && <CreditsPanel script={vnScript} standalone={standalone} onClose={() => setPanel("none")} />;
+  const creditsDialog = panel === "credits" && <CreditsPanel script={vnScript} standalone={standalone} onClose={closePanel} />;
 
-  const galleryDialog = panel === "gallery" && <GalleryPanel script={vnScript} gallery={gallery} onClose={() => setPanel("none")} />;
-  const titleConfirm = panel === "title-confirm" && <ConfirmDialog testId="title-confirm" title="타이틀로 돌아갈까요?" message="지금까지의 진행은 자동 저장되어 있습니다. 타이틀에서 「이어서 읽기」로 돌아올 수 있습니다." confirmLabel="타이틀로" onCancel={() => setPanel("none")} onConfirm={backToTitle} />;
+  const galleryDialog = panel === "gallery" && <GalleryPanel script={vnScript} gallery={gallery} onClose={closePanel} />;
+  const titleConfirm = panel === "title-confirm" && <ConfirmDialog testId="title-confirm" title="타이틀로 돌아갈까요?" message="지금까지의 진행은 자동 저장되어 있습니다. 타이틀에서 「이어서 읽기」로 돌아올 수 있습니다." confirmLabel="타이틀로" onCancel={closePanel} onConfirm={backToTitle} />;
   const bgmVolume = muted ? 0 : settings.bgmVolume;
   const voiceVolume = muted ? 0 : settings.voiceVolume ?? 0.8;
 
@@ -386,10 +395,10 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
         {message}
       </p>
       <div className="fatal-actions">
-        {state.past.length > 0 && <button type="button" data-testid="fatal-back" onClick={() => dispatch({ type: "back" })}>이전</button>}
+        {state.past.length > 0 && <button type="button" data-testid="fatal-back" onClick={() => { swallowClicks(); dispatch({ type: "back" }); }}>이전</button>}
         <button type="button" data-testid="fatal-title" onClick={backToTitle}>타이틀로</button>
         {latestSave(isStudioPreview, projectNamespace) && <button type="button" data-testid="fatal-continue" onClick={onLoad}>이어서 읽기</button>}
-        <button type="button" data-testid="fatal-restart" onClick={() => bootScript(script)}>처음부터 다시</button>
+        <button type="button" data-testid="fatal-restart" onClick={() => bootScript(vnScript)}>처음부터 다시</button>
       </div>
     </section>
   );
@@ -405,7 +414,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   if (state.error !== null) {
     content = fatalDialog(state.error);
   } else if (state.phase === "title") {
-    content = <TitleScreen onCredits={()=>setPanel("credits")} onGallery={()=>setPanel("gallery")} script={script} standalone={standalone} hasSave={savedAt !== null} onLoad={()=>setPanel("load")} onStart={() => { unlock(); playSfx("ui-click", sfxVolumeRef.current); bootScript(script); }} onContinue={() => { unlock(); onLoad(); }} />;
+    content = <TitleScreen onCredits={()=>setPanel("credits")} onGallery={()=>setPanel("gallery")} script={vnScript} standalone={standalone} hasSave={savedAt !== null} onLoad={()=>setPanel("load")} onStart={() => { unlock(); playSfx("ui-click", sfxVolumeRef.current); bootScript(vnScript); }} onContinue={() => { unlock(); onLoad(); }} />;
   } else if (state.phase === "ending") {
     content = <EndingScreen
       title={state.endingTitle ?? "END"}
@@ -431,6 +440,9 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
           if (event.ctrlKey || event.metaKey) { wheelAcc.current = 0; return; }
           if (panel !== "none" || artOnly || (state.phase !== "scene" && state.phase !== "choice")) return;
           // 위로 굴리면 되돌리고, 아래로 굴리면 다음 대사로 간다(선택지에서는 진행하지 않는다).
+          // 오래 전에 끊긴 휠 제스처의 누적치는 새 제스처에 섞이지 않게 버린다.
+          if (Date.now() - wheelAt.current > 700) wheelAcc.current = 0;
+          wheelAt.current = Date.now();
           if (event.deltaY !== 0 && Math.sign(event.deltaY) !== Math.sign(wheelAcc.current)) wheelAcc.current = 0;
           wheelAcc.current += event.deltaY;
           if (wheelAcc.current <= -120) { wheelAcc.current = 0; dispatch({ type: "back" }); }
@@ -458,10 +470,15 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
           className="click-layer"
           data-testid="advance-button"
           aria-label="다음"
+          // 선택지·입력·대화상자가 아래를 가리고 있을 때는 Tab 순서에서 뺀다.
+          tabIndex={state.phase === "scene" ? 0 : -1}
+          aria-hidden={state.phase !== "scene" ? true : undefined}
           onClick={() => {
             unlock();
+            if (Date.now() < swallowUntil.current) return;
             if (artOnly) { setArtOnly(false); return; }
             if (panel !== "none") {
+              swallowClicks();
               setPanel("none");
               return;
             }
@@ -500,7 +517,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
           />
         )}
         {state.phase === "scene" && !artOnly && line?.input && !typing && (
-          <LineInputPanel key={`${state.sceneEpoch}:${state.lineIndex}`} input={{ ...line.input, ...(line.input.prompt !== undefined ? { prompt: resolveText(line.input.prompt, state.flags) } : {}), ...(line.input.placeholder !== undefined ? { placeholder: resolveText(line.input.placeholder, state.flags) } : {}) }} onSubmit={(value) => dispatch({ type: "input", flag: line.input!.flag, value })} />
+          <LineInputPanel key={`${state.sceneEpoch}:${state.lineIndex}`} input={{ ...line.input, ...(line.input.prompt !== undefined ? { prompt: resolveText(line.input.prompt, state.flags) } : {}), ...(line.input.placeholder !== undefined ? { placeholder: resolveText(line.input.placeholder, state.flags) } : {}) }} onSubmit={(value) => { swallowClicks(); dispatch({ type: "input", flag: line.input!.flag, value }); }} />
         )}
         {state.phase === "choice" && scene.choices && (
           <ChoiceMenu
@@ -508,16 +525,17 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
             choices={scene.choices}
             onPick={(index) => {
               playSfx("ui-click", sfxVolumeRef.current);
+              swallowClicks();
               dispatch({ type: "choose", index });
             }}
             onHover={() => playSfx("ui-hover", sfxVolumeRef.current * 0.5)}
           />
         )}
         {panel === "history" && (
-          <HistoryPanel entries={state.history} flags={state.flags} nameOf={nameOf} colorOf={(speaker) => speakerColor(vnScript, speaker as never)} onClose={() => setPanel("none")} />
+          <HistoryPanel entries={state.history} flags={state.flags} nameOf={nameOf} colorOf={colorOf} onClose={closePanel} />
         )}
         {panel === "settings" && (
-          <SettingsPanel onCredits={()=>setPanel("credits")} settings={settings} onChange={updateSettings} onClose={() => setPanel("none")} />
+          <SettingsPanel onCredits={()=>setPanel("credits")} settings={settings} onChange={updateSettings} onClose={closePanel} />
         )}
       </section>
     </>;

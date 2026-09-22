@@ -9,6 +9,8 @@ import { referencedFlags, renameFlag } from "../src/studio/stateOperations.js";
 import { mergeActorCue } from "../src/studio/lineOperations.js";
 import { previewFlagsFor } from "../src/studio/editorPosition.js";
 import { audioInUse } from "../src/studio/assets.js";
+import { layoutStoryMap } from "../src/studio/StoryMap.js";
+import { unrecognizedSpeakers } from "../src/studio/lineOperations.js";
 import { unreferencedUserAssets } from "../src/studio/assetCleanup.js";
 import { reduce } from "../src/engine/reducer.js";
 import { initialState } from "../src/engine/types.js";
@@ -146,6 +148,8 @@ test("media references are collected once per url with a location label, and onl
   const refs = collectMediaReferences(story);
   assert.deepEqual(refs.map(ref => ref.kind), ["background", "voice", "portrait", "artwork"].filter((_, index) => index < 3).concat([]).length === 3 ? ["background", "voice", "portrait"] : refs.map(ref => ref.kind));
   assert.equal(refs.filter(ref => ref.url === "/assets/art/rain-library.png").length, 1, "the artwork entry shares its url with scene a and is deduplicated");
+  const withTitleMusic = collectMediaReferences({ ...story, titleBgm: "/assets/user/" + "a".repeat(64) + ".mp3" });
+  assert.ok(withTitleMusic.some(ref => ref.url.endsWith("a".repeat(64) + ".mp3")), "title BGM is collected too");
   assert.equal(refs[0]!.sceneId, "a"); assert.match(refs[0]!.label, /장면 배경/);
   assert.equal(refs[1]!.sceneId, "b"); assert.match(refs[1]!.label, /1줄 보이스/);
   assert.equal(refs[2]!.sceneId, undefined); assert.match(refs[2]!.label, /주인공 · neutral/);
@@ -292,4 +296,69 @@ test("renameFlag rewrites {flag:…}/{player} tokens in text, input prompt, and 
   assert.equal(line.input!.placeholder, "{flag:hero}");
   assert.equal(next.scenes[0]!.choices![0]!.text, "{flag:hero}이(가) 간다");
   assert.equal(next.characters[0]!.name, "{flag:hero}의 친구");
+});
+
+test("renameFlag refuses a rename that would collide inside one set/add map", () => {
+  const collide = parseScript({ ...story, flags: { met: false }, scenes: [
+    scene("a", { set: { met: true, night: 1 }, ending: "e" }),
+  ] });
+  assert.throws(() => renameFlag(collide, "met", "night"), /함께 쓰고 있어|겹치는/);
+  const fine = parseScript({ ...story, flags: { met: false, night: 0 }, scenes: [
+    scene("a", { set: { met: true }, next: "b" }), scene("b", { set: { night: 2 }, ending: "e" }),
+  ] });
+  assert.doesNotThrow(() => renameFlag(fine, "met", "warmth"), "renames into a name absent from every set/add map still work");
+});
+
+test("pasted 'name:' prefixes bind only to unambiguous characters — duplicates stay narration", () => {
+  const twins = [
+    { id: "twin-a", name: "서린", color: "#aabbcc", bio: "" },
+    { id: "twin-b", name: "서린", color: "#bbccdd", bio: "" },
+  ];
+  const lines = splitPastedText("서린: 안녕\n도현: 둘째", twins);
+  assert.equal(lines[0]!.speaker, null, "ambiguous name is not bound to an arbitrary twin");
+  assert.equal(lines[0]!.text, "서린: 안녕");
+  assert.ok(unrecognizedSpeakers("서린: 안녕", twins).includes("서린"), "the ambiguity is reported");
+});
+
+test("find/replace reaches prompts, placeholders, chapter and ending titles, and speaker names", () => {
+  const wide = parseScript({ ...story,
+    characters: [...story.characters, { id: "secret-npc", name: "비밀 서린", color: "#aabbcc", bio: "" }],
+    scenes: [
+      { ...scene("a", { chapter: "비밀의 장" }), lines: [{ speaker: null, text: "입력", input: { flag: "player", prompt: "비밀은?", placeholder: "비밀" } }], next: "b" },
+      scene("b", { ending: "비밀 엔딩" }),
+    ] });
+  const hits = findText(wide, "비밀");
+  assert.deepEqual(hits.map(h => h.kind).sort(), ["chapter", "ending", "name", "placeholder", "prompt"]);
+  const swapped = replaceAll(wide, "비밀", "약속");
+  assert.equal(swapped.script.scenes[0]!.lines[0]!.input!.prompt, "약속은?");
+  assert.equal(swapped.script.scenes[0]!.chapter, "약속의 장");
+  assert.equal(swapped.script.scenes[1]!.ending, "약속 엔딩");
+  assert.equal(swapped.script.characters.find(c => c.id === "secret-npc")!.name, "약속 서린");
+});
+
+test("replaceInMatch relocates by the recorded text when the stored index went stale", () => {
+  const match = findText(story, "편지").find(m => m.kind === "line")!;
+  const shifted: VnScript = { ...story, scenes: story.scenes.map(s => s.id === match.sceneId ? { ...s, lines: [{ speaker: null, text: "새 줄" }, ...s.lines] } : s) };
+  const replaced = replaceInMatch(shifted, match, "편지", "쪽지");
+  assert.ok(replaced.scenes.some(s => s.lines.some(l => l.text.includes("쪽지"))), "the intended line was found and rewritten");
+});
+
+test("insertSceneAfter keeps a routes+ending source scene's ending as the inserted scene's fallback", () => {
+  const src = parseScript({ ...story, scenes: [
+    scene("a", { routes: [{ when: { all: ["letter"] }, next: "b" }], ending: "낮 엔딩" }),
+    scene("b", { ending: "밤 엔딩" }),
+  ] });
+  const { script: next, movedExit } = insertSceneAfter(src, src.scenes[0]!, "mid");
+  assert.equal(movedExit, "조건 연결");
+  assert.equal(next.scenes[1]!.ending, "낮 엔딩", "the fallback ending travels with the routes");
+  assert.doesNotThrow(() => parseScript(next));
+});
+
+test("story map keeps unreachable scenes in bounded bands instead of a quadratic stack", () => {
+  const crowded = parseScript({ ...story, scenes: [
+    ...story.scenes,
+    ...Array.from({ length: 40 }, (_, i) => scene(`loose-${i}`, { ending: `e${i}` })),
+  ] });
+  const { width, height } = layoutStoryMap(crowded);
+  assert.ok(height < 4000 && width < 8000, `${width}x${height} — unreachable rows stay grouped`);
 });

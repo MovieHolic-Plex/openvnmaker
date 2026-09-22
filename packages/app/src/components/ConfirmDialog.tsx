@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { openModal } from "./modal.js";
 
 interface Props {
   readonly title: string;
@@ -16,7 +17,7 @@ export function ConfirmDialog({ title, message, confirmLabel, testId, onConfirm,
   useEffect(() => {
     const previous = document.activeElement;
     const node = dialog.current;
-    node?.showModal();
+    openModal(node);
     cancelButton.current?.focus();
     return () => { node?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
   }, []);

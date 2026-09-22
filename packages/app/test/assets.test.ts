@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { script, parseScript, validBackgroundUrl, type Artwork, type VnScript } from "@vnmaker/content";
-import { applyArtwork, artPrompt, assetUsage, createGeneratedArtwork, libraryAssets, pendingArtScenes, registerArtwork } from "../src/studio/assets.js";
+import { applyArtwork, artPrompt, assetUsage, createGeneratedArtwork, libraryAssets, pendingArtScenes, registerArtwork, unregisterArtwork } from "../src/studio/assets.js";
 
 const base: VnScript = { title: "이미지 테스트", subtitle: "", start: "first", characters: script.characters, scenes: [{ id: "first", background: "title", lines: [{ speaker: "seorin", text: "비가 온다." }], sprites: [{ slot: "center", character: "seorin", expression: "smile" }], next: "last" }, { id: "last", background: "campus-cafe", lines: [{ speaker: null, text: "돌아왔다." }], ending: "끝" }] };
 const cg: Artwork = { id: "event", name: "빗속의 고백", kind: "cg", url: "/assets/art/rain-confession-cg.png", sceneId: "first" };
@@ -80,4 +80,18 @@ test("generation includes art bible and scene brief and rejects malformed server
   const result = createGeneratedArtwork("cg", base.scenes[0]!, { url: "/api/image/file/generated.png", name: "generated.png" }, prompt);
   assert.equal(result.sceneId, "first");
   assert.equal(result.prompt, prompt);
+});
+
+test("a scene bound to a CG asset id counts as usage, blocks removal, and is not pending", () => {
+  const bound = parseScript({ ...base, assets: [{ id: "storm-cg", name: "폭풍", kind: "cg", url: "/assets/art/rain-confession-cg.png" }],
+    scenes: [{ ...base.scenes[0], cg: "storm-cg", cgUrl: undefined }, base.scenes[1]] });
+  const asset = bound.assets!.find(a => a.id === "storm-cg")!;
+  assert.ok(assetUsage(bound, asset) >= 1, "scene.cg counts as usage");
+  assert.throws(() => unregisterArtwork(bound, "storm-cg"), /CG 연결|사용 중/);
+  assert.ok(!pendingArtScenes(bound).some(s => s.id === base.scenes[0]!.id));
+  const applied = applyArtwork(bound, base.scenes[0]!.id, { id: "newcg", name: "새 CG", kind: "cg", url: "/assets/art/new-cg.png" });
+  assert.equal(applied.scenes[0]!.cg, undefined, "applying a CG clears the asset binding");
+  assert.equal(applied.scenes[0]!.cgUrl, "/assets/art/new-cg.png");
+  const bgApplied = applyArtwork(bound, base.scenes[0]!.id, { id: "bg2", name: "배경", kind: "background", url: "/assets/art/rain-library.png" });
+  assert.equal(bgApplied.scenes[0]!.cg, undefined, "applying a background clears the bound CG too");
 });

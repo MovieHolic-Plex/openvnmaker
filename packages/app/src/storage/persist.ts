@@ -156,7 +156,7 @@ const FLAG_NAME = /^[a-z][a-z0-9_-]{0,63}$/i;
 /** 저장·프리뷰 등 밖에서 온 플래그 맵을 허용 타입으로 좁힌다. */
 export function coerceFlags(value: unknown): StoryFlags | undefined {
   if (!isRecord(value)) return undefined;
-  return Object.fromEntries(Object.entries(value).slice(0, 200).filter(([key, flag]) => FLAG_NAME.test(key) && !["constructor", "prototype"].includes(key) && (typeof flag === "string" || typeof flag === "boolean" || typeof flag === "number" && Number.isFinite(flag)))) as StoryFlags;
+  return Object.fromEntries(Object.entries(value).slice(0, 200).filter(([key, flag]) => FLAG_NAME.test(key) && !["constructor", "prototype"].includes(key) && (typeof flag === "string" && flag.length <= 200 || typeof flag === "boolean" || typeof flag === "number" && Number.isFinite(flag)))) as StoryFlags;
 }
 /**
  * 복원한 선택 기억의 타입을 원고의 초기값과 맞춘다. 숫자 변수에 문자열이 들어 있으면 `add` 선택지가
@@ -171,6 +171,12 @@ export function reconcileFlags(flags: StoryFlags | undefined, defaults: StoryFla
   }
   return next;
 }
+/** 세이브의 inputFlags 를 플래그명 배열로 좁힌다. */
+function coerceInputFlags(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const flags = value.filter((flag): flag is string => typeof flag === "string" && FLAG_NAME.test(flag)).slice(0, 200);
+  return flags.length ? flags : undefined;
+}
 function coerceRollback(value: unknown): RollbackEntry[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const entries: RollbackEntry[] = [];
@@ -179,7 +185,8 @@ function coerceRollback(value: unknown): RollbackEntry[] | undefined {
     const { sceneId, lineIndex, affection, historyLength, phase } = item;
     if (typeof sceneId !== "string" || sceneId.length === 0 || sceneId.length > 20_000) continue;
     if (typeof lineIndex !== "number" || !Number.isFinite(lineIndex) || lineIndex < 0) continue;
-    entries.push({ sceneId, lineIndex: Math.floor(lineIndex), affection: typeof affection === "number" && Number.isFinite(affection) ? affection : 0, flags: coerceFlags(item["flags"]) ?? {}, phase: phase === "choice" ? "choice" : "scene", historyLength: typeof historyLength === "number" && Number.isFinite(historyLength) && historyLength >= 0 ? Math.floor(historyLength) : 0 });
+    const inputFlags = coerceInputFlags(item["inputFlags"]);
+    entries.push({ sceneId, lineIndex: Math.floor(lineIndex), affection: typeof affection === "number" && Number.isFinite(affection) ? affection : 0, flags: coerceFlags(item["flags"]) ?? {}, phase: phase === "choice" ? "choice" : "scene", historyLength: typeof historyLength === "number" && Number.isFinite(historyLength) && historyLength >= 0 ? Math.floor(historyLength) : 0, ...(inputFlags ? { inputFlags } : {}) });
   }
   return entries;
 }
@@ -207,13 +214,15 @@ function coerceSave(value: unknown, scope = ""): SaveData | null {
     sceneId,
     lineIndex: Math.floor(lineIndex),
     affection: typeof affection === "number" && Number.isFinite(affection) ? affection : 0,
-    savedAt: typeof savedAt === "number" ? savedAt : 0,
+    // 미래 시각을 무한정 신뢰하면 조작된 저장본이 「최근 저장」 자리를 영구히 점유한다 — 하루 이상 미래는 손상으로 본다.
+    savedAt: typeof savedAt === "number" && Number.isFinite(savedAt) && savedAt >= 0 && savedAt <= Date.now() + 86_400_000 ? savedAt : 0,
     ...(savedScript ? { script: savedScript } : {}),
     ...(scriptKey ? { scriptKey } : {}),
     ...(flags ? { flags } : {}),
     ...(["scene", "choice", "ending"].includes(String(value["phase"])) ? { phase: value["phase"] as "scene" | "choice" | "ending" } : {}),
     ...(Array.isArray(value["history"]) ? { history: value["history"].filter((entry): entry is { speaker: string | null; text: string; sceneId?: unknown; chapter?: unknown } => isRecord(entry) && (entry["speaker"] === null || typeof entry["speaker"] === "string" && entry["speaker"].length <= 20_000) && typeof entry["text"] === "string" && entry["text"].length <= 20_000).slice(-2000).map(entry => ({ speaker: entry.speaker, text: entry.text, ...(typeof entry.sceneId === "string" && entry.sceneId.length <= 20000 ? { sceneId: entry.sceneId } : {}), ...(typeof entry.chapter === "string" && entry.chapter.length <= 20000 ? { chapter: entry.chapter } : {}) })) } : {}),
     ...(rollback ? { rollback } : {}),
+    ...(coerceInputFlags(value["inputFlags"]) ? { inputFlags: coerceInputFlags(value["inputFlags"]) } : {}),
   };
 }
 
@@ -243,7 +252,8 @@ export function writeSlot(index: number, data: SlotSave, scope = ""): boolean {
   const serialized = rows.map((row, i) => {
     if (i === index) return serializeSave(data, scope);
     const slot = coerceSlot(row, scope);
-    return slot ? serializeSave(slot, scope) : "null";
+    // 검증을 못 통과한 행도 그대로 보존한다 — 다른 슬롯에 저장한다고 손상된 세이브를 지우면 안 된다.
+    return slot ? serializeSave(slot, scope) : JSON.stringify(row ?? null);
   });
   const ok = write(scopedKey(SLOTS_KEY, scope), `[${serialized.join(",")}]`);
   pruneManuscripts(scope);
@@ -301,6 +311,14 @@ export function readLineKeys(scope = ""): Set<string> {
   return cached(scopedKey(READ_KEY, scope), raw => {
     const value = parseJson(raw);
     const keys = new Set<string>();
+    // 새 형식: 씬 id 순서를 보존하는 튜플 배열. 정수처럼 보이는 id도 삽입 순서를 잃지 않는다.
+    if (isRecord(value) && Array.isArray(value["e"])) {
+      for (const pair of value["e"]) {
+        if (!Array.isArray(pair) || typeof pair[0] !== "string" || !Array.isArray(pair[1])) continue;
+        for (const line of pair[1]) if (typeof line === "string" || typeof line === "number") keys.add(`${pair[0]}#${line}`);
+      }
+      return keys;
+    }
     if (!isRecord(value) || Array.isArray(value)) return keys;
     for (const [sceneId, lines] of Object.entries(value)) {
       if (!Array.isArray(lines)) continue;
@@ -314,11 +332,19 @@ export function rememberRead(keys: Iterable<string>, scope = ""): boolean {
   const value = readJson(scopedKey(READ_KEY, scope));
   // null-prototype — "constructor"·"__proto__" 같은 씬 id 도 상속 멤버와 충돌하지 않는다.
   const table: Record<string, string[]> = Object.create(null);
+  const order: string[] = [];
   let total = 0;
-  if (isRecord(value) && !Array.isArray(value)) for (const [sceneId, lines] of Object.entries(value)) {
-    if (!Array.isArray(lines)) continue;
-    const kept = lines.filter((line): line is string | number => typeof line === "string" || typeof line === "number").map(String);
-    if (kept.length) { table[sceneId] = kept; total += kept.length; }
+  const seed = (entries: Iterable<readonly [unknown, unknown]>) => {
+    for (const [sceneId, lines] of entries) {
+      if (typeof sceneId !== "string" || !Array.isArray(lines)) continue;
+      const kept = lines.filter((line): line is string | number => typeof line === "string" || typeof line === "number").map(String);
+      if (kept.length) { table[sceneId] = kept; order.push(sceneId); total += kept.length; }
+    }
+  };
+  if (isRecord(value) && !Array.isArray(value)) {
+    // 새 형식({e:[[id,[줄…]]]})은 순서를, 구 형식({id:[줄…]})은 키 순서를 따른다.
+    if (Array.isArray(value["e"])) seed(value["e"] as Iterable<readonly [unknown, unknown]>);
+    else seed(Object.entries(value));
   }
   let added = false;
   for (const key of keys) {
@@ -326,17 +352,20 @@ export function rememberRead(keys: Iterable<string>, scope = ""): boolean {
     if (at <= 0) continue;
     const sceneId = key.slice(0, at), line = key.slice(at + 1);
     // 프로토타입 멤버("constructor" 등)를 상속값으로 읽지 않게 own-key 만 본다.
-    const lines = Object.hasOwn(table, sceneId) ? table[sceneId]! : (table[sceneId] = []);
+    let lines = Object.hasOwn(table, sceneId) ? table[sceneId]! : undefined;
+    if (!lines) { lines = []; table[sceneId] = lines; order.push(sceneId); }
     if (lines.includes(line)) continue;
     lines.push(line); total += 1; added = true;
   }
   if (!added) return true;
-  for (const sceneId of Object.keys(table)) {
+  // 삽입 순서대로 잊는다 — Object.keys 는 "3" 같은 정수 씬 id 를 앞으로 재정렬하므로 별도 목록을 유지한다.
+  for (const sceneId of order) {
     if (total <= READ_LIMIT) break;
     total -= table[sceneId]!.length;
     delete table[sceneId];
   }
-  return write(scopedKey(READ_KEY, scope), JSON.stringify(table));
+  // 튜플 배열로 쓴다 — 객체 키는 "3" 같은 정수 id를 재정렬해 삽입 순서를 잃는다.
+  return write(scopedKey(READ_KEY, scope), JSON.stringify({ e: order.filter(id => Object.hasOwn(table, id)).map(id => [id, table[id]]) }));
 }
 
 // ---- 갤러리 -----------------------------------------------------------------

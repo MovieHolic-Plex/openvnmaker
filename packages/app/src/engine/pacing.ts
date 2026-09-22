@@ -15,6 +15,7 @@ export function autoAdvanceDelay(length: number, msPerChar: number = DEFAULT_AUT
 
 /** 설정된 글자 속도를 줄 길이에 맞춰 조정한다. 0 이하(즉시 표시)는 그대로 둔다. */
 export function typewriterMsPerChar(length: number, msPerChar: number): number {
+  if (!Number.isFinite(msPerChar)) return 0;
   if (!(msPerChar > 0) || !(length > 0)) return msPerChar;
   return Math.min(msPerChar, TYPE_MAX_MS / length);
 }
