@@ -343,16 +343,19 @@ export function auditScript(script: VnScript): StoryIssue[] {
       const key=state.id+JSON.stringify(Object.entries(state.flags).sort(([a],[b])=>a.localeCompare(b)));
       if(seen.has(key))continue;seen.add(key);
       const scene=byId.get(state.id);if(!scene)continue;
+      // input 줄은 그 줄을 지나야 뒤로 진행되므로, 씬 안의 input 플래그는 출구 시점에 항상 비어있지 않은 값으로 세팅돼 있다.
+      const outFlags={...state.flags};
+      for(const line of scene.lines)if(line.input&&outFlags[line.input.flag]===undefined)outFlags[line.input.flag]="?";
       if(scene.choices?.length){
-        for(const choice of scene.choices){const error=choiceEffectError(choice,state.flags);const key=scene.id+error;if(error&&!choice.disable&&!choice.cond&&lineAllowed(choice,state.flags)&&!blocked.has(key)){blocked.add(key);issues.push({sceneId:scene.id,message:`선택 결과 오류: ${error}`,severity:"error"});}}
-        const available=scene.choices.filter(choice=>choiceAllowed(choice,state.flags));
+        for(const choice of scene.choices){const error=choiceEffectError(choice,outFlags);const key=scene.id+error;if(error&&!choice.disable&&!choice.cond&&lineAllowed(choice,outFlags)&&!blocked.has(key)){blocked.add(key);issues.push({sceneId:scene.id,message:`선택 결과 오류: ${error}`,severity:"error"});}}
+        const available=scene.choices.filter(choice=>choiceAllowed(choice,outFlags));
         if(!available.length&&!blocked.has(scene.id)){blocked.add(scene.id);issues.push({sceneId:scene.id,message:"도달 가능한 경로에서 선택지가 모두 닫힙니다. 조건이나 대체 선택지를 확인하세요.",severity:"error"});}
-        for(const choice of available)queue.push(enqueue(choice.next,applyChoiceFlags(state.flags,choice)));
+        for(const choice of available)queue.push(enqueue(choice.next,applyChoiceFlags(outFlags,choice)));
       }else{
         // 엔진과 같이 처음으로 조건이 맞는 경로만 따라간다. 전부 실패하면 next 로 폴백한다.
-        const taken=(scene.routes??[]).find(route=>lineAllowed(route,state.flags));
+        const taken=(scene.routes??[]).find(route=>lineAllowed(route,outFlags));
         const follow=taken?.next??(scene.ending?undefined:scene.next);
-        if(follow)queue.push(enqueue(follow,state.flags));
+        if(follow)queue.push(enqueue(follow,outFlags));
       }
     }
     if(queue.length)issues.push({sceneId:script.start,message:"분기 상태가 10,000개를 넘어 조건 경로 검사가 일부만 수행되었습니다.",severity:"warning"});

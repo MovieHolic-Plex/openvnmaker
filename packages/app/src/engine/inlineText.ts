@@ -44,8 +44,11 @@ function readBrace(text: string, at: number, flags: StoryFlags, style: Style): {
   // 열린 색 태그가 없는데 닫는 태그만 오면 원문으로 남긴다 — {c:…} 가 무효였을 때 꼬리가 사라지면 안 된다.
   if (inner === "/c") return style.color === undefined ? null : { next: close + 1, style: { bold: style.bold, italic: style.italic } };
   if (inner.startsWith("c:") && INLINE_COLOR.test(inner.slice(2))) return { next: close + 1, style: { ...style, color: inner.slice(2) } };
-  if (inner === "player") return { next: close + 1, insert: String(flags["player"] ?? "") };
-  if (inner.startsWith("flag:") && FLAG_TOKEN.test(inner.slice(5))) return { next: close + 1, insert: String(flags[inner.slice(5)] ?? "") };
+  if (inner === "player") return { next: close + 1, insert: String(Object.hasOwn(flags, "player") ? flags["player"] : "") };
+  if (inner.startsWith("flag:") && FLAG_TOKEN.test(inner.slice(5))) {
+    const name = inner.slice(5);
+    return { next: close + 1, insert: String(Object.hasOwn(flags, name) ? flags[name] : "") };
+  }
   return null;
 }
 

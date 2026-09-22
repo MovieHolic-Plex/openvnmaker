@@ -311,7 +311,8 @@ export function readLineKeys(scope = ""): Set<string> {
 /** 읽은 대사 키를 합쳐 저장한다. 상한을 넘으면 오래 전 씬부터 잊는다. 저장 실패는 false. */
 export function rememberRead(keys: Iterable<string>, scope = ""): boolean {
   const value = readJson(scopedKey(READ_KEY, scope));
-  const table: Record<string, string[]> = {};
+  // null-prototype — "constructor"·"__proto__" 같은 씬 id 도 상속 멤버와 충돌하지 않는다.
+  const table: Record<string, string[]> = Object.create(null);
   let total = 0;
   if (isRecord(value) && !Array.isArray(value)) for (const [sceneId, lines] of Object.entries(value)) {
     if (!Array.isArray(lines)) continue;
@@ -323,7 +324,8 @@ export function rememberRead(keys: Iterable<string>, scope = ""): boolean {
     const at = key.indexOf("#");
     if (at <= 0) continue;
     const sceneId = key.slice(0, at), line = key.slice(at + 1);
-    const lines = table[sceneId] ?? (table[sceneId] = []);
+    // 프로토타입 멤버("constructor" 등)를 상속값으로 읽지 않게 own-key 만 본다.
+    const lines = Object.hasOwn(table, sceneId) ? table[sceneId]! : (table[sceneId] = []);
     if (lines.includes(line)) continue;
     lines.push(line); total += 1; added = true;
   }

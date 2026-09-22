@@ -18,7 +18,7 @@ import { CreditsPanel } from "./components/CreditsPanel.js";
 import { TitleScreen } from "./components/TitleScreen.js";
 import { autoAdvanceDelay, typewriterMsPerChar } from "./engine/pacing.js";
 import { reduce, rollbackLog } from "./engine/reducer.js";
-import { resolveInline, truncateParts } from "./engine/inlineText.js";
+import { resolveInline, resolveText, truncateParts } from "./engine/inlineText.js";
 import { currentLine, currentScene, backgroundAt, bgmAt, cgAt, effectAt, framingAt, speakerColor, speakerName, spritesAt, tintAt } from "./engine/selectors.js";
 import { initialState, readKey, ROLLBACK_LIMIT, type SaveData, type VnAction, type VnState } from "./engine/types.js";
 import { useReducedMotion } from "./hooks/useReducedMotion.js";
@@ -385,6 +385,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
             {state.error}
           </p>
           <div className="fatal-actions">
+            {state.past.length > 0 && <button type="button" data-testid="fatal-back" onClick={() => dispatch({ type: "back" })}>이전</button>}
             <button type="button" data-testid="fatal-title" onClick={backToTitle}>타이틀로</button>
             {latestSave(isStudioPreview, projectNamespace) && <button type="button" data-testid="fatal-continue" onClick={onLoad}>이어서 읽기</button>}
             <button type="button" data-testid="fatal-restart" onClick={() => bootScript(script)}>처음부터 다시</button>
@@ -436,6 +437,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
         <section className="fatal-dialog">
           <p className="fatal">{state.error ?? "씬을 찾을 수 없다"}</p>
           <div className="fatal-actions">
+            {state.past.length > 0 && <button type="button" data-testid="fatal-back" onClick={() => dispatch({ type: "back" })}>이전</button>}
             <button type="button" data-testid="fatal-title" onClick={backToTitle}>타이틀로</button>
             {latestSave(isStudioPreview, projectNamespace) && <button type="button" data-testid="fatal-continue" onClick={onLoad}>이어서 읽기</button>}
             <button type="button" data-testid="fatal-restart" onClick={() => bootScript(script)}>처음부터 다시</button>
@@ -535,7 +537,7 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
           />
         )}
         {state.phase === "scene" && !artOnly && line?.input && !typing && (
-          <LineInputPanel key={`${state.sceneEpoch}:${state.lineIndex}`} input={line.input} onSubmit={(value) => dispatch({ type: "input", flag: line.input!.flag, value })} />
+          <LineInputPanel key={`${state.sceneEpoch}:${state.lineIndex}`} input={{ ...line.input, ...(line.input.prompt !== undefined ? { prompt: resolveText(line.input.prompt, state.flags) } : {}), ...(line.input.placeholder !== undefined ? { placeholder: resolveText(line.input.placeholder, state.flags) } : {}) }} onSubmit={(value) => dispatch({ type: "input", flag: line.input!.flag, value })} />
         )}
         {state.phase === "choice" && scene.choices && (
           <ChoiceMenu

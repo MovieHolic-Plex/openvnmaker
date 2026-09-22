@@ -22,14 +22,14 @@ function nextVisible(scene: Scene, start: number, flags: StoryFlags) {
   return -1;
 }
 
-function enterScene(script: VnScript, state: VnState, id: string, visited: string[] = []): VnState {
+function enterScene(script: VnScript, state: VnState, id: string, visited: string[] = [], applySet = true): VnState {
   const scene = findScene(script, id);
   if (!scene) {
     return { ...state, error: `알 수 없는 씬 id: ${id}` };
   }
   if (visited.includes(id)) return { ...state, error: "표시할 대사가 없는 장면이 순환합니다." };
   // 진입 시점 set — 첫 대사의 when 과 조건 경로가 이 플래그를 본다.
-  const flags = scene.set ? { ...state.flags, ...scene.set } : state.flags;
+  const flags = applySet && scene.set ? { ...state.flags, ...scene.set } : state.flags;
   const lineIndex = nextVisible(scene, 0, flags);
   const entered: VnState = {
     ...state,
@@ -99,9 +99,11 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
     case "restore": {
       const scene = findScene(script, action.sceneId);
       if (!scene) return { ...state, error: `알 수 없는 씬 id: ${action.sceneId}` };
-      const flags = { ...script.flags, ...action.flags };
+      // 저장된 플래그가 진입 시점 set 을 이긴다 — 입력 줄이 수집한 값을 복원이 덮어쓰지 않게.
+      // 저장에 없는 키(원고가 나중에 추가한 set)는 set 값으로 채운다.
+      const flags = { ...script.flags, ...(scene.set ?? {}), ...action.flags };
       const history = action.history ?? [];
-      const restored = enterScene(script, { ...state, flags, affection: action.affection, history, past: rebuildPast(script, action.rollback, history), endingTitle: null }, action.sceneId);
+      const restored = enterScene(script, { ...state, flags, affection: action.affection, history, past: rebuildPast(script, action.rollback, history), endingTitle: null }, action.sceneId, [], false);
       const requested = Math.min(scene.lines.length - 1, Math.max(0, Math.floor(action.lineIndex)));
       const lineIndex = nextVisible(scene, requested, restored.flags);
       if (action.phase === "choice" && scene.choices?.length) {
@@ -138,9 +140,13 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
       const line = scene?.lines[state.lineIndex];
       // 현재 줄이 이 플래그를 묻는 input 줄일 때만 값을 받는다 — 다른 줄에서 온 입력은 무시한다.
       if (!scene || line?.input?.flag !== action.flag) return state;
-      const value = action.value.slice(0, line.input.max ?? 16);
-      if (!value.trim()) return state;
-      return advanceOnce(script, { ...pushPast(state), flags: { ...state.flags, [action.flag]: value.trim() } });
+      const value = action.value.slice(0, line.input.max ?? 16).trim();
+      if (!value) return state;
+      // 정규 숫자 문자열은 숫자 플래그로 저장한다 — compare/add 가 숫자를 요구하므로.
+      // "007"·"3.50" 같은 비정규 표기는 문자열을 유지한다(이름 플래그 오염 방지).
+      const num = Number(value);
+      const stored = Number.isFinite(num) && String(num) === value ? num : value;
+      return advanceOnce(script, { ...pushPast(state), flags: { ...state.flags, [action.flag]: stored } });
     }
 
     case "skipToChoice": {
@@ -149,6 +155,8 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
       if (state.phase !== "scene") return state;
       const scene = findScene(script, state.sceneId);
       if (!scene) return { ...state, error: `알 수 없는 씬 id: ${state.sceneId}` };
+      // 입력 줄에 서 있는 동안은 스킵도 멈춘다 — 플래그 없이 지나치면 조건 선택지가 전부 닫혀 데드엔드가 된다.
+      if (scene.lines[state.lineIndex]?.input) return state;
       let next = pushPast(state);
       let moved = false;
       for (let guard = 0; guard <= scene.lines.length; guard += 1) {

@@ -181,3 +181,167 @@ test("outfit: 역할은 의상 원화로 계획되고 기본 표정표와 섞이
   assert.equal(plain.length, 2, "base·expression:미소만 기본 표정표로");
   assert.deepEqual(plan.ignored, ["outfit:uniform:나머지"]);
 });
+
+// ---------- 회귀: 적대적 리뷰 수정분 ----------
+
+test("스킵은 input 줄에 서 있을 때도 멈춘다 — 플래그 없이 지나치면 선택지가 전부 닫힌다", () => {
+  const script: VnScript = {
+    title: "t", start: "s", characters: [],
+    scenes: [
+      { id: "s", background: "title", lines: [
+        { speaker: null, text: "묻는다", input: { flag: "player" } },
+        { speaker: null, text: "뒤" },
+      ], choices: [{ text: "간다", next: "e", when: { all: ["player"] } }] },
+      { id: "e", background: "title", lines: [{ speaker: null, text: "끝" }], ending: "끝" },
+    ],
+  };
+  let state = reduce(script, initialState(script), { type: "start" });
+  assert.equal(state.lineIndex, 0);
+  const skipped = reduce(script, state, { type: "skipToChoice" });
+  assert.equal(skipped.lineIndex, 0, "input 줄에 서 있는 동안 스킵은 넘어가면 안 된다");
+  assert.equal(skipped.error ?? null, null);
+});
+
+test("input 정규 숫자 문자열은 숫자 플래그로 저장되고 비정규 표기는 문자열을 유지한다", () => {
+  const script: VnScript = {
+    title: "t", start: "s", characters: [],
+    scenes: [{ id: "s", background: "title", lines: [
+      { speaker: null, text: "나이?", input: { flag: "age" } },
+      { speaker: null, text: "끝" },
+    ] }],
+  };
+  let state = reduce(script, initialState(script), { type: "start" });
+  state = reduce(script, state, { type: "input", flag: "age", value: "25" });
+  assert.equal(state.flags["age"], 25, "compare:{gte:20} 가 숫자를 요구하므로 숫자로 저장");
+  const rest = reduce(script, initialState(script), { type: "start" });
+  const leading = reduce(script, rest, { type: "input", flag: "age", value: "007" });
+  assert.equal(leading.flags["age"], "007", "비정규 표기는 문자열 유지");
+});
+
+test("복원은 입력으로 모은 플래그를 씬 진입 set 으로 덮어쓰지 않는다", () => {
+  const script: VnScript = {
+    title: "t", start: "s", characters: [],
+    scenes: [{ id: "s", background: "title", set: { player: "기본이름" }, lines: [
+      { speaker: null, text: "이름?", input: { flag: "player" } },
+      { speaker: null, text: "{player} 님" },
+      { speaker: null, text: "셋" },
+    ] }],
+  };
+  let state = reduce(script, initialState(script), { type: "start" });
+  assert.equal(state.flags["player"], "기본이름", "진입 set 이 먼저 돈다");
+  state = reduce(script, state, { type: "input", flag: "player", value: "연우" });
+  state = reduce(script, state, { type: "advance" });
+  const restored = reduce(script, initialState(script), { type: "restore", sceneId: "s", lineIndex: 2, affection: 0, flags: state.flags });
+  assert.equal(restored.flags["player"], "연우", "저장된 입력값이 set 기본값보다 우선해야 한다");
+});
+
+test("감사는 input 줄이 쓰는 플래그를 씬 출구에서 세팅된 것으로 본다", async () => {
+  const { auditScript } = await import("@vnmaker/content");
+  const script: VnScript = {
+    title: "t", start: "s", characters: [],
+    scenes: [
+      { id: "s", background: "title", lines: [
+        { speaker: null, text: "이름?", input: { flag: "player" } },
+      ], choices: [
+        { text: "간다", next: "e", when: { all: ["player"] } },
+        { text: "안 간다", next: "e" },
+      ] },
+      { id: "e", background: "title", lines: [{ speaker: null, text: "끝" }], ending: "끝" },
+    ],
+  };
+  const errors = auditScript(script).filter(issue => issue.severity === "error");
+  assert.deepEqual(errors.map(issue => issue.message), [], `거짓 데드엔드 진단이 없어야 한다: ${errors.map(i => i.message).join(" / ")}`);
+});
+
+test("유효하지 않은 의상 id 와 빈 의상 id 는 설치 대상에서 빠진다", () => {
+  const manifest: StoreManifest = {
+    spec: "losia-asset/1", id: "evil", kind: "character", name: "악성",
+    license: "downloadable", uploader: { handle: "x", display: "x" },
+    files: [
+      { role: "base", url: "https://losia.online/api/assets/evil/files/base" },
+      { role: "outfit:__proto__:base", url: "https://losia.online/api/assets/evil/files/a" },
+      { role: "outfit:constructor:expression:미소", url: "https://losia.online/api/assets/evil/files/b" },
+      { role: "outfit::expression:미소", url: "https://losia.online/api/assets/evil/files/c" },
+      { role: "outfit:uniform:base", url: "https://losia.online/api/assets/evil/files/d" },
+    ],
+  };
+  const plan = installPlan(manifest);
+  assert.deepEqual(plan.files.filter(f => f.outfit !== undefined).map(f => f.outfit), ["uniform"]);
+  assert.deepEqual(plan.ignored, ["outfit:__proto__:base", "outfit:constructor:expression:미소", "outfit::expression:미소"]);
+  assert.ok(plan.files.some(f => f.outfit === "uniform"));
+});
+
+test("같은 role 슬러그가 두 번 오면 두 번째는 무시한다 — artwork id 충돌 방지", () => {
+  const manifest: StoreManifest = {
+    spec: "losia-asset/1", id: "dup", kind: "stage", name: "중복",
+    license: "downloadable", uploader: { handle: "x", display: "x" },
+    files: [
+      { role: "base", url: "https://losia.online/api/assets/dup/files/1" },
+      { role: "base", url: "https://losia.online/api/assets/dup/files/2" },
+      { role: "variant:낮", url: "https://losia.online/api/assets/dup/files/3" },
+    ],
+  };
+  const plan = installPlan(manifest);
+  assert.equal(plan.files.filter(f => f.role === "base").length, 1);
+  assert.deepEqual(plan.ignored, ["base"]);
+});
+
+test("expressionKey 는 프로토타입 멤버를 별칭으로 읽지 않는다", async () => {
+  const { expressionKey } = await import("../src/studio/storeInstall.js");
+  for (const label of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
+    const key = expressionKey(label);
+    assert.equal(typeof key, "string", `${label} 은 문자열 키여야 한다`);
+    assert.ok(!["function", "object"].includes(typeof key));
+  }
+  assert.equal(expressionKey("미소"), "smile", "정상 별칭은 그대로");
+});
+
+test("{flag:} 치환은 프로토타입 멤버를 빈 문자열로 둔다", () => {
+  for (const name of ["constructor", "toString", "valueOf"]) {
+    const resolved = resolveInline(`{flag:${name}}`, {});
+    assert.equal(resolved.plain, "", `{flag:${name}} 는 빈 문자열이어야 한다`);
+  }
+  // "__proto__" 는 플래그명 규칙(영문 시작)에 안 맞아 토큰 자체가 성립하지 않는다 — 리터럴로 남긴다.
+  assert.equal(resolveInline("{flag:__proto__}", {}).plain, "{flag:__proto__}");
+  assert.equal(resolveInline("{player}", {}).plain, "");
+  assert.equal(resolveInline("{player}", { player: "연우" }).plain, "연우");
+});
+
+test("rememberRead 는 프로토타입과 겹치는 씬 id 에도 죽지 않는다", async () => {
+  const { rememberRead } = await import("../src/storage/persist.js");
+  assert.doesNotThrow(() => rememberRead(["constructor#0", "toString#1", "__proto__#2", "hasOwnProperty#0"]));
+});
+
+test("Ren'Py보내기는 input 줄을 renpy.input 으로 내고 인라인 마크업을 살린다", async () => {
+  const { generateRenpyScript } = await import("../src/studio/renpyScript.js");
+  const script: VnScript = {
+    title: "t", subtitle: "d", start: "s", characters: [],
+    scenes: [
+      { id: "s", background: "title", lines: [
+        { speaker: null, text: "이름?", input: { flag: "player", prompt: "이름을 알려줘", max: 12 } },
+        { speaker: null, text: "{player}, **정말** {c:#a78bfa}반가워{/c}." },
+      ], next: "e" },
+      { id: "e", background: "title", lines: [{ speaker: null, text: "끝" }], ending: "끝" },
+    ],
+  };
+  const out = generateRenpyScript(script);
+  assert.match(out, /renpy\.input\("이름을 알려줘", length=12\)/);
+  assert.match(out, /vn_store_input\("player", vn_in, 12\)/);
+  assert.match(out, /\[vn_flags\.get\("player",""\)\]/);
+  assert.match(out, /\{b\}정말\{\/b\}/);
+  assert.match(out, /\{color=#a78bfa\}반가워\{\/color\}/);
+});
+
+test("Ren'Py보내기는 지원하지 않는 연출 큐를 파일 상단 경고로 남긴다", async () => {
+  const { generateRenpyScript } = await import("../src/studio/renpyScript.js");
+  const script: VnScript = {
+    title: "t", subtitle: "d", start: "s", characters: [],
+    scenes: [
+      { id: "s", background: "title", effect: "rain", next: "e", lines: [{ speaker: null, text: "비", tint: "#334455" }] },
+      { id: "e", background: "title", lines: [{ speaker: null, text: "끝" }], ending: "끝" },
+    ],
+  };
+  const out = generateRenpyScript(script);
+  assert.match(out, /# WARNING: effect\/tint cues are not supported/);
+  assert.match(out, /scenes: s\)/);
+});

@@ -152,7 +152,9 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       const outfitImages: Record<string, Record<string, string>> = {};
       for (const asset of result.artworks) {
         if (asset.kind !== "character" || !asset.outfit || !asset.expression) continue;
-        (outfitImages[asset.outfit] ??= {})[asset.expression] = asset.url;
+        // "constructor" 같은 프로토타입 이름은 ??= 가 상속 멤버를 읽어 오염된다 — own-key 로만 만든다.
+        if (!Object.hasOwn(outfitImages, asset.outfit)) outfitImages[asset.outfit] = {};
+        outfitImages[asset.outfit]![asset.expression] = asset.url;
       }
       const touched = targetCharacterId !== "" && targetCharacterId !== NEW_CHARACTER && result.artworks.some(asset => asset.kind === "character");
       const keyed = touched && chroma !== undefined;

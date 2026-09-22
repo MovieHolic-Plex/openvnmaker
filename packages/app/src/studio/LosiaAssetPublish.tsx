@@ -71,7 +71,8 @@ export function LosiaAssetPublish({ target, script, buttonClass = "art-secondary
     const seen = new Set([asset.url]);
     const label = (key: string) => EXPRESSION_LABELS[key] ?? key;
     for (const row of script.assets ?? []) {
-      if (row.characterId !== character.id || row.id === asset.id || !row.expression || seen.has(row.url)) continue;
+      // 의상 파일(row.outfit)은 base 표정 role 로 올리지 않는다 — 재설치하면 기본 표정표가 다른 옷으로 덮인다.
+      if (row.characterId !== character.id || row.id === asset.id || !row.expression || row.outfit || seen.has(row.url)) continue;
       seen.add(row.url);
       rows.push({ role: `expression:${label(row.expression)}`, url: row.url });
     }

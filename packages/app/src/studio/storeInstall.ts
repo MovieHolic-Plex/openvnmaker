@@ -13,7 +13,7 @@
  *   안정적인 합성 키(`x-<hash>`)로 만든다. 한글 라벨은 이름에 남는다.
  * - Artwork id 는 매니페스트 id + role 에서 결정적으로 만든다 → 같은 자산을 다시 설치하면 카드가 늘지 않고 대체된다.
  */
-import { validBackgroundUrl, type Artwork, type AudioAsset, type MediaProvenance } from "@vnmaker/content";
+import { validBackgroundUrl, validCharacterKey, type Artwork, type AudioAsset, type MediaProvenance } from "@vnmaker/content";
 
 export const LOSIA_SPEC = "losia-asset/1";
 /** 게이트웨이가 기본으로 쓰는 스토어 주소. 출처 표기에만 쓴다. */
@@ -99,7 +99,10 @@ function hash32(text: string): string {
 
 export function expressionKey(label: string): string {
   const trimmed = label.trim();
-  const alias = EXPRESSION_ALIASES[trimmed] ?? EXPRESSION_ALIASES[trimmed.toLowerCase()];
+  // 프로토타입 멤버(constructor 등)가 별칭처럼 읽히지 않게 own-key 만 본다.
+  const alias = Object.hasOwn(EXPRESSION_ALIASES, trimmed) ? EXPRESSION_ALIASES[trimmed]
+    : Object.hasOwn(EXPRESSION_ALIASES, trimmed.toLowerCase()) ? EXPRESSION_ALIASES[trimmed.toLowerCase()]
+    : undefined;
   if (alias) return alias;
   const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   // 영문 라벨이면 그대로 쓴다(64자 제한은 parse 의 characterKey 규칙).
@@ -200,6 +203,9 @@ export function installPlan(manifest: StoreManifest): InstallPlan {
       // outfit:<의상id>:<base|expression:표정|pose:포즈> — 같은 인물의 다른 복장.
       const cut = tail.indexOf(":");
       const outfitId = cut === -1 ? tail : tail.slice(0, cut);
+      // 의상 id 는 원고의 characterKey 규칙과 같아야 한다 — "__proto__" 같은 키는
+      // 설치를 실패로 두기 전에 여기서 걸러야 outfitImages 조립이 프로토타입을 오염하지 않는다.
+      if (!validCharacterKey(outfitId)) { ignored.push(file.role); continue; }
       const inner = cut === -1 ? "base" : tail.slice(cut + 1);
       const innerCut = inner.indexOf(":");
       const innerHead = innerCut === -1 ? inner : inner.slice(0, innerCut);
@@ -231,7 +237,16 @@ export function installPlan(manifest: StoreManifest): InstallPlan {
     }
     ignored.push(file.role);
   }
-  return { files, ignored };
+  // artwork id 는 role 슬러그에서 나온다 — 같은 role(또는 슬러그가 충돌하는 role)이 두 번 오면
+  // id 가 겹쳐 저장 후 parseScript 가 실패하므로, 두 번째부터는 설치 대상에서 뺀다.
+  const seen = new Set<string>();
+  const unique = files.filter(file => {
+    const slug = idSlug(file.role);
+    if (seen.has(slug)) { ignored.push(file.role); return false; }
+    seen.add(slug);
+    return true;
+  });
+  return { files: unique, ignored };
 }
 
 /**
