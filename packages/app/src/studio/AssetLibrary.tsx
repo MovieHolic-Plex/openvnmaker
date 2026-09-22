@@ -23,13 +23,17 @@ interface Props {
   readonly projectEpoch: number;
   readonly onChange: (script: VnScript) => void;
   readonly onPatchScene: (patch: Partial<Scene>) => void;
+  /** 지금 이 순간의 원고를 읽는다. script prop 은 디바운스돼 있을 수 있어 커밋 기준으로 쓰면 안 된다. */
+  readonly getLiveScript?: (() => VnScript) | undefined;
+  /** 실행 취소·다시 실행 이력의 원고 — 지운 카드가 여기서 참조되면 파일은 지우지 않는다. */
+  readonly undoTrail?: readonly VnScript[] | undefined;
   /** 딥링크(openvnmaker://install/<id>, /make?store-install=<id>)로 전달된 losia 자산 — 패널이 뜨면 자동 설치한다. */
   readonly autoInstallId?: string | undefined;
 }
 const kindLabels = { background: "배경", cg: "이벤트 CG", character: "캐릭터" } as const;
 const expressionLabels = { neutral: "기본", smile: "미소", sad: "슬픔", surprised: "놀람" } as const;
 
-export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchScene, generationEnabled = true, active = true, autoInstallId }: Props) {
+export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchScene, generationEnabled = true, active = true, autoInstallId, getLiveScript, undoTrail }: Props) {
   const [filter, setFilter] = useState<Artwork["kind"] | "all">("all");
   const [selectedId, setSelectedId] = useState("curated-nocturne-atrium");
   const [search, setSearch] = useState("");
@@ -50,10 +54,25 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
   const [recovery, setRecovery] = useState(recoveredArtwork);
   const [storageEpoch, setStorageEpoch] = useState(0);
   const scriptRef = useRef(script);
+  // scriptRef 는 커밋용 추적본이다 — 표시 prop 은 디바운스돼 최신 입력을 모른다.
+  // 커밋은 항상 살아있는 원고 위에 쌓고, 우리가 onChange 한 원고는 리렌더 전까지 여기에 둔다.
+  const committedRef = useRef<VnScript | null>(null);
+  const seenLiveRef = useRef(script);
   const epochRef = useRef(projectEpoch);
   epochRef.current = projectEpoch;
   const controllerRef = useRef<AbortController | null>(null);
-  useEffect(() => { scriptRef.current = script; }, [script]);
+  useEffect(() => { if (getLiveScript) { const live = getLiveScript(); seenLiveRef.current = live; scriptRef.current = live; } else scriptRef.current = script; }, [script, getLiveScript]);
+  function commitBase(): VnScript {
+    if (!getLiveScript) return scriptRef.current;
+    const live = getLiveScript();
+    if (live !== seenLiveRef.current) {
+      seenLiveRef.current = live;
+      // live 가 우리의 마지막 커밋이면 누적을 유지하고, 아니면 다른 편집이 들어온 것 — 그 위로 옮긴다.
+      if (live !== committedRef.current) scriptRef.current = live;
+    }
+    return scriptRef.current;
+  }
+  function commitScript(next: VnScript) { scriptRef.current = next; committedRef.current = next; onChange(next); }
   useEffect(() => { controllerRef.current?.abort(); }, [projectEpoch]);
   useEffect(() => {
     // 수동 편집만 하는 동안 내부 API 를 부르지 않는다 — 아트 작업 공간을 열었을 때 확인한다.
@@ -93,7 +112,7 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
   function recover(entry: RecoveredArtwork) {
     try {
       const { sceneId: _oldScene, ...asset } = entry.asset;
-      onChange(registerArtwork(scriptRef.current, asset));
+      commitScript(registerArtwork(commitBase(), asset));
       setSelectedId(asset.id); setFilter(asset.kind);
       setMessage("이미지를 현재 라이브러리로 가져왔습니다. 장면에 적용하려면 이미지를 확인하세요.");
       setError("");
@@ -102,7 +121,7 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
 
   function apply(asset: Artwork) {
     try {
-      onChange(applyArtwork(scriptRef.current, scene.id, asset));
+      onChange(applyArtwork(commitBase(), scene.id, asset));
       setMessage(asset.kind === "character" ? (asset.expression ? "캐릭터의 표정 이미지에 적용했습니다." : "현재 장면의 배우 포즈에 적용했습니다.") : `‘${scene.chapter || scene.id}’에 ${kindLabels[asset.kind]}를 적용했습니다.`);
       setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
@@ -110,22 +129,22 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
 
   /** 카드는 바로 빼고, 파일은 어떤 작품도 더 쓰지 않을 때만 지운다(보관함 파일은 작품 사이에서 공유된다). */
   async function remove(asset: Artwork) {
-    if (assetUsage(scriptRef.current, asset) > 0) { setError("장면이나 배우가 아직 이 이미지를 사용합니다. 먼저 다른 이미지로 바꾸세요."); return; }
+    if (assetUsage(commitBase(), asset) > 0) { setError("장면이나 배우가 아직 이 이미지를 사용합니다. 먼저 다른 이미지로 바꾸세요."); return; }
     let next: VnScript;
-    try { next = unregisterArtwork(scriptRef.current, asset.id); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); return; }
-    scriptRef.current = next; onChange(next); setError("");
+    try { next = unregisterArtwork(commitBase(), asset.id); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); return; }
+    commitScript(next); setError("");
     setSelectedId(""); setMessage(`‘${asset.name}’ 카드를 라이브러리에서 제거했습니다.`);
     if (!asset.url.startsWith("/assets/user/")) return;
     try {
-      const result = await removeUnreferencedAssets([asset.url], { id: readActiveProjectId(), script: next });
-      setMessage(result.removed.length ? `‘${asset.name}’ 카드와 보관함 파일을 삭제했습니다.` : `‘${asset.name}’ 카드를 제거했습니다. 다른 작품이나 버전 기록이 같은 파일을 써서 파일은 보관함에 남겼습니다.`);
+      const result = await removeUnreferencedAssets([asset.url], { id: readActiveProjectId(), script: next }, undoTrail);
+      setMessage(result.removed.length ? `‘${asset.name}’ 카드와 보관함 파일을 삭제했습니다.` : `‘${asset.name}’ 카드를 제거했습니다. 다른 작품·버전 기록·실행 취소 이력이 같은 파일을 써서 파일은 보관함에 남겼습니다.`);
       setStorageEpoch(value => value + 1);
     } catch (cause) { setMessage(`‘${asset.name}’ 카드를 제거했습니다. 보관함 파일 정리는 실패했습니다: ${cause instanceof Error ? cause.message : String(cause)}`); }
   }
 
   async function generate(batch: boolean) {
     if (busy) return;
-    const queue = batch ? pendingArtScenes(scriptRef.current).slice(0, 6) : [scene];
+    const queue = batch ? pendingArtScenes(commitBase()).slice(0, 6) : [scene];
     if (!queue.length) return;
     const controller = new AbortController();
     const requestEpoch = projectEpoch;
@@ -135,7 +154,7 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
     try {
       for (const target of queue) {
         if (controller.signal.aborted) break;
-        const snapshot = scriptRef.current;
+        const snapshot = commitBase();
         const role = batch ? "background" : kind;
         const text = artPrompt(snapshot, target, role, batch ? sceneArtBrief(snapshot, target) : brief, role === "character" ? characterId : undefined, role === "character" ? expression : undefined);
         const result = await generateImage(text, role === "character" ? "2:3" : "16:9", controller.signal, backend);
@@ -148,9 +167,8 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
           return;
         }
         // Save each finished image immediately. Cancelling a later job cannot discard earlier work.
-        const next = registerArtwork(scriptRef.current, asset);
-        scriptRef.current = next;
-        onChange(next);
+        const next = registerArtwork(commitBase(), asset);
+        commitScript(next);
         setSelectedId(asset.id); setFilter(role); setSearch("");
         done += 1; setProgress({ done, total: queue.length });
       }
@@ -174,9 +192,9 @@ export function AssetLibrary({ script, scene, projectEpoch, onChange, onPatchSce
     </div>
     {selected && <div className="art-mobile-selection"><ArtImage className={`art-mobile-preview art-mobile-preview--${selected.kind}`} src={selected.url} alt={selected.name} chromaKey={selectedCharacter?.chromaKey} testId="art-mobile-preview" /><div><strong>{selected.name}</strong><small>{message || selectedContext}</small></div><button type="button" data-testid="art-quick-apply" onClick={() => apply(selected)}>적용<Icon name="check" size={13} /></button></div>}
     <aside className="art-workbench">
-      {selected && <MediaProvenanceEditor key={selected.id} value={selected.provenance} onChange={provenance => onChange(registerArtwork(script, { ...selected, provenance }))} />}
-      <StorePanel active={active} script={script} projectEpoch={projectEpoch} onChange={onChange} onApplyToScene={apply} autoInstallId={autoInstallId} onInstalled={artworks => { const first = artworks[0]; if (first) { setSelectedId(first.id); setFilter(first.kind); setSearch(""); } }} />
-      <ArtImportButton script={script} onImport={rows=>{let next=script;for(const asset of rows)next=registerArtwork(next,asset);onChange(next);setSelectedId(rows[0]!.id);setFilter("all");setSearch("");setMessage(`${rows.length}개 원화를 가져왔습니다. 장면에 적용할 이미지를 선택하세요.`);}}/>
+      {selected && <MediaProvenanceEditor key={selected.id} value={selected.provenance} onChange={provenance => onChange(registerArtwork(commitBase(), { ...selected, provenance }))} />}
+      <StorePanel active={active} script={script} projectEpoch={projectEpoch} getLiveScript={getLiveScript} onChange={onChange} onApplyToScene={apply} autoInstallId={autoInstallId} onInstalled={artworks => { const first = artworks[0]; if (first) { setSelectedId(first.id); setFilter(first.kind); setSearch(""); } }} />
+      <ArtImportButton script={script} getLiveScript={getLiveScript} onImport={rows=>{let next=commitBase();for(const asset of rows)next=registerArtwork(next,asset);onChange(next);setSelectedId(rows[0]!.id);setFilter("all");setSearch("");setMessage(`${rows.length}개 원화를 가져왔습니다. 장면에 적용할 이미지를 선택하세요.`);}}/>
       {selected && <section className="art-selection"><div className="art-section-title"><Icon name="image" /><h2>선택한 이미지</h2><span>{kindLabels[selected.kind]}</span></div><ArtImage className={`art-selected-preview art-selected-preview--${selected.kind}`} src={selected.url} alt={selected.name} chromaKey={selectedCharacter?.chromaKey} testId="art-selected-preview" /><strong>{selected.name}</strong><p>{selectedContext}{selected.kind === "character" ? "에 적용됩니다." : ""}</p><button className="art-primary" type="button" data-testid="art-apply" onClick={() => apply(selected)}><Icon name="check" />{selected.kind === "character" ? (selected.expression ? "이 표정에 적용" : "현재 장면에 포즈 적용") : "현재 장면에 적용"}</button>{script.assets?.some(saved => saved.id === selected.id) && <button className="art-secondary" type="button" data-testid="art-remove" disabled={assetUsage(script, selected) > 0} title={assetUsage(script, selected) > 0 ? "장면·배우의 이미지 지정을 먼저 바꾸세요." : "라이브러리에서 제거"} onClick={() => void remove(selected)}><Icon name="trash" size={13} />{assetUsage(script, selected) > 0 ? "사용 중이라 제거할 수 없음" : "라이브러리에서 제거"}</button>}<LosiaAssetPublish target={{ type: "image", asset: selected }} script={script} /></section>}
       <section className="art-direction"><div className="art-section-title"><Icon name="settings" /><h2>작품 아트 디렉션</h2></div><textarea aria-label="작품 아트 디렉션" value={script.artDirection ?? DEFAULT_ART_DIRECTION} placeholder="화풍, 색감, 조명과 캐릭터 외형을 적어 주세요." onChange={event => onChange({ ...script, artDirection: event.target.value })} maxLength={3000} rows={4} /><p>현재 작품의 색감, 화풍과 인물 외형을 정리한 제작 기준입니다.</p></section>
       {generationEnabled && <section className="art-generation"><div className="art-section-title"><Icon name="spark" /><h2>이미지 스튜디오</h2><span className={ready ? "is-connected" : ""}>{needsAuth ? (authenticated ? "연결됨" : "로그인 필요") : (canUseBackend ? (backend === "codex" ? "Codex 준비됨" : "준비됨") : (backend === "codex" ? "Codex 없음" : "사용 불가"))}</span></div>

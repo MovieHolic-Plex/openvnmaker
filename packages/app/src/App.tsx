@@ -1,7 +1,7 @@
 import {manuscriptKey} from "./storage/manuscriptKey.js";
 import { lineAllowed, parseScript, script as bundledScript } from "@vnmaker/content";
 import type { VnScript } from "@vnmaker/content";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { BgmPlayer } from "./audio/BgmPlayer.js";
 import { VoicePlayer } from "./audio/VoicePlayer.js";
 import { playSfx } from "./audio/sfx.js";
@@ -24,7 +24,7 @@ import { initialState, readKey, ROLLBACK_LIMIT, type SaveData, type VnAction, ty
 import { useReducedMotion } from "./hooks/useReducedMotion.js";
 import { useScenePrefetch } from "./hooks/useScenePrefetch.js";
 import { useTypewriter } from "./hooks/useTypewriter.js";
-import { defaultSettings, EMPTY_GALLERY, latestSave, listSlots, loadSettings, readAutoSlot, readGallery, readLineKeys, readQuickSlot, readSlot, reconcileFlags, rememberRead, unlockGalleryCg, unlockGalleryEnding, writeAutoSlot, writeQuickSlot, writeSave, writeSettings, writeSlot, type GalleryUnlocks, type Settings, type SlotSave } from "./storage/persist.js";
+import { coerceFlags, defaultSettings, EMPTY_GALLERY, latestSave, listSlots, loadSettings, readAutoSlot, readGallery, readLineKeys, readQuickSlot, readSlot, reconcileFlags, rememberRead, unlockGalleryCg, unlockGalleryEnding, writeAutoSlot, writeQuickSlot, writeSave, writeSettings, writeSlot, type GalleryUnlocks, type Settings, type SlotSave } from "./storage/persist.js";
 
 declare global {
   interface Window {
@@ -239,7 +239,8 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
       const previewScene = parsed.scenes.find(row => row.id === position?.sceneId);
       // NaN 은 typeof number 를 통과한다 — 유한한 정수만 위치로 받는다.
       if (previewScene && typeof position?.lineIndex === "number" && Number.isFinite(position.lineIndex)) {
-        dispatch({ type: "restore", sceneId: previewScene.id, lineIndex: Math.max(0, Math.min(Math.floor(position.lineIndex), previewScene.lines.length - 1)), affection: 0, ...(position.flags ? {flags:position.flags} : {}) });
+        const previewFlags = coerceFlags(position.flags);
+        dispatch({ type: "restore", sceneId: previewScene.id, lineIndex: Math.max(0, Math.min(Math.floor(position.lineIndex), previewScene.lines.length - 1)), affection: 0, ...(previewFlags ? { flags: previewFlags } : {}) });
       }
     } catch {
       // 깨진 미리보기 JSON 은 무시한다.
@@ -377,95 +378,57 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
   const bgmVolume = muted ? 0 : settings.bgmVolume;
   const voiceVolume = muted ? 0 : settings.voiceVolume ?? 0.8;
 
-  if (state.error !== null) {
-    return (
-      <main className="vn-root">
-        <section className="fatal-dialog">
-          <p className="fatal" data-testid="fatal">
-            {state.error}
-          </p>
-          <div className="fatal-actions">
-            {state.past.length > 0 && <button type="button" data-testid="fatal-back" onClick={() => dispatch({ type: "back" })}>이전</button>}
-            <button type="button" data-testid="fatal-title" onClick={backToTitle}>타이틀로</button>
-            {latestSave(isStudioPreview, projectNamespace) && <button type="button" data-testid="fatal-continue" onClick={onLoad}>이어서 읽기</button>}
-            <button type="button" data-testid="fatal-restart" onClick={() => bootScript(script)}>처음부터 다시</button>
-          </div>
-        </section>
-      </main>
-    );
-  }
+  // 오디오는 어떤 화면 위에도 한 번만 뜬다 — phase 별로 return 을 나누면 타이틀→씬→엔딩마다
+  // <audio> 가 리마운트돼 배경음악이 처음부터 다시 시작한다.
+  const fatalDialog = (message: string) => (
+    <section className="fatal-dialog">
+      <p className="fatal" data-testid="fatal">
+        {message}
+      </p>
+      <div className="fatal-actions">
+        {state.past.length > 0 && <button type="button" data-testid="fatal-back" onClick={() => dispatch({ type: "back" })}>이전</button>}
+        <button type="button" data-testid="fatal-title" onClick={backToTitle}>타이틀로</button>
+        {latestSave(isStudioPreview, projectNamespace) && <button type="button" data-testid="fatal-continue" onClick={onLoad}>이어서 읽기</button>}
+        <button type="button" data-testid="fatal-restart" onClick={() => bootScript(script)}>처음부터 다시</button>
+      </div>
+    </section>
+  );
 
-  if (state.phase === "title") {
-    return (
-      <main className="vn-root" onClick={unlock}>
-        <PaperTexture />
-        <BgmPlayer fadeSeconds={vnScript.musicFadeSeconds} track={bgmTrack} volume={bgmVolume} unlocked={unlocked} onError={() => onMediaError("배경음악")} />
-        <TitleScreen onCredits={()=>setPanel("credits")} onGallery={()=>setPanel("gallery")} script={script} standalone={standalone} hasSave={savedAt !== null} onLoad={()=>setPanel("load")} onStart={() => { unlock(); playSfx("ui-click", sfxVolumeRef.current); bootScript(script); }} onContinue={() => { unlock(); onLoad(); }} />
-        {mediaNotice && <p className="player-save-notice media-notice" data-testid="media-notice" aria-live="polite">{mediaNotice}</p>}
-        {saveDialog}{creditsDialog}{galleryDialog}
-        <div className="grain-overlay" aria-hidden="true" />
-      </main>
-    );
-  }
-
-  if (state.phase === "ending") {
-    return (
-      <main className="vn-root">
-        {isStudioPreview && <a className="studio-return" href={`${import.meta.env.BASE_URL}studio.html`}>← 스튜디오로 돌아가기</a>}
-        <PaperTexture />
-        <BgmPlayer fadeSeconds={vnScript.musicFadeSeconds} track={bgmTrack} volume={bgmVolume} unlocked={unlocked} onError={() => onMediaError("배경음악")} />
-        {mediaNotice && <p className="player-save-notice media-notice" data-testid="media-notice" aria-live="polite">{mediaNotice}</p>}
-        {creditsDialog}
-        <EndingScreen
-          title={state.endingTitle ?? "END"}
-          affection={state.affection}
-          background={scene?.background ?? "title"}
-          backgroundUrl={scene ? backgroundAt(scene, scene.lines.length - 1,state.flags) : undefined}
-          cgUrl={scene ? cgAt(vnScript,scene, scene.lines.length - 1,state.flags) : undefined}
-          showAffection={vnScript.scenes.some(row => row.choices?.some(choice => choice.affection !== undefined))}
-          onCredits={()=>setPanel("credits")}
-          onBack={backToTitle}
-        />
-        <div className="grain-overlay" aria-hidden="true" />
-      </main>
-    );
-  }
-
-  if (!scene) {
-    return (
-      <main className="vn-root">
-        <section className="fatal-dialog">
-          <p className="fatal">{state.error ?? "씬을 찾을 수 없다"}</p>
-          <div className="fatal-actions">
-            {state.past.length > 0 && <button type="button" data-testid="fatal-back" onClick={() => dispatch({ type: "back" })}>이전</button>}
-            <button type="button" data-testid="fatal-title" onClick={backToTitle}>타이틀로</button>
-            {latestSave(isStudioPreview, projectNamespace) && <button type="button" data-testid="fatal-continue" onClick={onLoad}>이어서 읽기</button>}
-            <button type="button" data-testid="fatal-restart" onClick={() => bootScript(script)}>처음부터 다시</button>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  const speaking = line?.speaker ?? null;
-  // 다음 보이는 대사가 아직 읽지 않은 것인지 — 스킵 버튼이 왜 멈추는지 알려 주기 위해서다.
+  let speaking: string | null = null;
   let nextUnread = false;
-  if (state.phase === "scene" && !settings.skipUnread) {
+  if (state.phase === "scene" && scene && !settings.skipUnread) {
+    // 다음 보이는 대사가 아직 읽지 않은 것인지 — 스킵 버튼이 왜 멈추는지 알려 주기 위해서다.
     for (let index = state.lineIndex + 1; index < scene.lines.length; index += 1) if (lineAllowed(scene.lines[index]!, state.flags)) { nextUnread = !readKeys.current.has(readKey(scene.id, index, scene.lines[index])); break; }
   }
 
-  return (
-    <main className="vn-root">
-      {isStudioPreview && <a className="studio-return" href={`${import.meta.env.BASE_URL}studio.html`} data-testid="studio-return">← 스튜디오로 돌아가기</a>}
-      {saveFeedback && <p className="player-save-notice" role="status">{saveFeedback}</p>}
-      {mediaNotice && <p className="player-save-notice media-notice" data-testid="media-notice" aria-live="polite">{mediaNotice}</p>}
-      <PaperTexture />
-      <BgmPlayer fadeSeconds={vnScript.musicFadeSeconds} track={bgmTrack} volume={bgmVolume} unlocked={unlocked} onError={() => onMediaError("배경음악")} /><VoicePlayer source={state.phase==="scene"?line?.voice:undefined} cue={`${state.sceneEpoch}:${state.lineIndex}`} volume={voiceVolume} paused={panel!=="none"} unlocked={unlocked} onDone={setVoiceDone}/>
+  let content: ReactNode;
+  if (state.error !== null) {
+    content = fatalDialog(state.error);
+  } else if (state.phase === "title") {
+    content = <TitleScreen onCredits={()=>setPanel("credits")} onGallery={()=>setPanel("gallery")} script={script} standalone={standalone} hasSave={savedAt !== null} onLoad={()=>setPanel("load")} onStart={() => { unlock(); playSfx("ui-click", sfxVolumeRef.current); bootScript(script); }} onContinue={() => { unlock(); onLoad(); }} />;
+  } else if (state.phase === "ending") {
+    content = <EndingScreen
+      title={state.endingTitle ?? "END"}
+      affection={state.affection}
+      background={scene?.background ?? "title"}
+      backgroundUrl={scene ? backgroundAt(scene, scene.lines.length - 1,state.flags) : undefined}
+      cgUrl={scene ? cgAt(vnScript,scene, scene.lines.length - 1,state.flags) : undefined}
+      showAffection={vnScript.scenes.some(row => row.choices?.some(choice => choice.affection !== undefined))}
+      onCredits={()=>setPanel("credits")}
+      onBack={backToTitle}
+    />;
+  } else if (!scene) {
+    content = fatalDialog(state.error ?? "씬을 찾을 수 없다");
+  } else {
+    speaking = line?.speaker ?? null;
+    content = <>
       <section
         className={`stage ${line?.shake ? "is-shaking" : ""} ${state.phase === "choice" ? "is-choice" : ""}`}
         data-testid="stage"
         data-scene={scene.id}
         onWheel={(event) => {
+          // Ctrl+휠은 브라우저/트랙패드 핀치 줌이다 — 줌하려다 되돌리기·진행이 발동하면 안 된다.
+          if (event.ctrlKey || event.metaKey) { wheelAcc.current = 0; return; }
           if (panel !== "none" || artOnly || (state.phase !== "scene" && state.phase !== "choice")) return;
           // 위로 굴리면 되돌리고, 아래로 굴리면 다음 대사로 간다(선택지에서는 진행하지 않는다).
           if (event.deltaY !== 0 && Math.sign(event.deltaY) !== Math.sign(wheelAcc.current)) wheelAcc.current = 0;
@@ -557,7 +520,18 @@ export function App({ initialScript, standalone = false, projectNamespace = "" }
           <SettingsPanel onCredits={()=>setPanel("credits")} settings={settings} onChange={updateSettings} onClose={() => setPanel("none")} />
         )}
       </section>
-      {saveDialog}{creditsDialog}{titleConfirm}
+    </>;
+  }
+
+  return (
+    <main className="vn-root" onClick={unlock}>
+      {isStudioPreview && <a className="studio-return" href={`${import.meta.env.BASE_URL}studio.html`} data-testid="studio-return">← 스튜디오로 돌아가기</a>}
+      {saveFeedback && <p className="player-save-notice" role="status">{saveFeedback}</p>}
+      {mediaNotice && <p className="player-save-notice media-notice" data-testid="media-notice" aria-live="polite">{mediaNotice}</p>}
+      <PaperTexture />
+      <BgmPlayer fadeSeconds={vnScript.musicFadeSeconds} track={bgmTrack} volume={bgmVolume} unlocked={unlocked} onError={() => onMediaError("배경음악")} /><VoicePlayer source={state.phase==="scene"?line?.voice:undefined} cue={`${state.sceneEpoch}:${state.lineIndex}`} volume={voiceVolume} paused={panel!=="none"} unlocked={unlocked} onDone={setVoiceDone}/>
+      {content}
+      {saveDialog}{creditsDialog}{galleryDialog}{titleConfirm}
       <div className="grain-overlay" aria-hidden="true" />
     </main>
   );

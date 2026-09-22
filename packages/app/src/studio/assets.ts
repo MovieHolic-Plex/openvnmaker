@@ -43,6 +43,11 @@ export function libraryAssets(script: VnScript): Artwork[] {
   return [...(script.assets ?? []), ...base.filter(asset => !script.assets?.some(saved => saved.id === asset.id))];
 }
 
+/** 음원이 원고에서 참조 중인지 — 제목 음악·장면 음악·대사의 음악/효과음/보이스를 모두 센다. */
+export function audioInUse(script: VnScript, url: string): boolean {
+  return script.titleBgm === url || script.scenes.some(scene => scene.bgm === url || scene.lines.some(line => line.bgm === url || line.sfx === url || line.voice === url));
+}
+
 export function assetUsage(script: VnScript, asset: Artwork): number {
   if (asset.kind === "character") return script.characters.filter(character => Object.values(character.expressionImages ?? {}).includes(asset.url)).length + script.scenes.filter(scene=>scene.sprites?.some(sprite=>sprite.poseUrl===asset.url)||scene.lines.some(line=>line.sprites?.some(sprite=>sprite.poseUrl===asset.url))).length;
   return script.scenes.filter(scene => scene.backgroundUrl === asset.url || scene.cgUrl === asset.url || scene.lines.some(line=>line.cgUrl === asset.url || line.backgroundUrl === asset.url) || (!scene.backgroundUrl && asset.url === `/assets/bg/${scene.background}.png`)).length;

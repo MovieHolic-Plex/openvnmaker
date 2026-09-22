@@ -49,9 +49,9 @@ export interface RollbackEntry {
 /** 세이브에 남기는 롤백 기록 개수 상한. */
 export const ROLLBACK_LIMIT = 30;
 
-/** 읽은 대사를 기억하는 키. 줄 id 가 있으면 순서를 바꿔도 유지된다. */
+/** 읽은 대사를 기억하는 키. 줄 id 가 있으면 순서를 바꿔도 유지된다. id 키는 "id:" 접두로 인덱스 키와 구분한다 — 숫자 id "3" 과 위치 3 이 충돌하면 안 된다. */
 export function readKey(sceneId: string, index: number, line?: Pick<Line, "id"> | undefined): string {
-  return `${sceneId}#${line?.id ?? index}`;
+  return `${sceneId}#${line?.id !== undefined ? `id:${line.id}` : index}`;
 }
 
 export type VnAction =

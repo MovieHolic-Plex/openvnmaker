@@ -1,5 +1,5 @@
 import { choiceAllowed, choiceEffectError, lineAllowed, type Choice, type StoryFlags } from "@vnmaker/content";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { resolveText } from "../engine/inlineText.js";
 
 interface Props {
@@ -21,10 +21,21 @@ export function ChoiceMenu({ choices, flags = {}, onPick, onHover }: Props) {
   const [focused, setFocused] = useState(available[0] ?? -1);
   const tabStop = available.includes(focused) ? focused : available[0];
   const visible = choices.filter(choice => lineAllowed(choice, flags)).length;
+  const menuRef = useRef<HTMLDivElement>(null);
+  // 메뉴를 연 Enter 키가 눌린 채로 남아 있다 — 버튼을 autoFocus 하면 그 keyup 이 첫 번째
+  // 선택지를 누른 것으로 처리될 수 있다. 진행 중이던 키 이벤트가 끝난 뒤에 포커스를 옮긴다.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLButtonElement>(`[data-testid="choice-${available[0]}"]`)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+    // 메뉴가 열릴 때 한 번만 — 목록이 바뀌어도 포커스를 빼앗지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div className="choice-scrim" data-testid="choice-scrim">
       <p className="sr-only" aria-live="polite">선택지 {visible}개. 화살표나 숫자 키로 고를 수 있습니다.</p>
-      <div className="choice-menu" data-testid="choice-menu" role="menu" aria-label="선택지" onKeyDown={event => {
+      <div className="choice-menu" ref={menuRef} data-testid="choice-menu" role="menu" aria-label="선택지" onKeyDown={event => {
         if (event.isDefaultPrevented() || event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
         const position = available.indexOf(focused);
         let next: number | undefined;
@@ -57,7 +68,6 @@ export function ChoiceMenu({ choices, flags = {}, onPick, onHover }: Props) {
               aria-keyshortcuts={disabled ? undefined : String(index + 1)}
               title={reason ?? undefined}
               tabIndex={index === tabStop ? 0 : -1}
-              autoFocus={index === available[0]}
               style={{ animationDelay: `${Math.min(index, 8) * 90}ms` }}
               onMouseEnter={onHover}
               onFocus={event => {setFocused(index); event.currentTarget.scrollIntoView({block:"nearest"}); onHover();}}

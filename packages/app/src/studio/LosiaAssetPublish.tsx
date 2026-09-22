@@ -30,7 +30,9 @@ function filename(role: string, blob: Blob): string {
 }
 
 async function fetchFile(role: string, url: string, signal: AbortSignal): Promise<LosiaAssetFile> {
-  const response = await fetch(url, { signal, cache: "no-store" });
+  // 리다이렉트는 따르지 않는다 — 발행 대상 URL 이 외부로 빠지면 다른 도메인의 파일이
+  // 우리 이름으로 올라간다(프로젝트 데이터의 URL 은 작성자가 넣을 수 있는 값이다).
+  const response = await fetch(url, { signal, cache: "no-store", redirect: "error" });
   if (!response.ok) throw new Error(`파일을 읽지 못했습니다 (${url} — HTTP ${response.status})`);
   const blob = await response.blob();
   return { role, blob, filename: filename(role, blob) };
@@ -67,17 +69,21 @@ export function LosiaAssetPublish({ target, script, buttonClass = "art-secondary
   /** 패키지로 올릴 때 모을 파일 목록: 선택한 원화가 base, 나머지 표정 이미지가 expression:*. */
   function packageUrls(): { role: string; url: string }[] {
     if (target.type !== "image" || !character) return [];
+    // 직접 올린 파일(/assets/user, /api/image/file)만 패키지에 넣는다 — 내장 아트나
+    // 스토어에서 내려받은 원화를 다른 사람 자산으로 재게시할 권리가 없다.
+    const ownUrl = (url: string) => url.startsWith("/assets/user/") || url.startsWith("/api/image/file/");
     const rows: { role: string; url: string }[] = [{ role: "base", url: asset.url }];
     const seen = new Set([asset.url]);
     const label = (key: string) => EXPRESSION_LABELS[key] ?? key;
     for (const row of script.assets ?? []) {
       // 의상 파일(row.outfit)은 base 표정 role 로 올리지 않는다 — 재설치하면 기본 표정표가 다른 옷으로 덮인다.
       if (row.characterId !== character.id || row.id === asset.id || !row.expression || row.outfit || seen.has(row.url)) continue;
+      if (!ownUrl(row.url) || (row.provenance?.source ?? "").includes("losia")) continue;
       seen.add(row.url);
       rows.push({ role: `expression:${label(row.expression)}`, url: row.url });
     }
     for (const [key, url] of Object.entries(character.expressionImages ?? {})) {
-      if (!url || seen.has(url)) continue;
+      if (!url || seen.has(url) || !ownUrl(url)) continue;
       seen.add(url);
       rows.push({ role: `expression:${label(key)}`, url });
     }

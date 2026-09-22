@@ -137,7 +137,13 @@ export function truncateParts(parts: readonly InlinePart[], count: number): read
     const left = count - used;
     if (left <= 0) break;
     if (part.text.length <= left) { out.push(part); used += part.text.length; }
-    else { out.push({ ...part, text: part.text.slice(0, left) }); used += left; }
+    else {
+      // count 는 UTF-16 코드 유닛 기준 — 경계가 서로게이트 쌍을 쪼개면 상위 서로게이트만 남는다.
+      let text = part.text.slice(0, left);
+      const tail = text.charCodeAt(text.length - 1);
+      if (tail >= 0xd800 && tail <= 0xdbff && text.length < part.text.length && part.text.charCodeAt(text.length) >= 0xdc00 && part.text.charCodeAt(text.length) <= 0xdfff) text = text.slice(0, -1);
+      out.push({ ...part, text }); used += text.length;
+    }
   }
   return out;
 }

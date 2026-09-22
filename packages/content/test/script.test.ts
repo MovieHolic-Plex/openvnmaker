@@ -122,3 +122,27 @@ test("auditScript — 조건 경로의 도착지·도달성과 진입 set 을 �
   const warned = auditScript({ ...base, scenes: [{ ...base.scenes[0], choices: [{ text: "가기", next: "b" }] }, ...base.scenes.slice(1)] } as VnScript);
   assert.ok(warned.some(issue => issue.severity === "warning" && /우선/.test(issue.message)));
 });
+
+test("auditScript — 조건부 입력이 건너뛰어진 상태에서 선택지가 모두 닫히면 경고한다", () => {
+  const gated = parseScript({ title: "t", subtitle: "", start: "s", characters: [], flags: {}, scenes: [
+    { id: "s", background: "title", lines: [
+      { speaker: null, text: "이름을 묻는다", when: { all: ["gate"] }, input: { flag: "name" } },
+      { speaker: null, text: "…" },
+    ], choices: [{ text: "계속", next: "end", when: { all: ["name"] } }] },
+    { id: "end", background: "title", lines: [{ speaker: null, text: "끝" }], ending: "끝" },
+  ] });
+  const issues = auditScript(gated);
+  assert.ok(issues.some(issue => issue.sceneId === "s" && issue.severity === "warning" && /선택지가 모두 닫힐/.test(issue.message)), JSON.stringify(issues));
+  // 실행 시 실제로 데드엔드인데 audit 이 조용하면 안 된다 — 경고는 있어야 한다.
+  assert.equal(issues.filter(issue => issue.severity === "error").length, 0, "일부 상태만 막히면 오류가 아니라 경고다");
+});
+
+test("auditScript — input 이 이미 세팅된 숫자 변수를 덮어쓰면 뒤의 add 를 잡아낸다", () => {
+  const overwrite = parseScript({ title: "t", subtitle: "", start: "a", characters: [], flags: { age: 0 }, scenes: [
+    { id: "a", background: "title", lines: [{ speaker: null, text: "x" }], choices: [{ text: "다섯", next: "ask", set: { age: 5 } }] },
+    { id: "ask", background: "title", lines: [{ speaker: null, text: "나이를 입력하세요", input: { flag: "age" } }], next: "gate" },
+    { id: "gate", background: "title", lines: [{ speaker: null, text: "x" }], choices: [{ text: "한 살 더", next: "end", add: { age: 1 } }] },
+    { id: "end", background: "title", lines: [{ speaker: null, text: "끝" }], ending: "끝" },
+  ] });
+  assert.ok(auditScript(overwrite).some(issue => issue.sceneId === "gate" && issue.severity === "error"), "input 이 쓴 문자열 위의 add 는 실행 시 실패한다");
+});

@@ -1,4 +1,28 @@
-import type { Character, Line, Scene } from "@vnmaker/content";
+import { characterExpressions, type Character, type Line, type Scene, type SpriteDirection, type VnScript } from "@vnmaker/content";
+import { spritesAt } from "../engine/selectors.js";
+
+/**
+ * 대사 줄의 배우 큐를 고친다. 배우가 바뀌면 전 배우의 의상·표정은 새 배우에게 유효하지 않다 —
+ * 남겨 두면 파서가 원고를 거부하거나 UI 에 안 떠서 되돌릴 수 없다. 새 배우가 실제로 가진 값만 남긴다.
+ * 배우가 그대로면(포즈·의상만 고칠 때) 기존 필드를 그대로 유지한다.
+ */
+export function mergeActorCue(script: VnScript, scene: Scene, lineIndex: number, slot: string, patch: Partial<SpriteDirection>): Line {
+  const line = scene.lines[lineIndex]!;
+  const current = spritesAt(scene, Math.max(0, lineIndex - 1)).find(sprite => sprite.slot === slot);
+  const old = line.sprites?.find(sprite => sprite.slot === slot);
+  const previous = old?.character ?? current?.character ?? null;
+  const merged: SpriteDirection = { slot, character: previous, ...old, ...patch };
+  const sprites = [...(line.sprites ?? []).filter(sprite => sprite.slot !== slot)];
+  if (merged.character === previous) return { ...line, sprites: [...sprites, merged] };
+  const actor = merged.character ? script.characters.find(row => row.id === merged.character) : undefined;
+  const { outfit, expression, ...rest } = merged;
+  const next: SpriteDirection = {
+    ...rest,
+    ...(outfit != null && actor && (actor.outfits ?? []).includes(outfit) ? { outfit } : {}),
+    ...(expression != null && actor && characterExpressions(actor).includes(expression) ? { expression } : {}),
+  };
+  return { ...line, sprites: [...sprites, next] };
+}
 
 /** 대사 순서 변경. 범위를 벗어난 목표는 양 끝으로 클램프하고, 같은 자리면 원본을 그대로 반환한다. */
 export function moveLine(scene: Scene, from: number, to: number): Scene {

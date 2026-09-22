@@ -58,3 +58,16 @@ test("splicing a returning edge cannot introduce a new direct loop and inactive 
   const removed = removeScene(source, "target", "source");
   assert.equal(removed.scenes[0]!.next, undefined); assert.equal(removed.scenes[0]!.ending, "이미 끝난 장면");
 });
+
+test("a replacement linked by BOTH a choice and a route repairs both through the bridge exit", () => {
+  const source = { ...story([
+    scene("source", { choices: [{ text: "다리", next: "bridge" }], routes: [{ when: { all: ["x"] }, next: "bridge" }], next: "finish" }),
+    scene("bridge", { next: "finish" }),
+    scene("finish", { ending: "끝" }),
+  ]), flags: { x: false } };
+  assert.equal(sceneRemovalIssue(source, "bridge", "source"), null);
+  const removed = parseScript(removeScene(source, "bridge", "source"));
+  const repaired = removed.scenes.find(scene => scene.id === "source")!;
+  assert.equal(repaired.choices![0]!.next, "finish");
+  assert.equal(repaired.routes![0]!.next, "finish", "route must not be left as next:undefined — the choiceTarget path covers it");
+});

@@ -153,9 +153,10 @@ function writeSaveRecord(key: string, data: SaveData, scope: string): boolean {
 
 // ---- 세이브 검증 -----------------------------------------------------------
 const FLAG_NAME = /^[a-z][a-z0-9_-]{0,63}$/i;
-function coerceFlags(value: unknown): StoryFlags | undefined {
+/** 저장·프리뷰 등 밖에서 온 플래그 맵을 허용 타입으로 좁힌다. */
+export function coerceFlags(value: unknown): StoryFlags | undefined {
   if (!isRecord(value)) return undefined;
-  return Object.fromEntries(Object.entries(value).filter(([key, flag]) => FLAG_NAME.test(key) && !["constructor", "prototype"].includes(key) && (typeof flag === "string" || typeof flag === "boolean" || typeof flag === "number" && Number.isFinite(flag)))) as StoryFlags;
+  return Object.fromEntries(Object.entries(value).slice(0, 200).filter(([key, flag]) => FLAG_NAME.test(key) && !["constructor", "prototype"].includes(key) && (typeof flag === "string" || typeof flag === "boolean" || typeof flag === "number" && Number.isFinite(flag)))) as StoryFlags;
 }
 /**
  * 복원한 선택 기억의 타입을 원고의 초기값과 맞춘다. 숫자 변수에 문자열이 들어 있으면 `add` 선택지가
@@ -190,7 +191,7 @@ export function loadSave(preview = false, namespace = ""): SaveData | null {
 function coerceSave(value: unknown, scope = ""): SaveData | null {
   if (!isRecord(value)) return null;
   const { sceneId, lineIndex, affection, savedAt } = value;
-  if (typeof sceneId !== "string" || sceneId.length === 0) return null;
+  if (typeof sceneId !== "string" || sceneId.length === 0 || sceneId.length > 20_000) return null;
   if (typeof lineIndex !== "number" || !Number.isFinite(lineIndex) || lineIndex < 0) return null;
   let savedScript: VnScript | undefined;
   let scriptKey: string | undefined;
@@ -211,7 +212,7 @@ function coerceSave(value: unknown, scope = ""): SaveData | null {
     ...(scriptKey ? { scriptKey } : {}),
     ...(flags ? { flags } : {}),
     ...(["scene", "choice", "ending"].includes(String(value["phase"])) ? { phase: value["phase"] as "scene" | "choice" | "ending" } : {}),
-    ...(Array.isArray(value["history"]) ? { history: value["history"].filter((entry): entry is { speaker: string | null; text: string; sceneId?: unknown; chapter?: unknown } => isRecord(entry) && (entry["speaker"] === null || typeof entry["speaker"] === "string") && typeof entry["text"] === "string").slice(-2000).map(entry => ({ speaker: entry.speaker, text: entry.text, ...(typeof entry.sceneId === "string" && entry.sceneId.length <= 20000 ? { sceneId: entry.sceneId } : {}), ...(typeof entry.chapter === "string" && entry.chapter.length <= 20000 ? { chapter: entry.chapter } : {}) })) } : {}),
+    ...(Array.isArray(value["history"]) ? { history: value["history"].filter((entry): entry is { speaker: string | null; text: string; sceneId?: unknown; chapter?: unknown } => isRecord(entry) && (entry["speaker"] === null || typeof entry["speaker"] === "string" && entry["speaker"].length <= 20_000) && typeof entry["text"] === "string" && entry["text"].length <= 20_000).slice(-2000).map(entry => ({ speaker: entry.speaker, text: entry.text, ...(typeof entry.sceneId === "string" && entry.sceneId.length <= 20000 ? { sceneId: entry.sceneId } : {}), ...(typeof entry.chapter === "string" && entry.chapter.length <= 20000 ? { chapter: entry.chapter } : {}) })) } : {}),
     ...(rollback ? { rollback } : {}),
   };
 }
@@ -352,7 +353,7 @@ export function readGallery(scope = ""): GalleryUnlocks {
   const value = readJson(scopedKey(GALLERY_KEY, scope));
   if (!isRecord(value)) return EMPTY_GALLERY;
   const cgs = Array.isArray(value["cgs"]) ? value["cgs"].filter((v): v is string => validBackgroundUrl(v)).slice(0, 500) : [];
-  const endings = Array.isArray(value["endings"]) ? value["endings"].filter((v): v is string => typeof v === "string" && v.length <= 200).slice(0, 100) : [];
+  const endings = Array.isArray(value["endings"]) ? value["endings"].filter((v): v is string => typeof v === "string" && v.length <= 20_000).slice(0, 100) : [];
   return { cgs, endings };
 }
 
@@ -370,6 +371,6 @@ export function unlockGalleryCg(url: string, scope = ""): GalleryUnlocks {
 
 export function unlockGalleryEnding(title: string, scope = ""): GalleryUnlocks {
   const current = readGallery(scope);
-  if (typeof title !== "string" || title === "" || title.length > 200 || current.endings.includes(title)) return current;
+  if (typeof title !== "string" || title === "" || title.length > 20_000 || current.endings.includes(title)) return current;
   return writeGallery({ ...current, endings: [...current.endings, title] }, scope);
 }

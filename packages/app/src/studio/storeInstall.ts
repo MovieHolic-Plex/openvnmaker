@@ -105,8 +105,9 @@ export function expressionKey(label: string): string {
     : undefined;
   if (alias) return alias;
   const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  // 영문 라벨이면 그대로 쓴다(64자 제한은 parse 의 characterKey 규칙).
-  return /^[a-z][a-z0-9-]{0,52}$/.test(slug) ? slug : `x-${hash32(trimmed)}`;
+  // 영문 라벨이면 그대로 쓴다 — 단, 원고의 characterKey 규칙을 그대로 적용해
+  // "constructor" 같은 프로토타입 멤버는 해시 키로 돌린다(표정 맵 조회가 상속 멤버를 읽지 않게).
+  return validCharacterKey(slug) ? slug : `x-${hash32(trimmed)}`;
 }
 
 function idSlug(text: string): string {
@@ -126,6 +127,27 @@ function mediaSource(manifest: StoreManifest, options: InstallOptions): string {
   return prefix === "" ? origin : `${origin}${prefix}${manifest.id}`;
 }
 
+// 업로더·생성 정보는 표시용 메타라 부재는 허용하지만, 문자열이 아닌 필드나 비정상적으로
+// 긴 값은 그대로 신뢰하지 않고 잘라낸다 — 설치 후 Inspector·크레딧에 그대로 노출된다.
+function parseManifestUploader(value: unknown): NonNullable<StoreManifest["uploader"]> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as Record<string, unknown>;
+  const handle = typeof row["handle"] === "string" ? row["handle"].slice(0, 100) : "";
+  const display = typeof row["display"] === "string" ? row["display"].slice(0, 100) : "";
+  if (!handle && !display) return undefined;
+  return { ...(handle ? { handle } : {}), ...(display ? { display } : {}) };
+}
+
+function parseManifestProvenance(value: unknown): NonNullable<StoreManifest["provenance"]> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as Record<string, unknown>;
+  const out: { generator?: string; model?: string; prompt?: string } = {};
+  if (typeof row["generator"] === "string" && row["generator"]) out.generator = row["generator"].slice(0, 200);
+  if (typeof row["model"] === "string" && row["model"]) out.model = row["model"].slice(0, 200);
+  if (typeof row["prompt"] === "string" && row["prompt"]) out.prompt = row["prompt"].slice(0, 20_000);
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** 검증된 매니페스트만 계획 단계로 보낸다. 여기서 막지 않으면 빈 URL 이 원고로 들어간다. */
 export function parseStoreManifest(value: unknown): StoreManifest {
   if (!value || typeof value !== "object") throw new StoreInstallError("스토어 응답을 해석하지 못했습니다.");
@@ -136,13 +158,14 @@ export function parseStoreManifest(value: unknown): StoreManifest {
   if (kind !== "stage" && kind !== "character" && kind !== "sound") throw new StoreInstallError(`지원하지 않는 자산 종류입니다: ${String(kind)}`);
   const license = row["license"];
   if (license !== "embedded" && license !== "attribution" && license !== "downloadable") throw new StoreInstallError(`알 수 없는 라이선스 등급입니다: ${String(license)}`);
-  if (typeof row["id"] !== "string" || row["id"] === "") throw new StoreInstallError("자산 id 가 없습니다.");
-  if (typeof row["name"] !== "string" || row["name"].trim() === "") throw new StoreInstallError("자산 이름이 없습니다.");
+  if (typeof row["id"] !== "string" || row["id"] === "" || row["id"].length > 200) throw new StoreInstallError("자산 id 가 없거나 너무 깁니다.");
+  if (typeof row["name"] !== "string" || row["name"].trim() === "" || row["name"].length > 200) throw new StoreInstallError("자산 이름이 없거나 너무 깁니다.");
   if (!Array.isArray(row["files"]) || row["files"].length === 0) throw new StoreInstallError("자산에 파일이 없습니다.");
+  if (row["files"].length > 64) throw new StoreInstallError("자산 파일이 너무 많습니다(최대 64개).");
   const files: StoreManifestFile[] = row["files"].map(file => {
     if (!file || typeof file !== "object") throw new StoreInstallError("자산 파일 항목이 올바르지 않습니다.");
     const entry = file as Record<string, unknown>;
-    if (typeof entry["role"] !== "string" || entry["role"] === "") throw new StoreInstallError("자산 파일에 역할이 없습니다.");
+    if (typeof entry["role"] !== "string" || entry["role"] === "" || entry["role"].length > 200) throw new StoreInstallError("자산 파일에 역할이 없거나 너무 깁니다.");
     return {
       role: entry["role"],
       ...(typeof entry["url"] === "string" ? { url: entry["url"] } : {}),
@@ -159,10 +182,11 @@ export function parseStoreManifest(value: unknown): StoreManifest {
     license,
     files,
     ...(Array.isArray(row["tags"]) ? { tags: row["tags"].filter((tag): tag is string => typeof tag === "string") } : {}),
-    // 색 표기만 받는다. 아무 문자열이나 통과시키면 원고의 캐릭터에 쓰레기 값이 들어간다.
-    ...(typeof row["chromaKey"] === "string" && /^#[0-9a-fA-F]{6}$/.test(row["chromaKey"]) ? { chromaKey: row["chromaKey"] } : {}),
-    ...(row["uploader"] && typeof row["uploader"] === "object" ? { uploader: row["uploader"] as NonNullable<StoreManifest["uploader"]> } : {}),
-    ...(row["provenance"] && typeof row["provenance"] === "object" ? { provenance: row["provenance"] as NonNullable<StoreManifest["provenance"]> } : {}),
+    // 색 표기만 받는다. 파서가 소문자 #00ff00 만 인정하니 대문자는 정규화하고,
+    // 다른 값은 필드 자체를 버린다 — 뒤에서 parseScript 가 던지면 저장 전이라도 부담이 크다.
+    ...(typeof row["chromaKey"] === "string" && row["chromaKey"].toLowerCase() === "#00ff00" ? { chromaKey: "#00ff00" } : {}),
+    ...(() => { const uploader = parseManifestUploader(row["uploader"]); return uploader ? { uploader } : {}; })(),
+    ...(() => { const provenance = parseManifestProvenance(row["provenance"]); return provenance ? { provenance } : {}; })(),
   };
 }
 
@@ -240,10 +264,18 @@ export function installPlan(manifest: StoreManifest): InstallPlan {
   // artwork id 는 role 슬러그에서 나온다 — 같은 role(또는 슬러그가 충돌하는 role)이 두 번 오면
   // id 가 겹쳐 저장 후 parseScript 가 실패하므로, 두 번째부터는 설치 대상에서 뺀다.
   const seen = new Set<string>();
+  // 표정 키도 같이 본다 — "Sad!"·"sad" 처럼 다른 라벨이 같은 expression 키로 슬러그되면
+  // expressionImages 에서 뒤 항목이 앞을 조용히 덮어쓴다.
+  const seenExpr = new Set<string>();
   const unique = files.filter(file => {
     const slug = idSlug(file.role);
     if (seen.has(slug)) { ignored.push(file.role); return false; }
     seen.add(slug);
+    if (file.expression !== undefined) {
+      const exprKey = `${file.outfit ?? ""}|${file.expression}`;
+      if (seenExpr.has(exprKey)) { ignored.push(file.role); return false; }
+      seenExpr.add(exprKey);
+    }
     return true;
   });
   return { files: unique, ignored };

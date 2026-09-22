@@ -19,6 +19,9 @@ export function editIssue(current: VnScript, next: VnScript): string | null {
     if (!textOnly || changed.length > 3) { parseScript(next); return null; }
     for (const scene of changed) {
       if (scene.lines.length > LIMITS.sceneLines) throw new Error(`한 씬에는 대사를 최대 ${LIMITS.sceneLines.toLocaleString()}줄까지 쓸 수 있습니다. 씬을 나누세요.`);
+      // 의상 큐는 그 배우가 선언한 의상인지 씬만 봐서는 알 수 없다 — 있으면 전체를 검사한다.
+      const hasOutfit = scene.sprites?.some(sprite => sprite.outfit != null) || scene.lines.some(line => line.sprites?.some(sprite => sprite.outfit != null));
+      if (hasOutfit) { parseScript(next); return null; }
       parseScene(scene);
     }
     return null;

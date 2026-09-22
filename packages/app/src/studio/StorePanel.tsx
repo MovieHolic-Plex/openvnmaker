@@ -24,6 +24,8 @@ interface Props {
   readonly onApplyToScene?: (artwork: Artwork) => void;
   /** 딥링크(openvnmaker://install/<id> → ?store-install=<id>)로 전달된 losia 자산 id — 패널이 활성화되면 자동 설치한다. */
   readonly autoInstallId?: string | undefined;
+  /** 지금 원고를 읽는다 — script prop 은 디바운스될 수 있어 비동기 설치의 커밋 기준으로는 이 getter 를 쓴다. */
+  readonly getLiveScript?: (() => VnScript) | undefined;
 }
 
 const KIND_LABELS = { all: "전체", stage: "무대", character: "인물", sound: "소리" } as const;
@@ -44,7 +46,7 @@ const NEW_CHARACTER = "__new__";
  * losia.online 은 CORS 때문에 게이트웨이 프록시(/api/store/*)를 지난다.
  * 설치는 파일을 브라우저 보관함에 넣고 프로젝트 아트로 등록한다 — 플레이어와 ZIP 번들이 같은 경로를 쓴다.
  */
-export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled, fixedKind, panelTestId = "store-panel", onApplyToScene, autoInstallId }: Props) {
+export function StorePanel({ active = true, script, projectEpoch, onChange, onInstalled, fixedKind, panelTestId = "store-panel", onApplyToScene, autoInstallId, getLiveScript }: Props) {
   const [sourceId, setSourceId] = useState<string>(STORE_SOURCES[0]!.id);
   const [sources, setSources] = useState<readonly typeof STORE_SOURCES[number][]>(STORE_SOURCES);
   const source = storeSourceById(sourceId);
@@ -136,6 +138,8 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
       }
       const artworkIds = new Set(result.artworks.map(asset => asset.id));
       const audioIds = new Set(result.audio.map(asset => asset.id));
+      // 설치 커밋은 살아있는 원고 위에서 한다 — 이 패널의 script prop 은 디바운스된 표시본일 수 있다.
+      const live = getLiveScript?.() ?? scriptRef.current;
       // 설치는 어느 캐릭터의 어떤 표정인지 이미 안다. 표정표에 걸어 주지 않으면 그림만 보관함에 쌓이고
       // 무대에는 아무것도 뜨지 않는다 — 원본이 초록 배경이면 그 색도 같이 걸어야 초록 상자가 안 보인다.
       const chroma = result.manifest.chromaKey;
@@ -168,9 +172,9 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
         ...(chroma === undefined ? {} : { chromaKey: chroma }),
       } : null;
       const next = parseScript({
-        ...scriptRef.current,
+        ...live,
         ...(touched ? { characters: [
-          ...scriptRef.current.characters.map(character => character.id !== targetCharacterId ? character : {
+          ...live.characters.map(character => character.id !== targetCharacterId ? character : {
             ...character,
             ...(chroma === undefined ? {} : { chromaKey: chroma }),
             ...(Object.keys(expressions).length ? { expressionImages: { ...character.expressionImages, ...expressions } } : {}),
@@ -181,8 +185,8 @@ export function StorePanel({ active = true, script, projectEpoch, onChange, onIn
           }),
           ...(newCharacter ? [newCharacter] : []),
         ] } : {}),
-        assets: [...(scriptRef.current.assets ?? []).filter(asset => !artworkIds.has(asset.id)), ...result.artworks],
-        audioAssets: [...(scriptRef.current.audioAssets ?? []).filter(asset => !audioIds.has(asset.id)), ...result.audio],
+        assets: [...(live.assets ?? []).filter(asset => !artworkIds.has(asset.id)), ...result.artworks],
+        audioAssets: [...(live.audioAssets ?? []).filter(asset => !audioIds.has(asset.id)), ...result.audio],
       });
       if (newCharacter) setCharacterId(newCharacter.id);
       onChange(next);

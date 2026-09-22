@@ -28,6 +28,8 @@ export function collectProjectAssets(script: VnScript): string[] {
   };
   for (const asset of script.assets ?? []) image(asset.url);
   for (const asset of script.audioAssets ?? []) paths.add(asset.url);
+  // 타이틀 음악도 수집한다 — 커스텀 업로드(/assets/user/)는 빠지면보낸 작품이 조용히 묵음이 된다.
+  if (script.titleBgm) paths.add(audioPath(script.titleBgm, "bgm"));
   for (const actor of script.characters) { for (const url of Object.values(actor.expressionImages ?? {})) image(url); for (const set of Object.values(actor.outfitImages ?? {})) for (const url of Object.values(set ?? {})) image(url); }
   for (const scene of script.scenes) {
     image(scene.backgroundUrl ?? `/assets/bg/${scene.background}.png`); image(scene.cgUrl); placement(scene.sprites);
@@ -49,6 +51,7 @@ export function rebaseProjectAssets(script: VnScript, replacements: ReadonlyMap<
   const sprites = (rows: readonly SpriteDirection[] | undefined) => rows?.map(row => row.poseUrl ? { ...row, poseUrl: replace(row.poseUrl) } : row);
   return parseScript({
     ...script,
+    ...(script.titleBgm?{titleBgm:replace(script.titleBgm)}:{}),
     ...(script.audioAssets?{audioAssets:script.audioAssets.map(asset=>({...asset,url:replace(asset.url)}))}:{}),
     ...(script.assets ? { assets: script.assets.map(asset => ({ ...asset, url: replace(asset.url) })) } : {}),
     characters: script.characters.map(character => ({ ...character, ...(character.expressionImages ? { expressionImages: Object.fromEntries(Object.entries(character.expressionImages).map(([expression, url]) => [expression, url ? replace(url) : url])) } : {}), ...(character.outfitImages ? { outfitImages: Object.fromEntries(Object.entries(character.outfitImages).map(([outfit, set]) => [outfit, Object.fromEntries(Object.entries(set ?? {}).map(([expression, url]) => [expression, url ? replace(url) : url]))])) } : {}) })),

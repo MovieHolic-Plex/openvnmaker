@@ -95,13 +95,16 @@ export async function openProjectFolder(root:FolderHandle,onProgress?:Progress,f
   }
   const restored=rebaseRestoredScript(script,replacements);
   await ensureAssetServer();count=0;
+  // 검증과 커밋을 분리한다 — 파일 단위로 저장하면 도중 실패가 반쪽짜리 보관함을 남긴다.
+  const pending:StoredAsset[]=[];
   for(const entry of raw.files){
     onProgress?.({phase:"restore",complete:count++,total:raw.files.length});
     if(entry.path.startsWith("assets/audio/")||unchanged.has(entry.path))continue;
     // Recheck because external applications can change files between validation and copying.
     const asset=await describe(entry.path,await read(entry),false);
-    const stored:StoredAsset={...asset,originalName:entry.path.split("/").at(-1)!,createdAt:Date.now()};await storeAssets([stored]);
+    pending.push({...asset,originalName:entry.path.split("/").at(-1)!,createdAt:Date.now()});
   }
+  if(pending.length)await storeAssets(pending);
   onProgress?.({phase:"restore",complete:raw.files.length,total:raw.files.length});return restored;
 }
 

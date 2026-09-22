@@ -27,6 +27,8 @@ export function BgmPlayer({ track, volume, unlocked, fadeSeconds=1.2, onError }:
   const bRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const gains=useRef({active:0,idle:0});
+  // play() 가 거절(자동재생 정책·디코딩 지연)된 상태인지 — 다음 제스처에서 재시도하기 위한 표지.
+  const failedRef = useRef(false);
   const [slots, setSlots] = useState<{ a: string | null; b: string | null; active: SlotName }>({
     a: null,
     b: null,
@@ -50,7 +52,7 @@ export function BgmPlayer({ track, volume, unlocked, fadeSeconds=1.2, onError }:
     if (!active) return;
     const hasTrack=!!(slots.active==="a"?slots.a:slots.b);
     active.volume = 0;
-    if(hasTrack){active.currentTime=0;void active.play().catch(() => undefined);}else active.pause();
+    if(hasTrack){active.currentTime=0;void active.play().catch(() => { failedRef.current = true; });}else active.pause();
     const fadeMs=Math.max(0,fadeRef.current)*1000;
     const startedAt = performance.now();
     const idleFrom = gains.current.active;
@@ -76,6 +78,28 @@ export function BgmPlayer({ track, volume, unlocked, fadeSeconds=1.2, onError }:
       rafRef.current = null;
     };
   }, [slots, unlocked]);
+
+  // play() 한 번이 거절돼도 다음 제스처·탭 복귀·canplay 에서 재시도한다 — 한 번 실패가
+  // 그 세션의 무음을 고정하지 않게 한다(첫 클릭 타이밍에 정책이 아직 안 풀리는 경우가 있다).
+  useEffect(() => {
+    if (!unlocked) return;
+    const retry = () => {
+      if (!failedRef.current) return;
+      const active = slots.active === "a" ? aRef.current : bRef.current;
+      const hasTrack = !!(slots.active === "a" ? slots.a : slots.b);
+      if (!active || !hasTrack || !active.paused) return;
+      failedRef.current = false;
+      void active.play().catch(() => { failedRef.current = true; });
+    };
+    window.addEventListener("pointerdown", retry);
+    window.addEventListener("keydown", retry);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      window.removeEventListener("pointerdown", retry);
+      window.removeEventListener("keydown", retry);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [unlocked, slots]);
 
   useEffect(() => {
     const active = slots.active === "a" ? aRef.current : bRef.current;

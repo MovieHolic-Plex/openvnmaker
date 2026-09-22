@@ -32,7 +32,7 @@ import { saveVersion } from "./studio/versions.js";
 import { parseEditorPosition, previewFlagsFor, type PreviewChoices } from "./studio/editorPosition.js";
 import { editIssue } from "./studio/editGuard.js";
 import { duplicateLine, insertLines, moveLine, removeLine } from "./studio/lineOperations.js";
-import { moveScene, renameScene } from "./studio/sceneOperations.js";
+import { insertSceneAfter, moveScene, renameScene } from "./studio/sceneOperations.js";
 import { collectMediaReferences, findMissingMedia, type MediaReference } from "./studio/mediaIntegrity.js";
 import { ensureAssetServer } from "./storage/projectAssets.js";
 import { fetchProjectScript } from "./api/gateway.js";
@@ -82,7 +82,8 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
   // 딥링크로 들어왔으면 아트 디렉션으로 바로 연다 — 스토어 패널이 그 자산 설치를 시작한다.
   useEffect(() => { if (storeInstallId) setView("assets"); }, [storeInstallId]);
   const [previewChoices, setPreviewChoices] = useState<PreviewChoices>(position.choices ?? {});
-  const previewFlags = useMemo(() => previewFlagsFor(script, previewChoices), [script, previewChoices]);
+  // 실행 취소·다시 실행 이력도 자산 참조로 센다 — 카드를 지워도 Ctrl+Z 로 되돌렸을 때 파일이 남아 있어야 한다.
+  const undoTrail = useMemo(() => [...history.past, ...history.future], [history]);
   const [artOnly, setArtOnly] = useState(false);
   const [rightTab, setRightTab] = useState<"ai" | "inspector">("inspector");
   // 호스트 능력 기술서 — 게이트웨이 없는 배포에서는 게이트웨이 전용 버튼을 숨긴다.
@@ -113,6 +114,7 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
   const pendingFocus = useRef(false);
   const [previewWidth, setPreviewWidth] = useState(720);
   const scene = script.scenes.find(row => row.id === sceneId) ?? script.scenes[0]!;
+  const previewFlags = useMemo(() => previewFlagsFor(script, previewChoices, scene.id), [script, previewChoices, scene.id]);
   const index = Math.min(lineIndex, scene.lines.length - 1);
   const line = scene.lines[index]!;
   const sceneNumber = script.scenes.findIndex(row => row.id === scene.id) + 1;
@@ -229,11 +231,8 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
   function addScene() {
     if (script.scenes.length >= LIMITS.scenes) { setNotice(`씬은 최대 ${LIMITS.scenes}개까지 만들 수 있습니다. 씬을 합치거나 새 작품으로 나누세요.`); return; }
     const id = newSceneId();
-    const { id: _id, chapter: _chapter, lines: _lines, ...inherited } = scene;
-    const next: Scene = { ...inherited, id, chapter: "새로운 장면", lines: [{ speaker: null, text: "이곳에서 새로운 이야기가 시작된다." }] };
-    const { choices: _choices, ending: _ending, ...previous } = scene;
-    const movedExit = scene.choices?.length ? "선택지" : scene.ending ? "엔딩" : null;
-    if (!edit({ ...script, scenes: script.scenes.flatMap(row => row.id === scene.id ? [{ ...previous, next: id }, next] : [row]) })) return;
+    const { script: inserted, movedExit } = insertSceneAfter(script, scene, id);
+    if (!edit(inserted)) return;
     selectScene(id); setView("stage"); setRightTab("inspector"); setNotice(movedExit ? `현재 씬 뒤에 새 씬을 연결했습니다. 기존 ${movedExit}는 새 씬으로 옮겼습니다.` : "현재 씬 뒤에 새 씬을 연결했습니다.");
   }
   function addLine() {
@@ -320,6 +319,9 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
     if (token === importToken.current && fileInput.current) fileInput.current.value = "";
   }
   const assetChange = useCallback((next: VnScript) => { if (projectEpoch === projectEpochRef.current) edit(next); }, [edit, projectEpoch]);
+  // 아트 라이브러리에는 디바운스된 분석용 원고를 보여 주지만, 비동기 작업(이미지 생성·스토어 설치·가져오기)의
+  // 커밋은 이 getter 가 주는 지금 원고 위에 쌓아야 한다 — 옛 스냅숏 위에 커밋하면 직전 편집이 조용히 되돌아간다.
+  const getLiveScript = useCallback((): VnScript => presentRef.current, []);
   // patchScene 은 원고가 바뀔 때마다 새 함수가 되어 memo 를 무력화한다 — 숨겨진 아트 라이브러리는 ref 로 현재 장면을 읽는다.
   const assetPatchScene = useCallback((patch: Partial<Scene>) => { const current = presentRef.current; const target = positionRef.current.scene; edit({ ...current, scenes: current.scenes.map(row => row.id === target.id ? { ...target, ...patch } : row) }); }, [edit]);
   const lowered = query.toLocaleLowerCase();
@@ -366,10 +368,10 @@ export function StudioApp({recoveryInitial}:{recoveryInitial?:ReturnType<typeof 
           <div className="scene-exits"><Icon name={scene.choices?.length ? "graph" : "arrow"} size={13} />{scene.choices?.length ? scene.choices.map((choice, i) => <button key={i} onClick={() => selectScene(choice.next)}>{choice.text}<Icon name="chevron" size={11} /></button>) : scene.ending ? <span>ENDING <b>{scene.ending}</b></span> : <button onClick={() => scene.next && selectScene(scene.next)}>다음 장면 <b>{script.scenes.find(row => row.id === scene.next)?.chapter ?? "미연결"}</b><Icon name="chevron" size={11} /></button>}</div></section>
         </>}
         {view === "graph" && <StoryMap script={script} selected={scene.id} onSelect={openScene} />}
-        <div className="full-workspace art-workspace" hidden={view !== "assets"}><MemoAssetLibrary generationEnabled={true} active={view === "assets"} projectEpoch={projectEpoch} script={view === "assets" ? script : analysisScript} scene={view === "assets" ? scene : analysisScene} onChange={assetChange} onPatchScene={assetPatchScene} autoInstallId={storeInstallId || undefined} /></div>
+        <div className="full-workspace art-workspace" hidden={view !== "assets"}><MemoAssetLibrary generationEnabled={true} active={view === "assets"} projectEpoch={projectEpoch} script={view === "assets" ? script : analysisScript} scene={view === "assets" ? scene : analysisScene} getLiveScript={getLiveScript} undoTrail={undoTrail} onChange={assetChange} onPatchScene={assetPatchScene} autoInstallId={storeInstallId || undefined} /></div>
         {view === "characters" && <CharacterManager script={script} onChange={edit}/>}
       </main>
-      <aside className="studio-inspector"><div className="right-tabs" role="tablist" aria-label="작업 패널"><button type="button" role="tab" aria-selected={rightTab === "ai"} onClick={() => setRightTab("ai")}><Icon name="spark" />AI</button><button type="button" role="tab" aria-selected={rightTab === "inspector"} onClick={() => setRightTab("inspector")}><Icon name="settings" />속성</button></div><div className="right-panel-scroll"><div hidden={rightTab !== "ai"}><MemoAiPanel active={rightTab === "ai"} script={rightTab === "ai" ? script : analysisScript} scene={rightTab === "ai" ? scene : analysisScene} lineIndex={index} onApply={applyAiProposal} /><div className="scene-notes"><p className="eyebrow">SCENE DIRECTION</p><h2>{sceneTitle(scene)}</h2><img src={backgroundSrc(scene)} alt="장면 아트" /><p>{scene.artBrief || "이 장면의 감정과 시각적 방향을 속성 패널에 기록하세요."}</p><div><span>{scene.lines.length}줄</span><span>{scene.cgUrl ? "EVENT CG" : "BACKGROUND"}</span></div><button className="studio-button" onClick={() => setView("assets")}><Icon name="image" />아트 디렉션 열기</button><button className="studio-button" onClick={() => setView("production")}><Icon name="clock" />전체 원고 검수</button></div></div><div hidden={rightTab !== "inspector"}><Inspector script={script} scene={scene} lineIndex={index} patchScene={patchScene} patchLine={patchLine} onChange={edit} onAddLine={addLine} onInsertLines={insertPastedLines} onRenameScene={renameCurrentScene} textRef={lineTextRef} projectEpoch={projectEpoch} /></div></div></aside>
+      <aside className="studio-inspector"><div className="right-tabs" role="tablist" aria-label="작업 패널"><button type="button" role="tab" aria-selected={rightTab === "ai"} onClick={() => setRightTab("ai")}><Icon name="spark" />AI</button><button type="button" role="tab" aria-selected={rightTab === "inspector"} onClick={() => setRightTab("inspector")}><Icon name="settings" />속성</button></div><div className="right-panel-scroll"><div hidden={rightTab !== "ai"}><MemoAiPanel active={rightTab === "ai"} script={rightTab === "ai" ? script : analysisScript} scene={rightTab === "ai" ? scene : analysisScene} lineIndex={index} onApply={applyAiProposal} /><div className="scene-notes"><p className="eyebrow">SCENE DIRECTION</p><h2>{sceneTitle(scene)}</h2><img src={backgroundSrc(scene)} alt="장면 아트" /><p>{scene.artBrief || "이 장면의 감정과 시각적 방향을 속성 패널에 기록하세요."}</p><div><span>{scene.lines.length}줄</span><span>{scene.cgUrl ? "EVENT CG" : "BACKGROUND"}</span></div><button className="studio-button" onClick={() => setView("assets")}><Icon name="image" />아트 디렉션 열기</button><button className="studio-button" onClick={() => setView("production")}><Icon name="clock" />전체 원고 검수</button></div></div><div hidden={rightTab !== "inspector"}><Inspector script={script} scene={scene} lineIndex={index} patchScene={patchScene} patchLine={patchLine} onChange={edit} onAddLine={addLine} onInsertLines={insertPastedLines} onRenameScene={renameCurrentScene} textRef={lineTextRef} projectEpoch={projectEpoch} undoTrail={undoTrail} /></div></div></aside>
     </div>
     <footer className="studio-status"><span><i />{saveError ? "저장 상태 확인 필요" : autosave.pending ? "현재 원고 저장 중…" : "이 브라우저에 자동 저장"}</span><div><span>{script.scenes.length} scenes</span><span>{totalLines} lines</span><span>예상 {scriptDuration}</span><span>{script.scenes.filter(row => row.ending).length} endings</span></div><button type="button" className={errors.length ? "has-error" : ""} onClick={() => { if (showIssues) closeIssues(); else setShowIssues(true); }} data-testid="studio-validation"><Icon name={allIssues.length ? "warning" : "check"} size={12} />{errors.length ? `수정 필요 ${errors.length}` : allIssues.length ? `검토 ${allIssues.length}건` : "스토리 연결 정상"}</button></footer>
     {notice && <div className="studio-toast" role="status">{notice}<button className="icon-button" aria-label="알림 닫기" onClick={() => setNotice("")}><Icon name="close" size={13} /></button></div>}

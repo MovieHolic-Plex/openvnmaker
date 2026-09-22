@@ -5,7 +5,8 @@ import type { Expression, Line, Scene, SpriteDirection, VnScript, WeatherEffect 
 import { memo, useEffect, useMemo, useState, type RefObject } from "react";
 import { Icon } from "./Icon.js";
 import { sceneTitle } from "./project.js";
-import { splitPastedText, stripSpeakerPrefix } from "./lineOperations.js";
+import { mergeActorCue, splitPastedText, stripSpeakerPrefix } from "./lineOperations.js";
+import { appendChoice, directSceneExit } from "./sceneOperations.js";
 import { speakerName, spritesAt } from "../engine/selectors.js";
 
 export const expressionLabel = (expression: string) => ({ neutral: "기본", smile: "미소", sad: "슬픔", surprised: "놀람" })[expression] ?? expression;
@@ -35,6 +36,8 @@ interface Props {
   textRef?: RefObject<HTMLTextAreaElement | null>;
   /** 스토어 설치가 끝난 뒤 프로젝트가 바뀌었는지 가려 내는 시대 값. */
   projectEpoch?: number;
+  /** 실행 취소·다시 실행 이력의 원고 — 음원 삭제 시 파일을 지울지 가리는 참조로 쓴다. */
+  undoTrail?: readonly VnScript[];
 }
 
 /** 장면 연결 select 의 옵션 목록. id·제목 서명이 같으면 다시 만들지 않는다 — 장편에서 키 입력마다 256개 option 을 만들 이유가 없다. */
@@ -49,16 +52,17 @@ function SceneIdField({ sceneId, onRename }: { sceneId: string; onRename: (id: s
   return <label className="studio-field">씬 ID<input data-testid="studio-scene-id" aria-label="씬 ID" value={draft} maxLength={64} spellCheck={false} onChange={event => { setDraft(event.target.value); setError(""); }} onBlur={commit} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); commit(); } if (event.key === "Escape") { setDraft(sceneId); setError(""); } }} />{error ? <small role="alert" className="field-error">{error}</small> : <small className="field-help">바꾸면 시작 위치·다음 씬·선택지 연결이 함께 갱신됩니다.</small>}</label>;
 }
 
-export function Inspector({ script, scene, lineIndex, patchScene, patchLine, onChange, onAddLine, onInsertLines, onRenameScene, textRef, projectEpoch }: Props) {
+export function Inspector({ script, scene, lineIndex, patchScene, patchLine, onChange, onAddLine, onInsertLines, onRenameScene, textRef, projectEpoch, undoTrail }: Props) {
   const line = scene.lines[lineIndex]!;
   const optionKey = script.scenes.map(row => `${row.id}\u0001${row.chapter ?? ""}`).join("\n");
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 서명이 같으면 옵션 목록이 같다.
   const optionScenes = useMemo(() => script.scenes, [optionKey]);
   const remaining = LIMITS.text - line.text.length;
-  function patchActor(slot:string,patch:Partial<SpriteDirection>){const current=spritesAt(scene,Math.max(0,lineIndex-1)).find(sprite=>sprite.slot===slot);const old=line.sprites?.find(sprite=>sprite.slot===slot);patchLine({...line,sprites:[...(line.sprites??[]).filter(sprite=>sprite.slot!==slot),{slot,character:old?.character??current?.character??null,...old,...patch}]});}
+  function patchActor(slot:string,patch:Partial<SpriteDirection>){patchLine(mergeActorCue(script,scene,lineIndex,slot,patch));}
   function exit(value: string) {
-    const { choices: _choices, next: _next, ending: _ending, ...rest } = scene;
-    patchScene({ ...rest, ...(value === "ending" ? { ending: scene.chapter || "이야기의 끝" } : { next: value }) });
+    // 직접 출구(엔딩/다음 씬)를 고르면 조건 연결은 지운다 — 남겨 두면 런타임이 routes 를 먼저
+    // 평가해서 고른 출구가 조용히 무시된다.
+    patchScene(directSceneExit(scene, value));
   }
   return <div className="inspector-content">
     <div className="section-kicker">DIALOGUE <span>{String(lineIndex + 1).padStart(2, "0")}</span></div>
@@ -70,7 +74,7 @@ export function Inspector({ script, scene, lineIndex, patchScene, patchLine, onC
       onInsertLines(lines, line.text.trim() === "");
     }} />{remaining <= 2000 && <small className={`capacity-hint ${remaining <= 0 ? "is-full" : ""}`} data-testid="studio-line-capacity">{remaining.toLocaleString()}자 남음 · 최대 {LIMITS.text.toLocaleString()}자</small>}<small className="field-help">Ctrl+Enter 로 다음 줄 · 여러 줄을 붙여넣으면 줄마다 나눕니다</small></label>
     <div className="field-pair"><label className="studio-field">화자<select aria-label="화자" value={line.speaker ?? ""} onChange={event => { const speaker = (event.target.value || null) as Line["speaker"]; const actor = speaker ? script.characters.find(c => c.id === speaker) : undefined; const text = actor ? stripSpeakerPrefix(line.text, actor) : line.text; patchLine({ ...line, speaker, text }); }}><option value="">내레이션</option>{!script.characters.some(actor=>actor.id==="me") && script.scenes.some(row=>row.lines.some(line=>line.speaker==="me")) && <option value="me">기존 주인공 (me)</option>}{script.characters.map(character => <option key={character.id} value={character.id}>{character.name}</option>)}</select></label><label className="studio-field">표정<select aria-label="표정" value={line.expression ?? ""} onChange={event => { const { expression: _expression, ...rest } = line; patchLine(event.target.value ? { ...rest, expression: event.target.value as Expression } : rest); }}><option value="">유지</option>{characterExpressions(script.characters.find(actor=>actor.id===line.speaker)).map(value => <option key={value} value={value}>{expressionLabel(value)}</option>)}</select></label></div>
-    <AudioLibrary script={script} onChange={onChange} projectEpoch={projectEpoch}/><label className="studio-field">보이스<select aria-label="대사 보이스" value={line.voice??""} onChange={event=>{const {voice:old,...rest}=line;patchLine(event.target.value?{...rest,voice:event.target.value}:rest);}}><option value="">없음</option><AudioOptions script={script} kind="voice" current={line.voice}/></select></label>
+    <AudioLibrary script={script} onChange={onChange} projectEpoch={projectEpoch} undoTrail={undoTrail}/><label className="studio-field">보이스<select aria-label="대사 보이스" value={line.voice??""} onChange={event=>{const {voice:old,...rest}=line;patchLine(event.target.value?{...rest,voice:event.target.value}:rest);}}><option value="">없음</option><AudioOptions script={script} kind="voice" current={line.voice}/></select></label>
     <label className="studio-field">효과음<select aria-label="대사 효과음" value={line.sfx ?? ""} onChange={event => { const { sfx: _sfx, ...rest } = line; patchLine(event.target.value ? { ...rest, sfx: event.target.value } : rest); }}><option value="">없음</option><AudioOptions script={script} kind="sfx" current={line.sfx}/>{Object.entries(SFX).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
     <label className="check-field"><input type="checkbox" checked={line.shake ?? false} onChange={event => patchLine({ ...line, shake: event.target.checked })} />화면 흔들림</label>
     <label className="studio-field" style={{ marginTop: 18 }}>이 대사에서 배경 전환<select aria-label="이 대사에서 배경 전환" data-testid="studio-line-background" value={line.backgroundUrl ?? ""} onChange={event => { const { backgroundUrl: _background, ...rest } = line; patchLine(event.target.value ? { ...rest, backgroundUrl: event.target.value } : rest); }}><option value="">이전 배경 유지</option>{line.backgroundUrl && !script.assets?.some(asset => asset.kind === "background" && asset.url === line.backgroundUrl) && <option value={line.backgroundUrl}>현재 지정된 배경</option>}{script.assets?.filter(asset => asset.kind === "background").map(asset => <option value={asset.url} key={asset.id}>{asset.name}</option>)}</select></label>
@@ -104,6 +108,6 @@ export function Inspector({ script, scene, lineIndex, patchScene, patchLine, onC
     <div className="section-kicker">STORY FLOW <Icon name="graph" size={14} /></div>
     {scene.choices?.length ? <div className="choice-fields">{scene.choices.map((choice, index) => <div className="choice-edit" key={index}><div className="choice-edit-heading"><span>선택지 {index + 1}</span><button type="button" className="icon-button" aria-label={`선택지 ${index + 1} 삭제`} onClick={() => { const choices = scene.choices!.filter((_, i) => i !== index); if (choices.length) patchScene({ ...scene, choices }); else exit("ending"); }}><Icon name="close" size={13} /></button></div><input aria-label={`선택지 ${index + 1} 문구`} value={choice.text} maxLength={LABEL_MAX} onChange={event => patchScene({ ...scene, choices: scene.choices!.map((row, i) => i === index ? { ...row, text: event.target.value } : row) }, `choice-${scene.id}-${index}`)} /><select aria-label={`선택지 ${index + 1} 연결`} value={choice.next} onChange={event => patchScene({ ...scene, choices: scene.choices!.map((row, i) => i === index ? { ...row, next: event.target.value } : row) })}><SceneOptions scenes={optionScenes} /></select><ChoiceStateEditor choice={choice} index={index} flags={script.flags??{}} onChange={next=>patchScene({...scene,choices:scene.choices!.map((row,i)=>i===index?next:row)})}/></div>)}</div> : <label className="studio-field">이 씬이 끝나면<select aria-label="씬 종료 방식" value={scene.ending ? "ending" : scene.next ?? ""} onChange={event => exit(event.target.value)}><option value="" disabled>연결할 씬 선택</option><option value="ending">엔딩 표시</option><SceneOptions scenes={optionScenes} /></select></label>}
     {scene.ending && !scene.choices?.length && <label className="studio-field">엔딩 제목<input value={scene.ending} maxLength={LABEL_MAX} onChange={event => patchScene({ ...scene, ending: event.target.value }, `ending-${scene.id}`)} /></label>}
-    <button className="studio-button full-width" type="button" disabled={(scene.choices?.length ?? 0) >= LIMITS.choices} onClick={() => { const { ending: _ending, next: _next, ...rest } = scene; const target = scene.next ?? script.scenes.find(row => row.id !== scene.id)?.id ?? scene.id; patchScene({ ...rest, choices: [...(scene.choices ?? []), { text: "새로운 선택", next: target }] }); }}><Icon name="plus" />선택지 추가</button>
+    <button className="studio-button full-width" type="button" disabled={(scene.choices?.length ?? 0) >= LIMITS.choices} onClick={() => { const target = scene.next ?? scene.routes?.[0]?.next ?? script.scenes.find(row => row.id !== scene.id)?.id ?? scene.id; patchScene(appendChoice(scene, target)); }}><Icon name="plus" />선택지 추가</button>
   </div>;
 }

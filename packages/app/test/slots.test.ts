@@ -97,7 +97,7 @@ test("옛날 단일 키(vnmaker:save)도 이어서 읽기 대상으로 살아 �
 
 // ---- 2026-09-14 적대적 리뷰 회귀 테스트 ------------------------------------------
 import { script as sample, type VnScript } from "@vnmaker/content";
-import { invalidateStorageCache, loadSave, loadSettings, manuscriptFor, readLineKeys, readQuickSlot, reconcileFlags, rememberRead, writeQuickSlot, writeSettings, READ_LIMIT } from "../src/storage/persist.js";
+import { invalidateStorageCache, loadSave, loadSettings, manuscriptFor, readGallery, readLineKeys, readQuickSlot, reconcileFlags, rememberRead, unlockGalleryEnding, writeQuickSlot, writeSettings, READ_LIMIT } from "../src/storage/persist.js";
 import { manuscriptFingerprint } from "../src/storage/manuscriptKey.js";
 
 const tiny: VnScript = { title: "원고 A", subtitle: "", start: "s", flags: { score: 0, route: "none" }, characters: [], scenes: [{ id: "s", background: "title", lines: [{ speaker: null, text: "a" }], choices: [{ text: "더하기", next: "s", add: { score: 1 } }] }] };
@@ -211,4 +211,14 @@ test("세이브의 롤백 기록은 검증을 거쳐 읽히고 잘못된 항목�
   store.set("vnmaker:auto", JSON.stringify({ sceneId: "s", lineIndex: 1, affection: 0, savedAt: 1, rollback: [{ sceneId: "s", lineIndex: 0, affection: 0, flags: { score: 1, __proto__: { x: 1 } }, phase: "scene", historyLength: 0 }, { sceneId: "", lineIndex: 0 }, { sceneId: "s", lineIndex: -1 }, "garbage", { sceneId: "s", lineIndex: 2.7, affection: "x", phase: "ending", historyLength: -3 }] }));
   const auto = readAutoSlot();
   assert.deepEqual(auto?.rollback, [{ sceneId: "s", lineIndex: 0, affection: 0, flags: { score: 1 }, phase: "scene", historyLength: 0 }, { sceneId: "s", lineIndex: 2, affection: 0, flags: {}, phase: "scene", historyLength: 0 }]);
+});
+
+test("갤러리 엔딩 제목은 쓰기·읽기 한도가 같다 — 파서 한도(20,000)까지 저장되고 다시 읽힌다", () => {
+  const before = readGallery();
+  const long = "제목".repeat(150); // 300자 — 옛 읽기 한도(200)를 넘지만 파서 한도 안이다.
+  unlockGalleryEnding(long);
+  assert.ok(readGallery().endings.includes(long), "300자 엔딩 제목이 읽기에서 사라지면 안 된다");
+  unlockGalleryEnding("y".repeat(20_001));
+  assert.equal(readGallery().endings.filter(title => title.startsWith("y")).length, 0, "20,000자를 넘는 제목은 저장되지 않는다");
+  assert.equal(readGallery().endings.length, before.endings.length + 1);
 });

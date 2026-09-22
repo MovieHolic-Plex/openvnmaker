@@ -8,6 +8,6 @@ export function manuscriptKey(value:unknown):string {
 /** 원고 보관함 키로 쓰는 짧은 지문. FNV-1a 64비트 — edition.ts 의 판정과 같은 폭이다. */
 export function manuscriptFingerprint(value:unknown):string {
   let hash=0xcbf29ce484222325n;
-  for(const char of manuscriptKey(value))hash=BigInt.asUintN(64,(hash^BigInt(char.charCodeAt(0)))*0x100000001b3n);
+  for(const char of manuscriptKey(value))hash=BigInt.asUintN(64,(hash^BigInt(char.codePointAt(0)!))*0x100000001b3n);
   return hash.toString(36);
 }

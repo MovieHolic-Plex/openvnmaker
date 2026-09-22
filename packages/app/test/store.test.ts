@@ -141,6 +141,40 @@ test("소리 자산은 재생 길이와 함께 AudioAsset 이 된다", () => {
   assert.ok(audio[0]?.provenance && (audio[0].provenance as MediaProvenance).source?.includes("losia.online"));
 });
 
+test("매니페스트 경계 — 비정상적으로 긴 필드와 파일 수는 거부한다", () => {
+  assert.throws(() => parseStoreManifest({ ...stage, id: "x".repeat(201) }), StoreInstallError);
+  assert.throws(() => parseStoreManifest({ ...stage, name: "x".repeat(201) }), StoreInstallError);
+  assert.throws(() => parseStoreManifest({ ...stage, files: [{ role: "r".repeat(201), url: "https://losia.online/x" }] }), StoreInstallError);
+  assert.throws(() => parseStoreManifest({ ...stage, files: Array.from({ length: 65 }, (_, i) => ({ role: `f${i}`, url: "https://losia.online/x" })) }), StoreInstallError);
+});
+
+test("chromaKey 는 대문자를 정규화하고 #00ff00 이 아니면 필드를 버린다", () => {
+  assert.equal(parseStoreManifest({ ...stage, chromaKey: "#00FF00" }).chromaKey, "#00ff00");
+  // 다른 색은 파서가 거절할 값이므로 저장 전에 조용히 버린다 — 통과시키면 설치가 parseScript 에서 터진다.
+  assert.equal(parseStoreManifest({ ...stage, chromaKey: "#ff0000" }).chromaKey, undefined);
+  assert.equal(parseStoreManifest({ ...stage, chromaKey: "green" }).chromaKey, undefined);
+});
+
+test("업로더·생성 정보는 문자열 필드만 일정 길이로 잘라 담는다", () => {
+  const parsed = parseStoreManifest({ ...stage, uploader: { handle: 7, display: "표시" }, provenance: { generator: "gen", prompt: 12 } });
+  assert.deepEqual(parsed.uploader, { display: "표시" });
+  assert.deepEqual(parsed.provenance, { generator: "gen" });
+  assert.equal(parseStoreManifest({ ...stage, uploader: "문자열" }).uploader, undefined);
+  assert.equal(parseStoreManifest({ ...stage, uploader: { handle: "h".repeat(200) } }).uploader?.handle?.length, 100);
+});
+
+test("다른 표정 라벨이 같은 키로 슬러그되면 두 번째는 설치 대상에서 뺀다", () => {
+  // role 슬러그는 다르지만 표정 키는 같은 별칭으로 수렴 — 뒤 항목이 앞을 덮어쓰지 않게 한다.
+  const character: StoreManifest = { ...stage, id: "ch1234567890ab", kind: "character", name: "이서린", files: [
+    { role: "expression:슬픔", url: "https://losia.online/api/assets/ch1234567890ab/files/a" },
+    { role: "expression:sad", url: "https://losia.online/api/assets/ch1234567890ab/files/b" },
+  ] };
+  const plan = installPlan(character);
+  assert.equal(plan.files.length, 1);
+  assert.equal(plan.files[0]?.expression, "sad");
+  assert.deepEqual(plan.ignored, ["expression:sad"]);
+});
+
 test("다운로드는 네트워크 오류·5xx 를 재시도하고 4xx·중단은 즉시 실패한다", async () => {
   const { downloadWithRetry } = await import("../src/studio/installFromStore.js");
   const source = (fail: (calls: number) => Error | null) => {

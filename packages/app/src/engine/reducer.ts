@@ -80,8 +80,12 @@ function rebuildPast(script: VnScript, entries: readonly RollbackEntry[] | undef
   for (const entry of entries ?? []) {
     const scene = findScene(script, entry.sceneId);
     if (!scene) continue;
-    const lineIndex = Math.min(scene.lines.length - 1, Math.max(0, Math.floor(entry.lineIndex)));
-    past.push({ sceneId: entry.sceneId, lineIndex, affection: entry.affection, flags: { ...script.flags, ...entry.flags }, phase: entry.phase === "choice" && scene.choices?.length ? "choice" : "scene", endingTitle: null, history: history.slice(0, Math.max(0, Math.min(history.length, entry.historyLength))) });
+    const clamped = Math.min(scene.lines.length - 1, Math.max(0, Math.floor(entry.lineIndex)));
+    const flags = { ...script.flags, ...entry.flags };
+    // 저장 이후 원고가 바뀌어 그 위치의 줄이 when 에 가려졌으면 다음 보이는 줄로 보정한다 —
+    // 되돌리기가 보이지 않아야 할 줄을 다시 렌더하면 안 된다.
+    const visible = nextVisible(scene, clamped, flags);
+    past.push({ sceneId: entry.sceneId, lineIndex: visible < 0 ? clamped : visible, affection: entry.affection, flags, phase: entry.phase === "choice" && scene.choices?.length ? "choice" : "scene", endingTitle: null, history: history.slice(0, Math.max(0, Math.min(history.length, entry.historyLength))) });
   }
   return past;
 }
@@ -104,6 +108,9 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
       const flags = { ...script.flags, ...(scene.set ?? {}), ...action.flags };
       const history = action.history ?? [];
       const restored = enterScene(script, { ...state, flags, affection: action.affection, history, past: rebuildPast(script, action.rollback, history), endingTitle: null }, action.sceneId, [], false);
+      // enterScene 이 체인해서 다른 씬·단계에 도착했으면(모든 줄이 when 에 가려진 경우 등)
+      // 저장 위치는 재현 불가 — 요청한 씬의 phase/exits/엔딩을 도착 상태에 억지로 입히지 않는다.
+      if (restored.error !== null || restored.sceneId !== action.sceneId || restored.phase !== "scene") return restored;
       const requested = Math.min(scene.lines.length - 1, Math.max(0, Math.floor(action.lineIndex)));
       const lineIndex = nextVisible(scene, requested, restored.flags);
       if (action.phase === "choice" && scene.choices?.length) {
@@ -140,7 +147,9 @@ export function reduce(script: VnScript, state: VnState, action: VnAction): VnSt
       const line = scene?.lines[state.lineIndex];
       // 현재 줄이 이 플래그를 묻는 input 줄일 때만 값을 받는다 — 다른 줄에서 온 입력은 무시한다.
       if (!scene || line?.input?.flag !== action.flag) return state;
-      const value = action.value.slice(0, line.input.max ?? 16).trim();
+      // trim 후 코드포인트 기준으로 자른다 — 앞자르기는 "  ab"를 "a"로 만들고
+      // 서로게이트 쌍을 반으로 쪼갤 수 있다.
+      const value = [...action.value.trim()].slice(0, line.input.max ?? 16).join("");
       if (!value) return state;
       // 정규 숫자 문자열은 숫자 플래그로 저장한다 — compare/add 가 숫자를 요구하므로.
       // "007"·"3.50" 같은 비정규 표기는 문자열을 유지한다(이름 플래그 오염 방지).

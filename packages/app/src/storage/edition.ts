@@ -13,7 +13,7 @@ export function initializeEdition(storage: Storage = localStorage) {
       const previous=JSON.parse(storage.getItem("vnmaker.studio.project.v1")??"null");
       // FNV-1a 64 — scriptFingerprint(production.ts)와 같은 판정. 32비트 해시는
       // 구성 가능한 충돌로 수정한 원고를 샘플로 덮어쓸 수 있어 올렸다.
-      let hash=0xcbf29ce484222325n;for(const char of JSON.stringify(previous))hash=BigInt.asUintN(64,(hash^BigInt(char.charCodeAt(0)))*0x100000001b3n);
+      let hash=0xcbf29ce484222325n;for(const char of JSON.stringify(previous))hash=BigInt.asUintN(64,(hash^BigInt(char.codePointAt(0)!))*0x100000001b3n);
       if(hash.toString(36)==="2coug0m8bikc1") storage.setItem("vnmaker.studio.project.v1",JSON.stringify(script));
     } catch { /* Keep damaged or edited data available for recovery. */ }
     return;

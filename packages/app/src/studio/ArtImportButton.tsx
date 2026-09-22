@@ -4,20 +4,22 @@ import { importImages } from "../storage/projectAssets.js";
 import { dedupeImportedArtwork } from "./assets.js";
 import { Icon } from "./Icon.js";
 
-export function ArtImportButton({script,onImport}:{script:VnScript;onImport:(assets:Artwork[])=>void}){
+export function ArtImportButton({script,onImport,getLiveScript}:{script:VnScript;onImport:(assets:Artwork[])=>void;getLiveScript?:(()=>VnScript)|undefined}){
   const [kind,setKind]=useState<Artwork["kind"]>("background");
   const [character,setCharacter]=useState("");
   const [expression,setExpression]=useState("neutral");
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const input=useRef<HTMLInputElement>(null),latest=useRef(script);latest.current=script;
+  // script prop 은 디바운스된 표시본일 수 있다 — 비동기 작업의 기준·변경 감지는 살아있는 원고로 한다.
+  const live=()=>getLiveScript?.()??latest.current;
   async function importFiles(files:FileList|null){
     if(!files?.length)return;
-    const before=script;setBusy(true);setError("");setNotice("");
+    const before=live();setBusy(true);setError("");setNotice("");
     try{
       if(kind==="character" && !script.characters.some(actor=>actor.id===character))throw new Error("원화를 사용할 캐릭터를 먼저 선택하세요.");
       if(kind==="character" && expression && !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(expression))throw new Error("표정 ID는 영문자로 시작하는 영문·숫자·하이픈·밑줄을 사용하세요.");
       const rows=await importImages(Array.from(files));
-      if(latest.current!==before)throw new Error("가져오는 동안 원고가 변경됐습니다. 원화 파일은 보관했으며 현재 작품에는 적용하지 않았습니다. 다시 가져와 등록하세요.");
+      if(live()!==before)throw new Error("가져오는 동안 원고가 변경됐습니다. 원화 파일은 보관했으며 현재 작품에는 적용하지 않았습니다. 다시 가져와 등록하세요.");
       const {fresh,skipped}=dedupeImportedArtwork(before,rows,kind,kind==="character"?character:undefined,kind==="character"?expression||undefined:undefined);
       if(skipped)setNotice(`이미 라이브러리에 있는 원화 ${skipped}개는 다시 등록하지 않았습니다.`);
       if(fresh.length)onImport(fresh.map(row=>({id:`user-${crypto.randomUUID()}`,name:row.originalName.replace(/\.[^.]+$/,""),kind,url:row.path,createdAt:new Date(row.createdAt).toISOString(),...(kind==="character"?{characterId:character,...(expression?{expression}:{})}:{})})));

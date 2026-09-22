@@ -86,14 +86,20 @@ export async function installStoreAsset(
       pending.push({ path: described.path, blob: described.blob, originalName: `${manifest.name} · ${file.role}`, createdAt: Date.now() });
     } else {
       const described = await describeImage(blob);
+      // 파일 가져오기와 같은 검증 — 매직바이트만 맞는 껍데기나 과대 해상도는 설치를 실패로 둔다.
+      const bitmap = await createImageBitmap(described.blob).catch(() => { throw new Error(`${manifest.name} · ${file.role}: 이미지 데이터를 읽을 수 없습니다.`); });
+      const pixels = bitmap.width * bitmap.height; bitmap.close();
+      if (pixels > 64_000_000) throw new Error(`${manifest.name} · ${file.role}: 이미지 해상도는 6,400만 픽셀 이하여야 합니다.`);
       stored.set(file.role, described.path);
       pending.push({ path: described.path, blob: described.blob, originalName: `${manifest.name} · ${file.role}`, createdAt: Date.now() });
     }
     done += 1;
     settings.onProgress?.({ done, total: plan.files.length });
   }
+  // 매니페스트에서 온 값으로 원고 자산을 먼저 만든다 — 여기서 실패하면 아무것도 저장하지 않아
+  // 고아 blob 이 남지 않는다(저장 후 등록이면 실패할 때마다 파일이 새는 구조였다).
+  const installed = artworksFromInstall(manifest, plan, stored, settings, durations);
   await storeAssets(pending);
 
-  const installed = artworksFromInstall(manifest, plan, stored, settings, durations);
   return { manifest, ...installed, ignored: plan.ignored };
 }

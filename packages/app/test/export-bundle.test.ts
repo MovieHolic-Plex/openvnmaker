@@ -140,6 +140,24 @@ test("team credits validate bounded text and retain ordered multiline records th
   for(const credits of [null,{},[{}],[{role:1,names:"A"}],[{role:"R",names:"a".repeat(4001)}],[{role:"R".repeat(121),names:"A"}],[{role:"R",names:"A\u0000"}],[{role:"R",names:"A",extra:1}],Array.from({length:101},()=>({role:"R",names:"A"}))])assert.throws(()=>parseScript({...fixture,credits}));
 });
 
+test("title BGM은 사용자 음원·내장 트랙 모두 수집되고 리베이스된다", () => {
+  const custom = `/assets/user/${"b".repeat(64)}.mp3`;
+  const moved = `/assets/user/${"c".repeat(64)}.mp3`;
+  const withTitle = { ...fixture, titleBgm: custom };
+  assert.ok(collectProjectAssets(withTitle).includes(custom));
+  const rebased = rebaseProjectAssets(withTitle, new Map([[custom, moved]]));
+  assert.equal(rebased.titleBgm, moved);
+  // 내장 트랙 이름도 파일 경로로 풀어 수집한다 — 빼먹으면 발행 ZIP에서 조용히 묵음이 된다.
+  assert.ok(collectProjectAssets({ ...fixture, titleBgm: "daily" }).includes("/assets/audio/bgm/daily.mp3"));
+});
+
+test("원고 지문은 아스트랄 문자(이모지)도 코드포인트로 구분한다", async () => {
+  const { manuscriptFingerprint } = await import("../src/storage/manuscriptKey.js");
+  // charCodeAt 기반이면 서로게이트 쌍 첫 유닛만 보고 둘 다 같은 해시가 됐다.
+  assert.notEqual(manuscriptFingerprint({ t: "😀" }), manuscriptFingerprint({ t: "😁" }));
+  assert.equal(manuscriptFingerprint({ t: "한글 😀" }), manuscriptFingerprint({ t: "한글 😀" }));
+});
+
 test("packaged asset paths resolve relative to the deployed folder, not the domain root", () => {
   // itch.io·GitHub Pages 같은 하위 경로 배포에서도 루트 상대 원고 경로가 풀려야 한다.
   assert.equal(assetUrl("/assets/bg/title.png", "https://example.com/games/vn/"), "https://example.com/games/vn/assets/bg/title.png");

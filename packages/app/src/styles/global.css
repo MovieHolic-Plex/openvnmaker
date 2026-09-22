@@ -842,7 +842,9 @@ body {
 .line-input button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 @media (prefers-reduced-motion: reduce) {
-  .sprite-enter, .sprite-exit, .weather, .stage-layers.cg-drift, .line-input { animation: none !important; }
+  .sprite-enter, .sprite-exit, .stage-layers.cg-drift, .line-input { animation: none !important; }
   .sprite-exit { opacity: 0; }
   .scene-tint { transition: none !important; }
+  /* 입자 애니메이션은 i 요소에 걸려 있어 컨테이너 animation 해제만으로는 멈추지 않는다 — 통째로 숨긴다. */
+  .weather { display: none; }
 }

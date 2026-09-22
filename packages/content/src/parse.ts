@@ -269,10 +269,11 @@ export function parseScript(value: unknown): VnScript {
       if (asset["characterId"] !== undefined && !characters.has(asset["characterId"])) throw new Error("에셋의 등장인물을 찾을 수 없습니다.");
       if (asset["expression"] !== undefined) characterKey(asset["expression"], "에셋 표정");
     }
-    const cgAssets = new Set((row["assets"] as { id: string; kind: string }[]).filter(asset => asset.kind === "cg").map(asset => asset.id));
-    for (const item of row["scenes"] as { id: string; cg?: string }[]) {
-      if (item.cg !== undefined && !cgAssets.has(item.cg)) throw new Error(`씬 ${item.id}: 이벤트 CG 에셋을 찾을 수 없습니다: ${item.cg}`);
-    }
+  }
+  // scene.cg 는 assets 배열 유무와 무관하게 검증한다 — assets 없는 원고의 cg 는 조용히 무시된다.
+  const cgAssets = new Set(((row["assets"] as { id: string; kind: string }[] | undefined) ?? []).filter(asset => asset.kind === "cg").map(asset => asset.id));
+  for (const item of row["scenes"] as { id: string; cg?: string }[]) {
+    if (item.cg !== undefined && !cgAssets.has(item.cg)) throw new Error(`씬 ${item.id}: 이벤트 CG 에셋을 찾을 수 없습니다: ${item.cg}`);
   }
   for (const asset of [...(row["assets"] as Record<string, unknown>[] | undefined ?? []), ...(row["audioAssets"] as Record<string, unknown>[] | undefined ?? [])]) {
     if (asset["provenance"] === undefined) continue;
@@ -320,6 +321,7 @@ export function auditScript(script: VnScript): StoryIssue[] {
       if (!choice.text.trim()) add("빈 선택지가 있습니다.");
     }
     if (scene.choices?.length && (scene.routes?.length || scene.next || scene.ending)) add("선택지가 경로·다음 씬·엔딩 설정보다 우선합니다.", "warning");
+    if (scene.ending && scene.next) add("엔딩이 다음 씬보다 우선합니다 — 다음 씬은 실행되지 않습니다.", "warning");
     if (!reachable.has(scene.id)) add("시작 씬에서 도달할 수 없습니다.", "warning");
   }
   const canFinish = new Set(script.scenes.filter(scene => scene.ending && !scene.choices?.length).map(scene => scene.id));
@@ -343,19 +345,39 @@ export function auditScript(script: VnScript): StoryIssue[] {
       const key=state.id+JSON.stringify(Object.entries(state.flags).sort(([a],[b])=>a.localeCompare(b)));
       if(seen.has(key))continue;seen.add(key);
       const scene=byId.get(state.id);if(!scene)continue;
-      // input 줄은 그 줄을 지나야 뒤로 진행되므로, 씬 안의 input 플래그는 출구 시점에 항상 비어있지 않은 값으로 세팅돼 있다.
+      // input 줄은 그 줄을 지나야 뒤로 진행되므로, 무조건 input 플래그는 출구 시점에 항상 비어있지 않은 값으로 세팅돼 있다.
+      // when 이 붙은 input 은 건너뛸 수 있다 — 쓰임·안 쓰임 두 경우를 모두 탐색해
+      // "플래그가 세팅됐다"고 가정한 경로만 믿는 거짓 통과와 그 반대를 모두 피한다.
       const outFlags={...state.flags};
-      for(const line of scene.lines)if(line.input&&outFlags[line.input.flag]===undefined)outFlags[line.input.flag]="?";
+      // input 은 실행 시 항상 문자열을 쓴다 — 이미 선언된 플래그라도 덮어쓰므로 "?"로 둔다.
+      for(const line of scene.lines)if(line.input&&line.when===undefined)outFlags[line.input.flag]="?";
+      const maybes=[...new Set(scene.lines.flatMap(line=>line.input&&line.when!==undefined?[line.input.flag]:[]))];
+      const variants=[outFlags];
+      if(maybes.length<=4){
+        for(const flag of maybes)for(const base of variants.slice())variants.push({...base,[flag]:"?"});
+      }else for(const flag of maybes)outFlags[flag]="?"; // 조건 입력이 많으면 세팅된 쪽으로 본다
       if(scene.choices?.length){
-        for(const choice of scene.choices){const error=choiceEffectError(choice,outFlags);const key=scene.id+error;if(error&&!choice.disable&&!choice.cond&&lineAllowed(choice,outFlags)&&!blocked.has(key)){blocked.add(key);issues.push({sceneId:scene.id,message:`선택 결과 오류: ${error}`,severity:"error"});}}
-        const available=scene.choices.filter(choice=>choiceAllowed(choice,outFlags));
-        if(!available.length&&!blocked.has(scene.id)){blocked.add(scene.id);issues.push({sceneId:scene.id,message:"도달 가능한 경로에서 선택지가 모두 닫힙니다. 조건이나 대체 선택지를 확인하세요.",severity:"error"});}
-        for(const choice of available)queue.push(enqueue(choice.next,applyChoiceFlags(outFlags,choice)));
+        let deadCount=0;
+        for(const flags of variants){
+          for(const choice of scene.choices){const error=choiceEffectError(choice,flags);const key=scene.id+error;if(error&&!choice.disable&&!choice.cond&&lineAllowed(choice,flags)&&!blocked.has(key)){blocked.add(key);issues.push({sceneId:scene.id,message:`선택 결과 오류: ${error}`,severity:"error"});}}
+          const available=scene.choices.filter(choice=>choiceAllowed(choice,flags));
+          if(available.length)for(const choice of available)queue.push(enqueue(choice.next,applyChoiceFlags(flags,choice)));
+          else deadCount++;
+        }
+        if(deadCount===variants.length&&!blocked.has(scene.id)){blocked.add(scene.id);issues.push({sceneId:scene.id,message:"도달 가능한 경로에서 선택지가 모두 닫힙니다. 조건이나 대체 선택지를 확인하세요.",severity:"error"});}
+        else if(deadCount>0){const key=scene.id+"#partial-dead";if(!blocked.has(key)){blocked.add(key);issues.push({sceneId:scene.id,message:"일부 상태에서 선택지가 모두 닫힐 수 있습니다 — 조건부 입력이 건너뛰어지면 남는 선택지가 없습니다.",severity:"warning"});}}
       }else{
         // 엔진과 같이 처음으로 조건이 맞는 경로만 따라간다. 전부 실패하면 next 로 폴백한다.
-        const taken=(scene.routes??[]).find(route=>lineAllowed(route,outFlags));
-        const follow=taken?.next??(scene.ending?undefined:scene.next);
-        if(follow)queue.push(enqueue(follow,outFlags));
+        let deadCount=0;
+        for(const flags of variants){
+          const taken=(scene.routes??[]).find(route=>lineAllowed(route,flags));
+          const follow=taken?.next??(scene.ending?undefined:scene.next);
+          if(follow)queue.push(enqueue(follow,flags));
+          else if(!scene.ending)deadCount++;
+        }
+        // 도달 상태 전부가 막히면 확정 데드엔드(실행 시 "갈 곳이 없다" 치명 오류), 일부만 막히면 조건부.
+        if(deadCount===variants.length&&!blocked.has(scene.id)){blocked.add(scene.id);issues.push({sceneId:scene.id,message:"도달 가능한 상태에서 갈 곳이 없습니다 — 모든 경로가 닫히고 다음 씬·엔딩도 없습니다.",severity:"error"});}
+        else if(deadCount>0){const key=scene.id+"#partial-dead";if(!blocked.has(key)){blocked.add(key);issues.push({sceneId:scene.id,message:"일부 상태에서 갈 곳이 없을 수 있습니다 — 조건부 입력이 건너뛰어지면 닫히는 경로만 남습니다.",severity:"warning"});}}
       }
     }
     if(queue.length)issues.push({sceneId:script.start,message:"분기 상태가 10,000개를 넘어 조건 경로 검사가 일부만 수행되었습니다.",severity:"warning"});

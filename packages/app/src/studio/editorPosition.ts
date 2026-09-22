@@ -26,10 +26,13 @@ export function parseEditorPosition(raw: string | null): EditorPosition {
 }
 
 /** Rebuild from defaults so clearing or replacing a choice cannot retain stale flags. */
-export function previewFlagsFor(script: VnScript, choices: PreviewChoices): StoryFlags {
+export function previewFlagsFor(script: VnScript, choices: PreviewChoices, currentSceneId?: string): StoryFlags {
   return script.scenes.reduce<StoryFlags>((flags, scene) => {
     const index = choices[scene.id];
+    // 지금 편집 중인 씬과 미리보기에서 선택을 고른 씬은 "들른" 씬이다 — 런타임처럼 진입 변수(set)를 적용한다.
+    const entered = scene.id === currentSceneId || index !== undefined;
+    const next = entered && scene.set ? { ...flags, ...scene.set } : flags;
     const choice=index===undefined?undefined:scene.choices?.[index];
-    return !choice||choiceEffectError(choice,flags)?flags:applyChoiceFlags(flags,choice);
+    return !choice||choiceEffectError(choice,next)?next:applyChoiceFlags(next,choice);
   }, { ...script.flags });
 }

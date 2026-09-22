@@ -3,9 +3,15 @@ import assert from "node:assert/strict";
 import { LIMITS, parseScript, type Scene, type VnScript } from "@vnmaker/content";
 import { duplicateLine, insertLines, moveLine, removeLine, splitPastedText } from "../src/studio/lineOperations.js";
 import { findText, replaceAll, replaceInMatch } from "../src/studio/findReplace.js";
-import { duplicateScene, renameScene } from "../src/studio/sceneOperations.js";
+import { appendChoice, directSceneExit, duplicateScene, insertSceneAfter, renameScene } from "../src/studio/sceneOperations.js";
 import { renameCharacter } from "../src/studio/characterOperations.js";
-import { renameFlag } from "../src/studio/stateOperations.js";
+import { referencedFlags, renameFlag } from "../src/studio/stateOperations.js";
+import { mergeActorCue } from "../src/studio/lineOperations.js";
+import { previewFlagsFor } from "../src/studio/editorPosition.js";
+import { audioInUse } from "../src/studio/assets.js";
+import { unreferencedUserAssets } from "../src/studio/assetCleanup.js";
+import { reduce } from "../src/engine/reducer.js";
+import { initialState } from "../src/engine/types.js";
 import { editIssue } from "../src/studio/editGuard.js";
 import { collectMediaReferences, findMissingMedia } from "../src/studio/mediaIntegrity.js";
 import { withNarrativeIds } from "../src/studio/narrativeIds.js";
@@ -156,6 +162,105 @@ test("media references are collected once per url with a location label, and onl
   assert.deepEqual(noWorker.missing.map(ref => ref.url), ["/assets/art/rain-library.png"], "user files are skipped when the asset worker is unavailable");
 });
 
+test("switching an actor drops the previous actor's outfit and expression so the script stays parseable", () => {
+  const portrait = (hex: string) => `/assets/user/${hex.repeat(64)}.png`;
+  const staged = parseScript({ ...story, characters: [
+    { id: "hero", name: "주인공", color: "#aabbcc", bio: "", outfits: ["offduty"], expressionImages: { neutral: portrait("1"), wink: portrait("2") } },
+    { id: "riho", name: "리호", color: "#ccbbaa", bio: "", expressionImages: { neutral: portrait("3") } },
+    { id: "mia", name: "미아", color: "#ccbbaa", bio: "", outfits: ["offduty"], expressionImages: { neutral: portrait("4"), wink: portrait("5") } },
+  ], scenes: [scene("a", { lines: [{ speaker: null, text: "큐", sprites: [{ slot: "left", character: "hero", outfit: "offduty", expression: "wink" }] }] }), story.scenes[1]!] });
+  const switched = mergeActorCue(staged, staged.scenes[0]!, 0, "left", { character: "riho", poseUrl: null });
+  assert.deepEqual(switched.sprites, [{ slot: "left", character: "riho", poseUrl: null }], "outfit/custom expression do not follow the old actor");
+  const applied = { ...staged, scenes: [{ ...staged.scenes[0]!, lines: [switched] }, staged.scenes[1]!] };
+  assert.doesNotThrow(() => parseScript(applied));
+  const compatible = mergeActorCue(staged, staged.scenes[0]!, 0, "left", { character: "mia" });
+  assert.equal(compatible.sprites![0]!.outfit, "offduty", "a valid outfit on the new actor survives");
+  assert.equal(compatible.sprites![0]!.expression, "wink");
+  const left = mergeActorCue(staged, staged.scenes[0]!, 0, "left", { character: null, poseUrl: null });
+  assert.equal(left.sprites![0]!.character, null);
+  const kept = mergeActorCue(staged, staged.scenes[0]!, 0, "left", { expression: "neutral" });
+  assert.equal(kept.sprites![0]!.outfit, "offduty", "same-actor patches keep the outfit");
+});
+
+test("inserting a scene moves the exit to the new scene without copying set/cg/brief, and play reaches it", () => {
+  const routed = parseScript({ ...story, scenes: [
+    scene("a", { set: { trust: 9 }, cgUrl: "/assets/art/rain-library.png", artBrief: "이 장면만의 메모", routes: [{ when: { all: ["letter"] }, next: "b" }], next: "b" }),
+    scene("b", { ending: "끝" }),
+  ] });
+  const { script: inserted, movedExit } = insertSceneAfter(routed, routed.scenes[0]!, "mid");
+  assert.equal(movedExit, "조건 연결");
+  const [before, mid] = inserted.scenes;
+  assert.equal(before!.next, "mid");
+  assert.equal(before!.routes, undefined, "routes move to the inserted scene — leaving them would skip it at runtime");
+  assert.equal(before!.set?.trust, 9, "the original scene keeps its own entry state");
+  assert.deepEqual(mid!.routes, routed.scenes[0]!.routes);
+  assert.equal(mid!.next, "b", "the route fallback travels with the routes");
+  assert.equal(mid!.set, undefined, "entry flag writes are not duplicated");
+  assert.equal(mid!.cgUrl, undefined); assert.equal(mid!.artBrief, undefined);
+  assert.equal(mid!.background, routed.scenes[0]!.background, "stage look carries over");
+  assert.doesNotThrow(() => parseScript(inserted));
+  // letter=false 이면 경로가 안 맞아도 폴백으로 b 에 도착 — 새 장면을 반드시 거친다.
+  let state = reduce(inserted, initialState(inserted), { type: "start" });
+  state = reduce(inserted, state, { type: "advance" });
+  state = reduce(inserted, state, { type: "advance" });
+  assert.equal(state.sceneId, "mid");
+  state = reduce(inserted, state, { type: "advance" });
+  assert.equal(state.sceneId, "b");
+  state = reduce(inserted, state, { type: "advance" });
+  state = reduce(inserted, state, { type: "advance" });
+  assert.equal(state.phase, "ending");
+});
+
+test("direct exits and added choices clear stale routes so the chosen exit is not preempted", () => {
+  const routed = parseScript({ ...story, scenes: [scene("a", { routes: [{ when: { all: ["letter"] }, next: "b" }], next: "b" }), scene("b", { ending: "끝" })] });
+  const ended = directSceneExit(routed.scenes[0]!, "ending");
+  assert.equal(ended.routes, undefined); assert.equal(ended.ending, "a 장");
+  const linked = directSceneExit(routed.scenes[0]!, "b");
+  assert.equal(linked.next, "b"); assert.equal(linked.routes, undefined);
+  // 런타임이 고른 출구를 실제로 따른다 — letter=true 인데도 엔딩에 도착해야 한다.
+  const applied = parseScript({ ...routed, scenes: [ended, routed.scenes[1]!] });
+  let state = reduce(applied, { ...initialState(applied), flags: { letter: true } }, { type: "start" });
+  state = reduce(applied, state, { type: "advance" }); state = reduce(applied, state, { type: "advance" });
+  assert.equal(state.phase, "ending");
+  const withChoice = appendChoice(routed.scenes[0]!, "b");
+  assert.equal(withChoice.routes, undefined); assert.equal(withChoice.choices!.length, 1);
+});
+
+test("referencedFlags covers scene entry sets, route conditions and input targets", () => {
+  const rich = parseScript({ ...story, flags: { trust: 0, letter: false, player_name: "", route_flag: false }, scenes: [scene("a", {
+    set: { trust: 1 }, routes: [{ when: { all: ["route_flag"] }, next: "b" }],
+    lines: [{ speaker: null, text: "입력", input: { flag: "player_name" } }, { speaker: null, text: "조건 줄", when: { none: ["line_flag"] } }],
+    choices: [{ text: "x", next: "b", set: { choice_set: true }, when: { compare: [{ flag: "choice_when", op: "eq", value: true }] } }],
+  }), scene("b", { ending: "끝" })] });
+  const refs = referencedFlags(rich);
+  for (const key of ["trust", "route_flag", "player_name", "line_flag", "choice_set", "choice_when"]) assert.ok(refs.has(key), `${key} should count as referenced`);
+  assert.equal(refs.has("letter"), false);
+  const renamed = renameFlag(rich, "player_name", "reader");
+  assert.equal(renamed.scenes[0]!.lines[0]!.input!.flag, "reader", "renaming a variable retargets input writes too");
+  assert.equal(renameFlag(rich, "route_flag", "r").scenes[0]!.routes![0]!.when!.all![0], "r");
+});
+
+test("preview flags apply the current scene's entry set without crediting unvisited scenes", () => {
+  const staged = parseScript({ ...story, scenes: [
+    scene("a", { set: { trust: 7 }, lines: [{ speaker: null, text: "a" }], next: "b" }),
+    scene("b", { set: { letter: true }, lines: [{ speaker: null, text: "b" }], ending: "끝" }),
+  ] });
+  assert.deepEqual(previewFlagsFor(staged, {}, "a"), { trust: 7, letter: false }, "editing scene a sees its entry set");
+  assert.deepEqual(previewFlagsFor(staged, {}, "b"), { trust: 0, letter: true }, "a later scene's set does not leak backwards");
+});
+
+test("title BGM counts as an audio usage and undo history keeps card files alive", () => {
+  const url = "/assets/user/" + "3".repeat(64) + ".mp3";
+  const withTitle = parseScript({ ...story, titleBgm: url });
+  assert.equal(audioInUse(withTitle, url), true, "title BGM must block removal");
+  assert.equal(audioInUse(story, url), false);
+  const withAsset = parseScript({ ...story, audioAssets: [{ id: "au-1", name: "곡", kind: "bgm", url, duration: 120 }] });
+  const afterRemoval = { ...withAsset, audioAssets: [] };
+  // 삭제 후 원고만 보면 미참조지만, 실행 취소 이력(삭제 전 원고)에 남아 있으면 파일을 지우지 않는다.
+  assert.deepEqual(unreferencedUserAssets([url], [afterRemoval]), [url]);
+  assert.deepEqual(unreferencedUserAssets([url], [afterRemoval, withAsset]), []);
+});
+
 test("withNarrativeIds skips scenes that are unchanged from the previous manuscript", () => {
   let calls = 0; const id = () => `id-${++calls}`;
   const base = withNarrativeIds({ ...story, scenes: story.scenes.map(row => ({ ...row, lines: row.lines.map(({ id: _id, ...line }) => line) })) }, id);
@@ -168,4 +273,23 @@ test("withNarrativeIds skips scenes that are unchanged from the previous manuscr
   const full = withNarrativeIds(edited, id);
   assert.deepEqual(full.scenes.map(row => row.lines.map(line => typeof line.id)), next.scenes.map(row => row.lines.map(line => typeof line.id)), "fast path assigns identities everywhere the full pass does");
   assert.deepEqual(parseScript(JSON.parse(JSON.stringify(next))), next);
+});
+
+test("renameFlag rewrites {flag:…}/{player} tokens in text, input prompt, and character names", () => {
+  const withTokens = parseScript({
+    ...story,
+    flags: { player: "" },
+    characters: [{ id: "friend", name: "{player}의 친구", color: "#aabbcc", bio: "" }],
+    scenes: [{ id: "a", background: "title", lines: [
+      { speaker: null, text: "안녕 {player}, {flag:player}!", input: { flag: "player", prompt: "{player}의 이름은?", placeholder: "{flag:player}" } },
+    ], choices: [{ text: "{player}이(가) 간다", next: "a" }] }],
+  });
+  const next = renameFlag(withTokens, "player", "hero");
+  const line = next.scenes[0]!.lines[0]!;
+  assert.equal(line.text, "안녕 {flag:hero}, {flag:hero}!");
+  assert.equal(line.input!.flag, "hero");
+  assert.equal(line.input!.prompt, "{flag:hero}의 이름은?");
+  assert.equal(line.input!.placeholder, "{flag:hero}");
+  assert.equal(next.scenes[0]!.choices![0]!.text, "{flag:hero}이(가) 간다");
+  assert.equal(next.characters[0]!.name, "{flag:hero}의 친구");
 });

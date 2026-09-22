@@ -9,7 +9,7 @@ export const sceneCharacters = (scene: Pick<Scene, "lines">) => scene.lines.redu
 export const scriptFingerprint = (script: VnScript) => {
   // 64비트 FNV-1a. 32비트는 자동 체크포인트 스킵 판정에 2^-32 거짓 음성이 있다.
   let hash = 0xcbf29ce484222325n;
-  for (const char of JSON.stringify(script)) hash = BigInt.asUintN(64, (hash ^ BigInt(char.charCodeAt(0))) * 0x100000001b3n);
+  for (const char of JSON.stringify(script)) hash = BigInt.asUintN(64, (hash ^ BigInt(char.codePointAt(0)!)) * 0x100000001b3n);
   return hash.toString(36);
 };
 

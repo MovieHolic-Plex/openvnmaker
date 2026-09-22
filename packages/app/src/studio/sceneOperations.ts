@@ -9,6 +9,22 @@ export function duplicateScene(script: VnScript, sceneId: string, newId: string)
 }
 
 export const SCENE_ID = /^[a-zA-Z0-9가-힣][a-zA-Z0-9가-힣_-]{0,63}$/;
+/**
+ * 현재 장면 뒤에 새 장면을 끼워 넣는다. 출구(선택지·조건 경로·엔딩·다음 씬)는 새 장면으로 옮기고
+ * 이전 장면은 새 장면을 가리킨다 — routes 를 이전 장면에 남기면 런타임이 그걸 먼저 타서 새 장면에 닿지 않는다.
+ * set·cg·아트 브리프 같은 장면 전용 상태는 새 장면에 복사하지 않는다(set 은 진입 때마다 플래그를 다시 쓴다).
+ * 무대 연출(배경·음악·입자·틴트·배치)은 같은 무대가 이어진다고 보고 새 장면이 물려받는다.
+ */
+export function insertSceneAfter(script: VnScript, scene: Scene, newId: string): { script: VnScript; movedExit: "선택지" | "조건 연결" | "엔딩" | "다음 씬 연결" | null } {
+  const { choices, ending, routes, next: nextId, ...rest } = scene;
+  const { id: _id, chapter: _chapter, lines: _lines, set: _set, cg: _cg, cgUrl: _cgUrl, artBrief: _brief, ...stage } = rest;
+  // 출구가 여럿 섞여 있으면 런타임 우선순위(선택지 > 조건 경로 > 엔딩 > 다음 씬)의 승자만 옮긴다.
+  // 조건 경로와 그 폴백 next 는 한 덩어리다 — 경로만 옮기면 어느 조건도 안 맞을 때 새 장면이 막힌다.
+  const exit = choices?.length ? { choices } : routes?.length ? { routes, ...(nextId !== undefined ? { next: nextId } : {}) } : ending !== undefined ? { ending } : nextId !== undefined ? { next: nextId } : {};
+  const next: Scene = { ...stage, ...exit, id: newId, chapter: "새로운 장면", lines: [{ speaker: null, text: "이곳에서 새로운 이야기가 시작된다." }] };
+  const movedExit = choices?.length ? "선택지" : routes?.length ? "조건 연결" : ending !== undefined ? "엔딩" : nextId !== undefined ? "다음 씬 연결" : null;
+  return { movedExit, script: { ...script, scenes: script.scenes.flatMap(row => row.id === scene.id ? [{ ...rest, next: newId }, next] : [row]) } };
+}
 /** 씬 ID를 바꾸고 시작 위치·다음 씬·선택지 연결·에셋의 대상 씬을 함께 갱신한다. 대사·선택지 ID는 씬 안에서만 유효하므로 그대로다. */
 export function renameScene(script: VnScript, from: string, to: string): VnScript {
   const scene=script.scenes.find(scene=>scene.id===from);
@@ -38,6 +54,16 @@ export function moveScene(script: VnScript, sceneId: string, toIndex: number): V
 }
 
 type SceneExit = Pick<Scene, "next" | "choices" | "ending" | "routes">;
+/** 씬 종료를 직접 출구(엔딩/다음 씬)로 바꾼다 — 남은 선택지·조건 경로가 고른 출구를 덮지 않게 함께 지운다. */
+export function directSceneExit(scene: Scene, value: string): Scene {
+  const { choices: _choices, next: _next, ending: _ending, routes: _routes, ...rest } = scene;
+  return { ...rest, ...(value === "ending" ? { ending: scene.chapter || "이야기의 끝" } : { next: value }) };
+}
+/** 선택지를 하나 단다 — 엔딩·다음 씬·조건 경로는 지워 런타임 출구 우선순위(선택지 > 조건 경로 > 엔딩 > 다음)와 맞춘다. */
+export function appendChoice(scene: Scene, target: string): Scene {
+  const { ending: _ending, next: _next, routes: _routes, ...rest } = scene;
+  return { ...rest, choices: [...(scene.choices ?? []), { text: "새로운 선택", next: target }] };
+}
 function removalRouting(script: VnScript, sceneId: string, replacement: string): { inheritExit?: SceneExit; choiceTarget?: string; routeTarget?: string } {
   const removed = script.scenes.find(scene => scene.id === sceneId);
   const chosen = script.scenes.find(scene => scene.id === replacement);
@@ -101,7 +127,9 @@ export function removeScene(script: VnScript, sceneId: string, replacement: stri
       const next = previousNext === sceneId ? scene.id === replacement ? undefined : replacement : previousNext;
       return {
         ...body, ...(next !== undefined ? { next } : {}),
-        ...(scene.routes ? { routes: scene.routes.map(route => route.next === sceneId ? { ...route, next: scene.id === replacement ? routing.routeTarget! : replacement } : route) } : {}),
+        // choiceTarget 과 routeTarget 은 둘 다 "다리 장면의 출구"다 — 선택지·조건 경로가 같이
+        // 삭제 장면을 가리키면 choiceTarget 만 채워지므로 둘 다 거기로 돌린다.
+        ...(scene.routes ? { routes: scene.routes.map(route => route.next === sceneId ? { ...route, next: scene.id === replacement ? (routing.routeTarget ?? routing.choiceTarget)! : replacement } : route) } : {}),
         ...(scene.choices ? { choices: scene.choices.map(choice => choice.next === sceneId ? { ...choice, next: scene.id === replacement ? routing.choiceTarget! : replacement } : choice) } : {}),
       };
     }),

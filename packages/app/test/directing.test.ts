@@ -345,3 +345,67 @@ test("Ren'Py보내기는 지원하지 않는 연출 큐를 파일 상단 경고�
   assert.match(out, /# WARNING: effect\/tint cues are not supported/);
   assert.match(out, /scenes: s\)/);
 });
+
+// ---------- 회귀: 2차 적대적 리뷰 (엔진) ----------
+
+test("복원이 다른 씬으로 체인하면 요청한 씬의 엔딩·phase 를 억지로 입히지 않는다", () => {
+  // 저장 시점의 플래그로는 씬 a 의 모든 줄이 가려져 enterScene 이 b 로 체인한다.
+  // 꼬리 로직이 a 의 exits/ending 을 b 상태에 다시 적용하면 안 된다.
+  const script: VnScript = {
+    title: "t", start: "a", characters: [],
+    scenes: [
+      { id: "a", background: "title", lines: [
+        { speaker: null, text: "가려짐", when: { all: ["never"] } },
+      ], routes: [{ next: "b", when: { none: ["bx"] } }], ending: "a엔딩" },
+      { id: "b", background: "title", set: { bx: true }, lines: [{ speaker: null, text: "비" }], ending: "b엔딩" },
+    ],
+  };
+  const restored = reduce(script, initialState(script), { type: "restore", sceneId: "a", lineIndex: 0, affection: 0, flags: {}, phase: "ending" });
+  assert.equal(restored.sceneId, "b", "체인 도착지는 b");
+  assert.notEqual(restored.phase, "ending", "요청한 a 의 엔딩이 b 에 억지로 입혀지면 안 된다");
+  assert.notEqual(restored.endingTitle, "a엔딩");
+  assert.equal(restored.error ?? null, null);
+});
+
+test("읽은 줄 키는 숫자 id 와 인덱스를 구분한다 — id:'3' 과 위치 3 이 다른 키다", async () => {
+  const { readKey } = await import("../src/engine/types.js");
+  const byId = readKey("a", 0, { id: "3" });
+  const byIndex = readKey("a", 3, undefined);
+  assert.notEqual(byId, byIndex, `충돌하면 안 된다: ${byId} vs ${byIndex}`);
+});
+
+test("감사는 when 붙은 input 플래그가 안 세팅되는 경로도 탐색한다", async () => {
+  const { auditScript } = await import("@vnmaker/content");
+  const script: VnScript = {
+    title: "t", start: "s", characters: [],
+    scenes: [
+      { id: "s", background: "title", lines: [
+        { speaker: null, text: "보임" },
+        { speaker: null, text: "조건 입력", input: { flag: "x" }, when: { all: ["nope"] } },
+      ], routes: [{ next: "b", when: { all: ["x"] } }] },
+      { id: "b", background: "title", lines: [{ speaker: null, text: "끝" }], ending: "끝" },
+    ],
+  };
+  const issues = auditScript(script);
+  assert.ok(issues.some(issue => issue.sceneId === "s" && issue.message.includes("갈 곳이 없")), `조건 input 미작성 경로의 데드엔드를 잡아야 한다: ${JSON.stringify(issues)}`);
+});
+
+test("input 은 trim 후 코드포인트 단위로 자른다 — 이모지가 쪼개지지 않는다", () => {
+  const script: VnScript = {
+    title: "t", start: "s", characters: [],
+    scenes: [{ id: "s", background: "title", lines: [
+      { speaker: null, text: "?", input: { flag: "face", max: 1 } },
+      { speaker: null, text: "끝" },
+    ] }],
+  };
+  let state = reduce(script, initialState(script), { type: "start" });
+  state = reduce(script, state, { type: "input", flag: "face", value: "😀x" });
+  assert.equal(state.flags["face"], "😀", "서로게이트 쌍이 반으로 쪼개지면 안 된다");
+});
+
+test("truncateParts: 서로게이트 쌍 경계에서 자르면 상위 서로게이트를 버린다", () => {
+  const r = resolveInline("hi {flag:name}!", { name: "A😀B" });
+  assert.equal(r.plain.length, 8); // 😀 = 2 코드 유닛
+  assert.equal(truncateParts(r.parts, 5).map(p => p.text).join(""), "hi A", "쌍을 쪼개지 않는다");
+  assert.equal(truncateParts(r.parts, 6).map(p => p.text).join(""), "hi A😀");
+});

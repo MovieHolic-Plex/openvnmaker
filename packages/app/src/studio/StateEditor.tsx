@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from "react";
 import type {Choice,FlagComparison,LineCondition,StoryFlags,VnScript} from "@vnmaker/content";
-import {renameFlag} from "./stateOperations.js";
+import {referencedFlags,renameFlag} from "./stateOperations.js";
 import "./state-editor.css";
 
 type Value=string|number|boolean;
@@ -10,13 +10,7 @@ function ValueField({label,value,onChange}:{label:string;value:Value;onChange:(v
   if(typeof value==="boolean")return <select aria-label={label} value={String(value)} onChange={event=>onChange(event.target.value==="true")}><option value="false">꺼짐</option><option value="true">켜짐</option></select>;
   return <input aria-label={label} type={typeof value==="number"?"number":"text"} maxLength={200} value={draft} onChange={event=>{setDraft(event.target.value);if(typeof value==="string")onChange(event.target.value);}} onBlur={()=>{if(typeof value==="number"){const number=Number(draft);if(draft.trim()&&Number.isFinite(number))onChange(number);else setDraft(String(value));}}} onKeyDown={event=>{if(event.key==="Enter")event.currentTarget.blur();}}/>;
 }
-const uses=(condition:LineCondition|undefined,into:Set<string>)=>{condition?.all?.forEach(key=>into.add(key));condition?.none?.forEach(key=>into.add(key));condition?.compare?.forEach(rule=>into.add(rule.flag));};
-/** 원고를 한 번 훑어 참조 중인 변수 집합을 만든다. 변수마다 전체를 다시 훑으면 장편에서 키 입력마다 수십 ms 가 든다. */
-export function referencedFlags(script:VnScript):Set<string>{
-  const into=new Set<string>();
-  for(const scene of script.scenes){for(const line of scene.lines)uses(line.when,into);for(const choice of scene.choices??[]){uses(choice.when,into);for(const key of Object.keys(choice.set??{}))into.add(key);for(const key of Object.keys(choice.add??{}))into.add(key);}}
-  return into;
-}
+
 
 function RenameField({label,value,onRename}:{label:string;value:string;onRename:(next:string)=>string|null}){
   const [draft,setDraft]=useState(value),[error,setError]=useState("");
